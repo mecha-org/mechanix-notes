@@ -1,7 +1,7 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/bloc/search/search_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/search/search_event.dart';
@@ -53,9 +53,9 @@ class _SearchBarState extends State<SearchBar> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: NotesColors.bottomBarBg,
+                // color: NotesColors.bottomBarBg,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: NotesColors.searchBarColor, width: 1),
+                // border: Border.all(color: NotesColors.searchBarColor, width: 1),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
@@ -71,7 +71,7 @@ class _SearchBarState extends State<SearchBar> {
                       decoration: const InputDecoration(
                         hintText: 'Search in notes',
                         hintStyle: TextStyle(
-                          color: NotesColors.placeholderColor,
+                          // color: NotesColors.placeholderColor,
                         ),
                         border: InputBorder.none,
                       ),

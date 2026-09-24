@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
@@ -17,9 +16,9 @@ class HomeDeleteSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        color: NotesColors.searchBarColor,
+        // color: NotesColors.searchBarColor,
         border: Border(
-          top: BorderSide(color: NotesColors.borderColor, width: 1),
+          // top: BorderSide(color: NotesColors.borderColor, width: 1),
         ),
       ),
       child: SafeArea(
@@ -42,8 +41,7 @@ class HomeDeleteSheet extends StatelessWidget {
                 ),
               ),
 
-              const Divider(color: NotesColors.borderColor),
-
+              // const Divider(color: NotesColors.borderColor),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
@@ -81,8 +79,8 @@ class HomeDeleteSheet extends StatelessWidget {
                               onPressed: () => Navigator.of(context).pop(),
                               style: FilledButton.styleFrom(
                                 enabledMouseCursor: SystemMouseCursors.click,
-                                backgroundColor:
-                                    NotesColors.backgroundFilledColor,
+                                // backgroundColor:
+                                //     NotesColors.backgroundFilledColor,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(0),
@@ -108,7 +106,7 @@ class HomeDeleteSheet extends StatelessWidget {
                               },
                               style: FilledButton.styleFrom(
                                 enabledMouseCursor: SystemMouseCursors.click,
-                                backgroundColor: NotesColors.deleteButtonColor,
+                                // backgroundColor: NotesColors.deleteButtonColor,
                                 foregroundColor: Colors.white,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(0),

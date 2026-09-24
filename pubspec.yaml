@@ -41,7 +41,7 @@ dependencies:
   intl: ^0.19.0
   flutter_localizations:
     sdk: flutter
-  objectbox: ^5.3.2    
+  objectbox: ^5.3.2
   bloc_test: ^10.0.0
   mocktail: ^1.0.5
   show_fps: ^1.1.0
@@ -50,7 +50,9 @@ dependencies:
   flutter_tantivy:
     git:
       url: https://github.com/DhanishMecha/flutter_tantivy.git
-      ref: main  
+      ref: main
+  widgets:
+    path: ../mechanix.dart/widgets
 
 dependency_overrides:
   intl: ^0.20.2

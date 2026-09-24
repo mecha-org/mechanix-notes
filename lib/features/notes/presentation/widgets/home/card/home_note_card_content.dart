@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_icon.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_selection_icon.dart';
@@ -80,7 +79,7 @@ class _HomeNoteCardText extends StatelessWidget {
         Text(
           note.title.isNotEmpty ? note.title : note.previewText,
           style: const TextStyle(
-            color: NotesColors.titleColor,
+            // color: NotesColors.titleColor,
             fontSize: 17,
             fontWeight: FontWeight.w500,
           ),
@@ -91,7 +90,7 @@ class _HomeNoteCardText extends StatelessWidget {
         Text(
           _formatDate(context, note.updatedAt),
           style: const TextStyle(
-            color: NotesColors.timeLabelColor,
+            // color: NotesColors.timeLabelColor,
             fontSize: 14,
           ),
         ),

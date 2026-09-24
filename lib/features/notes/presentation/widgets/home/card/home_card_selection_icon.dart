@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 
 class HomeCardSelectionIcon extends StatelessWidget {
   final bool isSelected;
@@ -14,10 +13,10 @@ class HomeCardSelectionIcon extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: isSelected ? NotesColors.titleColor : NotesColors.borderColor,
+          // color: isSelected ? NotesColors.titleColor : NotesColors.borderColor,
           width: 2,
         ),
-        color: isSelected ? NotesColors.titleColor : Colors.transparent,
+        // color: isSelected ? NotesColors.titleColor : Colors.transparent,
       ),
       child: isSelected
           ? const Icon(Icons.check, size: 16, color: Colors.black)
