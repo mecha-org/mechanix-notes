@@ -17,7 +17,7 @@ class NotesIcon {
   static const String textstyleIcon = "assets/icons/textstyle.png";
   static const String menuIcon = "assets/icons/menu.png";
   static const String paragraphIcon = "assets/icons/paragraph.png";
-  static const String threedotIcon = "assets/icons/threedot.png";
+  static const String moreVertIcon = "assets/icons/more_vert.png";
   static const String saveIcon = "assets/icons/save.png";
   static const String deleteIcon = "assets/icons/delete.png";
   static const String closeIcon = "assets/icons/close.png";

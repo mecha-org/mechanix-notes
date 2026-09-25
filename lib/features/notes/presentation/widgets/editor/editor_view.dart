@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart'
     show QuillController, Document;
+import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
@@ -10,7 +11,6 @@ import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_top_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
-import 'package:mechanix_notes/core/utils/helper.dart';
 
 class EditorView extends StatefulWidget {
   const EditorView({super.key});
@@ -79,9 +79,12 @@ class _EditorViewState extends State<EditorView> {
       // builder
       builder: (context, state) {
         if (state is EditorInitial) {
-          return const Scaffold(
-            backgroundColor: Colors.black,
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerLowest,
+
+            body: const Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -90,11 +93,11 @@ class _EditorViewState extends State<EditorView> {
             state is EditorDiscarded ||
             state is EditorDeleteRequest) {
           final shell = Scaffold(
-            backgroundColor: Colors.black,
-            appBar: const PreferredSize(
-              preferredSize: Size.fromHeight(60),
-              child: EditorTopBar(),
-            ),
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerLowest,
+
+            appBar: const EditorTopBar(),
             body: _quillController == null
                 ? const Center(child: CircularProgressIndicator())
                 : const EditorContent(),
@@ -114,7 +117,9 @@ class _EditorViewState extends State<EditorView> {
 
         if (state is EditorFailure) {
           return Scaffold(
-            backgroundColor: Colors.black,
+            backgroundColor: Theme.of(
+              context,
+            ).colorScheme.surfaceContainerLowest,
             body: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -148,9 +153,9 @@ class _EditorViewState extends State<EditorView> {
             ),
           );
         }
-        return const Scaffold(
-          backgroundColor: Colors.black,
-          body: Center(child: CircularProgressIndicator()),
+        return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerLowest,
+          body: const Center(child: CircularProgressIndicator()),
         );
       },
     );
