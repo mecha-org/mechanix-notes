@@ -29,6 +29,9 @@ class HomeNoteCardContent extends StatelessWidget {
             note.title != note.previewText
         ? note.previewText
         : null;
+    print(
+      'content - title - ${note.title} - previewText - ${note.previewText}',
+    );
     final formattedDate = _formatDate(note.updatedAt);
 
     return MechanixListTile(

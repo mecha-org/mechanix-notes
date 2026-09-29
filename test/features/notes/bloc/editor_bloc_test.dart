@@ -78,7 +78,7 @@ void main() {
 
   group('EditorInitialised — create mode', () {
     blocTest<EditorBloc, EditorState>(
-      'emits EditorLoaded with empty title, blank document, isNewNote=true',
+      'emits EditorLoaded with empty title, blank document with H1 format, isNewNote=true',
       build: buildBloc,
       act: (bloc) => bloc.add(EditorInitialised()),
       expect: () => [
@@ -86,7 +86,17 @@ void main() {
             .having((s) => s.title, 'title', '')
             .having((s) => s.isNewNote, 'isNewNote', true)
             .having((s) => s.isContentLoading, 'isContentLoading', false)
-            .having((s) => s.quillDocument, 'quillDocument', isNotNull),
+            .having((s) => s.quillDocument, 'quillDocument', isNotNull)
+            .having(
+              (s) => s.quillDocument!.toDelta().toJson(),
+              'delta',
+              [
+                {
+                  'insert': '\n',
+                  'attributes': {'header': 1},
+                },
+              ],
+            ),
       ],
       verify: (_) => verifyNever(() => repository.getNoteById(any())),
     );
@@ -264,6 +274,31 @@ void main() {
         final loaded = bloc.state as EditorLoaded;
         expect(loaded.quillDocument, isNotNull);
         expect(loaded.isContentLoading, false);
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'initializes empty existing note content with H1 format',
+      build: buildBloc,
+      setUp: () {
+        when(
+          () => repository.getNoteById(kTestNoteId),
+        ).thenAnswer((_) async => makeNote(content: kEmptyDelta));
+      },
+      act: (bloc) => bloc.add(
+        EditorInitialised(noteId: kTestNoteId, noteTitle: kTestTitle),
+      ),
+      wait: const Duration(milliseconds: 300),
+      verify: (bloc) {
+        expect(bloc.state, isA<EditorLoaded>());
+        final loaded = bloc.state as EditorLoaded;
+        expect(loaded.quillDocument, isNotNull);
+        expect(loaded.quillDocument!.toDelta().toJson(), [
+          {
+            'insert': '\n',
+            'attributes': {'header': 1},
+          },
+        ]);
       },
     );
 
@@ -1848,6 +1883,68 @@ void main() {
         bloc.add(EditorToolbarToggled(EditorToolbar.menu));
       },
       expect: () => [],
+    );
+  });
+
+  group('Title and Preview extraction in buildNote', () {
+    blocTest<EditorBloc, EditorState>(
+      'extracts first line as title and remaining lines as previewText',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
+        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: '',
+        quillDocument: Document(),
+        isNewNote: true,
+      ),
+      act: (bloc) => bloc.add(
+        EditorSaveRequested(
+          content: jsonDecode(kSomeDelta),
+          plainText:
+              'My Note Title\nThis is the body of my note that provides preview text.',
+        ),
+      ),
+      verify: (_) {
+        final captured =
+            verify(() => repository.upsertNote(captureAny())).captured;
+        final note = captured.first as NoteModel;
+        expect(note.title, 'My Note Title');
+        expect(
+          note.previewText,
+          'This is the body of my note that provide',
+        );
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'single line note uses that line for title and previewText',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
+        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: '',
+        quillDocument: Document(),
+        isNewNote: true,
+      ),
+      act: (bloc) => bloc.add(
+        EditorSaveRequested(
+          content: jsonDecode(kSomeDelta),
+          plainText: 'Single Line Title Only',
+        ),
+      ),
+      verify: (_) {
+        final captured =
+            verify(() => repository.upsertNote(captureAny())).captured;
+        final note = captured.first as NoteModel;
+        expect(note.title, 'Single Line Title Only');
+        expect(note.previewText, 'Single Line Title Only');
+      },
     );
   });
 }

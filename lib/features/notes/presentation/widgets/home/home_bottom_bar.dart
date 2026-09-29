@@ -62,7 +62,7 @@ class HomeBottomBar extends StatelessWidget {
                 ),
 
                 _BottomBarIcon(
-                  iconPath: NotesIcon.deleteIcon,
+                  iconPath: NotesIcon.trashIcon,
                   color: state.selectedNotes.isNotEmpty
                       ? Colors.red
                       : Colors.grey,

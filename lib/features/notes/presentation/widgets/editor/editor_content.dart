@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart'
@@ -89,8 +90,9 @@ class _EditorContentState extends State<EditorContent> {
           scrollController: _scrollController,
           config: QuillEditorConfig(
             customShortcuts: const {},
+            showCodeBlockLineNumbers: false,
             placeholder: AppLocalizations.of(context)!.startWriting,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
             customStyles: quillEditorStyle(context),
             expands: true,
             scrollable: true,

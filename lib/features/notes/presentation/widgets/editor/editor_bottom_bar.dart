@@ -1,99 +1,182 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
-import 'package:mechanix_notes/core/utils/enums.dart';
-import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
+import 'package:flutter_quill/flutter_quill.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/bottom_bar/notes_text_link_control.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/toolbar/menu_toolbar.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/toolbar/text_style_toolbar.dart';
+import 'package:widgets/widgets.dart';
 
 class EditorBottomBar extends StatelessWidget {
   const EditorBottomBar({super.key});
 
-  void _save(BuildContext context) {
-    final controller = QuillControllerProvider.of(context).controller;
-    final delta = controller.document.toDelta().toJson();
-    final plainText = controller.document.toPlainText().trim();
-    context.read<EditorBloc>().add(
-      EditorSaveRequested(content: delta, plainText: plainText),
-    );
-  }
-
-  void _toggle(BuildContext context, EditorToolbar toolbar) {
-    context.read<EditorBloc>().add(EditorToolbarToggled(toolbar));
-    if (toolbar == EditorToolbar.textStyle || toolbar == EditorToolbar.menu) {
-      final provider = QuillControllerProvider.maybeOf(context);
-      provider?.focusNode.requestFocus();
-    }
+  void _handleLinkAction(BuildContext context) {
+    // Stub for future link insertion or editing dialog.
   }
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<EditorBloc, EditorState>(
-      buildWhen: (prev, curr) =>
-          curr is EditorLoaded &&
-          prev is EditorLoaded &&
-          prev.activeToolbar != curr.activeToolbar,
-      builder: (context, state) {
-        final activeToolbar = state is EditorLoaded
-            ? state.activeToolbar
-            : EditorToolbar.none;
+    final provider = QuillControllerProvider.maybeOf(context);
 
-        return SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (activeToolbar == EditorToolbar.textStyle)
-                const TextStyleToolbar(),
-              if (activeToolbar == EditorToolbar.menu) const MenuToolbar(),
+    Widget content;
+    if (provider == null) {
+      content = NotesTextLinkControl(
+        onLinkContextualPressed: () => _handleLinkAction(context),
+      );
+    } else {
+      final controller = provider.controller;
+      final focusNode = provider.focusNode;
 
-              Container(
-                height: 60,
-                decoration: const BoxDecoration(color: NotesColors.bottomBarBg),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    EditorButton(
-                      padding: const EdgeInsets.all(8),
-                      size: 28,
-                      asset: NotesIcon.backIcon,
-                      onPress: () => _save(context),
-                    ),
-                    EditorButton(
-                      size: 28,
-                      padding: const EdgeInsets.all(8),
-                      bgColor: activeToolbar == EditorToolbar.textStyle
-                          ? NotesColors.borderColor
-                          : Colors.transparent,
-                      asset: NotesIcon.textstyleIcon,
-                      onPress: () => _toggle(context, EditorToolbar.textStyle),
-                    ),
-                    EditorButton(
-                      size: 28,
-                      padding: const EdgeInsets.all(8),
-                      bgColor: activeToolbar == EditorToolbar.menu
-                          ? NotesColors.borderColor
-                          : Colors.transparent,
-                      asset: NotesIcon.menuIcon,
-                      onPress: () => _toggle(context, EditorToolbar.menu),
-                    ),
+      content = ListenableBuilder(
+        listenable: controller,
+        builder: (context, _) {
+          final selectionStyle = controller.getSelectionStyle();
+          final toggledStyle = controller.toggledStyle;
+          final attrs = selectionStyle.attributes;
+          final toggledAttrs = toggledStyle.attributes;
 
-                    const SizedBox(),
-                  ],
-                ),
-              ),
-            ],
+          Attribute? getBlockAttribute(String key) {
+            if (toggledAttrs.containsKey(key)) {
+              return toggledAttrs[key];
+            }
+            if (attrs.containsKey(key)) {
+              return attrs[key];
+            }
+            final sel = controller.selection;
+            if (sel.isValid &&
+                sel.start >= 0 &&
+                sel.start <= controller.document.length) {
+              final child = controller.document.queryChild(sel.start);
+              final node = child.node;
+              if (node is Line) {
+                if (node.style.containsKey(key)) {
+                  return node.style.attributes[key];
+                }
+                if (node.parent is Block) {
+                  return (node.parent as Block).style.attributes[key];
+                }
+              }
+            }
+            return null;
+          }
+
+          bool isAttrActive(Attribute attribute) {
+            if (toggledAttrs.containsKey(attribute.key)) {
+              return toggledAttrs[attribute.key]?.value == attribute.value;
+            }
+            final current = attrs[attribute.key];
+            return current != null && current.value == attribute.value;
+          }
+
+          bool isHeaderActive(int level) {
+            return getBlockAttribute(Attribute.header.key)?.value == level;
+          }
+
+          bool isParagraphActive() {
+            return getBlockAttribute(Attribute.header.key) == null &&
+                !attrs.containsKey(Attribute.size.key) &&
+                getBlockAttribute(Attribute.list.key) == null;
+          }
+
+          void toggleInline(Attribute attribute) {
+            if (isAttrActive(attribute)) {
+              controller.formatSelection(Attribute.clone(attribute, null));
+            } else {
+              controller.formatSelection(attribute);
+            }
+            focusNode.requestFocus();
+          }
+
+          void toggleHeader(int level) {
+            final currentLevel = getBlockAttribute(Attribute.header.key)?.value;
+            if (currentLevel == level) {
+              controller.formatSelection(
+                Attribute.clone(Attribute.header, null),
+              );
+            } else {
+              controller.formatSelection(Attribute.clone(Attribute.size, null));
+              controller.formatSelection(
+                Attribute.fromKeyValue(Attribute.header.key, level),
+              );
+            }
+            focusNode.requestFocus();
+          }
+
+          void clearToParagraph() {
+            controller.formatSelection(Attribute.clone(Attribute.header, null));
+            controller.formatSelection(Attribute.clone(Attribute.size, null));
+            controller.formatSelection(Attribute.clone(Attribute.list, null));
+            focusNode.requestFocus();
+          }
+
+          void toggleChecklist() {
+            final currentList = getBlockAttribute(Attribute.list.key)?.value;
+            if (currentList == Attribute.unchecked.value ||
+                currentList == Attribute.checked.value) {
+              controller.formatSelection(Attribute.clone(Attribute.list, null));
+            } else {
+              controller.formatSelection(Attribute.unchecked);
+            }
+            focusNode.requestFocus();
+          }
+
+          void toggleCodeBlock() {
+            final isCode = isAttrActive(Attribute.codeBlock);
+            if (isCode) {
+              controller.formatSelection(
+                Attribute.clone(Attribute.codeBlock, null),
+              );
+            } else {
+              controller.formatSelection(Attribute.codeBlock);
+            }
+            focusNode.requestFocus();
+          }
+
+          final listAttr = getBlockAttribute(Attribute.list.key);
+          final isChecklistActive =
+              listAttr?.value == Attribute.unchecked.value ||
+              listAttr?.value == Attribute.checked.value;
+
+          return NotesTextLinkControl(
+            isTextContextualActive: isHeaderActive(1),
+            onTextContextualPressed: () => toggleHeader(1),
+            isH2Active: isHeaderActive(2),
+            onH2Pressed: () => toggleHeader(2),
+            isBodyActive: isParagraphActive(),
+            onBodyPressed: clearToParagraph,
+            isBoldActive: isAttrActive(Attribute.bold),
+            onBoldPressed: () => toggleInline(Attribute.bold),
+            isItalicActive: isAttrActive(Attribute.italic),
+            onItalicPressed: () => toggleInline(Attribute.italic),
+            isUnderlineActive: isAttrActive(Attribute.underline),
+            onUnderlinePressed: () => toggleInline(Attribute.underline),
+            isStrikethroughActive: isAttrActive(Attribute.strikeThrough),
+            onStrikethroughPressed: () => toggleInline(Attribute.strikeThrough),
+            isChecklistActive: isChecklistActive,
+            onChecklistPressed: toggleChecklist,
+            isCodeActive: isAttrActive(Attribute.codeBlock),
+            onCodePressed: toggleCodeBlock,
+            onLinkContextualPressed: () => _handleLinkAction(context),
+          );
+        },
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colorScheme.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: context.colorScheme.outlineVariant.withValues(alpha: 0.4),
+          width: 0.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        );
-      },
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: content,
     );
   }
 }

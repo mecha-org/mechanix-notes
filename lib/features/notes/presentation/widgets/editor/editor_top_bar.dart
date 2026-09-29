@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
+import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
+import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_trash_confirmation_sheet.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/topbar/editor_undo_redo_actions.dart';
 import 'package:widgets/widgets.dart';
@@ -9,6 +14,30 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const MechanixAppBar().preferredSize;
+
+  void _showTrashConfirmationSheet(BuildContext context) {
+    final editorBloc = context.read<EditorBloc>();
+    final notesBloc = context.read<NotesBloc>();
+    final navigator = Navigator.of(context);
+
+    EditorTrashConfirmationSheet.show(
+      context: context,
+      onConfirm: () {
+        final editorState = editorBloc.state;
+        String? noteId;
+        if (editorState is EditorLoaded && !editorState.isNewNote) {
+          noteId = editorState.noteId;
+        } else if (editorState is EditorSaveSuccess) {
+          noteId = editorState.noteId;
+        }
+
+        if (noteId != null) {
+          notesBloc.add(DeleteNotes(noteIds: [noteId]));
+        }
+        navigator.pop();
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,11 +54,40 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         EditorUndoRedoActions(quillController: quillController),
-        MechanixIconButton.standard(
-          type: IconButtonType.rounded,
-          onPressed: () => Navigator.maybePop(context),
-          foregroundColor: context.colorScheme.onSurface,
-          icon: const ImageIcon(AssetImage(NotesIcon.moreVertIcon)),
+        MechanixMenu<String>(
+          alignment: MechanixMenuAlignment.end,
+          offset: const Offset(0, 4),
+          // style: const MenuThemeDataConfig(focusBorderWidth: 0.0),
+          anchorBuilder: (context, controller, child) {
+            return MechanixIconButton.standard(
+              type: IconButtonType.rounded,
+              onPressed: controller.toggle,
+              foregroundColor: context.colorScheme.onSurface,
+              icon: const ImageIcon(AssetImage(NotesIcon.moreVertIcon)),
+            );
+          },
+          entries: [
+            const MechanixMenuItem<String>(
+              value: 'pin',
+              labelText: 'Pin note',
+              trailing: ImageIcon(AssetImage(NotesIcon.pinIcon), size: 15),
+            ),
+            MechanixMenuItem<String>(
+              value: 'trash',
+              label: Text(
+                'Move to trash',
+                style: context.textTheme.titleSmall?.copyWith(
+                  color: context.colorScheme.error,
+                ),
+              ),
+              trailing: ImageIcon(
+                const AssetImage(NotesIcon.trashIcon),
+                size: 15,
+                color: context.colorScheme.error,
+              ),
+              onTap: () => _showTrashConfirmationSheet(context),
+            ),
+          ],
         ),
       ],
     );

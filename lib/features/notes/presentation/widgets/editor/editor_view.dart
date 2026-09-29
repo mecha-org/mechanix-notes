@@ -100,8 +100,23 @@ class _EditorViewState extends State<EditorView> {
             appBar: const EditorTopBar(),
             body: _quillController == null
                 ? const Center(child: CircularProgressIndicator())
-                : const EditorContent(),
-            bottomNavigationBar: const EditorBottomBar(),
+                : const Stack(
+                    children: [
+                      Positioned.fill(child: EditorContent()),
+                      Positioned(
+                        left: 16,
+                        right: 16,
+                        bottom: 16,
+                        child: SafeArea(
+                          top: false,
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: EditorBottomBar(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           );
 
           if (_quillController != null) {

@@ -7,12 +7,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
+import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:objectbox/objectbox.dart';
 import 'package:uuid/uuid.dart';
-import 'package:mechanix_notes/core/utils/enums.dart';
+
 part 'editor_event.dart';
 part 'editor_state.dart';
 
@@ -53,7 +54,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
           return;
         }
 
-        final quillDoc = await compute(decodeDocumentInIsolate, note.content);
+        var quillDoc = await compute(decodeDocumentInIsolate, note.content);
+        if (quillDoc.isEmpty()) {
+          quillDoc = Document.fromJson([
+            {
+              'insert': '\n',
+              'attributes': {'header': 1},
+            },
+          ]);
+        }
 
         AppLogger.i('EditorBloc: Content ready for ${event.noteId}');
         emit(
@@ -73,7 +82,12 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
           EditorLoaded(
             noteId: newId,
             title: '',
-            quillDocument: Document(),
+            quillDocument: Document.fromJson([
+              {
+                'insert': '\n',
+                'attributes': {'header': 1},
+              },
+            ]),
             isContentLoading: false,
             isNewNote: true,
           ),
@@ -128,9 +142,16 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         return;
       }
 
+      final note = buildNote(
+        current: current,
+        deltaJson: deltaJson,
+        plainText: event.plainText,
+        existing: existing,
+      );
+
       // Check if content is unchanged
       if (existing != null) {
-        if (existing.title == current.title && existing.content == deltaJson) {
+        if (existing.title == note.title && existing.content == deltaJson) {
           AppLogger.i('EditorBloc: Discarding unchanged edit');
           emit(
             EditorDiscarded(noteId: current.isDirty ? current.noteId : null),
@@ -139,14 +160,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         }
       }
 
-      emit(current.copyWith(isSaving: true));
-
-      final note = buildNote(
-        current: current,
-        deltaJson: deltaJson,
-        plainText: event.plainText,
-        existing: existing,
-      );
+      emit(current.copyWith(isSaving: true, title: note.title));
 
       await _repository.upsertNote(note);
 
@@ -161,6 +175,45 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     }
   }
 
+  (String title, String previewText) _extractTitleAndPreview(
+    String currentTitle,
+    String plainText,
+  ) {
+    final trimmed = plainText.trim();
+    if (trimmed.isEmpty) {
+      return (currentTitle, '');
+    }
+
+    final lines = plainText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    if (lines.length > 1) {
+      final title = lines.first;
+      final bodyText = lines.skip(1).join(' ');
+      final preview = bodyText.length > Constants.noteTitleMaxLength
+          ? bodyText.substring(0, Constants.noteTitleMaxLength)
+          : bodyText;
+      return (title, preview);
+    }
+
+    // Only 1 line of text:
+    final singleLine = lines.first;
+    if (currentTitle.isNotEmpty && currentTitle != singleLine) {
+      final preview = singleLine.length > Constants.noteTitleMaxLength
+          ? singleLine.substring(0, Constants.noteTitleMaxLength)
+          : singleLine;
+      return (currentTitle, preview);
+    }
+
+    final preview = singleLine.length > Constants.noteTitleMaxLength
+        ? singleLine.substring(0, Constants.noteTitleMaxLength)
+        : singleLine;
+    return (singleLine, preview);
+  }
+
   NoteModel buildNote({
     required EditorLoaded current,
     required String deltaJson,
@@ -169,14 +222,14 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
   }) {
     final now = DateTime.now();
 
-    final trimmedText = plainText.trim();
-    final previewText = trimmedText.length > Constants.noteTitleMaxLength
-        ? trimmedText.substring(0, Constants.noteTitleMaxLength)
-        : trimmedText;
+    final (title, previewText) = _extractTitleAndPreview(
+      current.title,
+      plainText,
+    );
 
     return NoteModel(
       id: current.noteId,
-      title: current.title,
+      title: title,
       content: deltaJson,
       plainText: plainText,
       previewText: previewText,
@@ -197,20 +250,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       final existing = await _repository.getNoteById(current.noteId);
       final deltaJson = jsonEncode(event.content);
 
-      // Don't auto-save if nothing changed
-      if (existing != null &&
-          existing.title == current.title &&
-          existing.content == deltaJson) {
-        return;
-      }
-
-      // Don't auto-save if new and empty
-      if (current.isNewNote &&
-          current.title.trim().isEmpty &&
-          event.plainText.trim().isEmpty) {
-        return;
-      }
-
       final note = buildNote(
         current: current,
         deltaJson: deltaJson,
@@ -218,11 +257,26 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         existing: existing,
       );
 
+      // Don't auto-save if nothing changed
+      if (existing != null &&
+          existing.title == note.title &&
+          existing.content == deltaJson) {
+        return;
+      }
+
+      // Don't auto-save if new and empty
+      if (current.isNewNote &&
+          note.title.trim().isEmpty &&
+          event.plainText.trim().isEmpty) {
+        return;
+      }
+
       await _repository.upsertNote(note);
 
       AppLogger.i('EditorBloc: Auto-save success for ${current.noteId}');
       emit(
         current.copyWith(
+          title: note.title,
           isDirty: true,
           isNewNote: current.isNewNote ? false : current.isNewNote,
         ),
