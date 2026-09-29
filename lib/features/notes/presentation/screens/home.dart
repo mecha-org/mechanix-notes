@@ -11,20 +11,41 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: context.colorScheme.surfaceContainerLowest,
       appBar: const MechanixAppBar.large(title: Text("Notes")),
-      // floatingActionButton: MechanixFloatingActionButton(
-      //   icon: const Icon(Icons.add),
-      //   onPressed: () {
-      //     Navigator.pushNamed(context, '/note-editor');
-      //   },
-      // ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
+      floatingActionButton: MechanixFloatingActionButton(
+        icon: const Icon(Icons.add),
         onPressed: () {
           Navigator.pushNamed(context, '/note-editor');
         },
       ),
+      floatingActionButtonLocation: const _CustomFloatingActionButtonLocation(
+        offsetFromRight: 24,
+        offsetFromBottom: 44,
+      ),
       bottomNavigationBar: const HomeBottomBar(),
       body: const HomeNotesView(),
     );
+  }
+}
+
+class _CustomFloatingActionButtonLocation extends FloatingActionButtonLocation {
+  const _CustomFloatingActionButtonLocation({
+    this.offsetFromRight = 24.0,
+    this.offsetFromBottom = 44.0,
+  });
+
+  final double offsetFromRight;
+  final double offsetFromBottom;
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final double x =
+        scaffoldGeometry.scaffoldSize.width -
+        scaffoldGeometry.floatingActionButtonSize.width -
+        offsetFromRight;
+    final double y =
+        scaffoldGeometry.scaffoldSize.height -
+        scaffoldGeometry.floatingActionButtonSize.height -
+        offsetFromBottom;
+    return Offset(x, y);
   }
 }

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_icon.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_selection_icon.dart';
-import 'package:mechanix_notes/l10n/notes_localizations.dart';
+import 'package:widgets/widgets.dart';
 
 class HomeNoteCardContent extends StatelessWidget {
   final NoteMetaData note;
@@ -23,97 +22,41 @@ class HomeNoteCardContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      splashFactory: NoSplash.splashFactory,
-      mouseCursor: SystemMouseCursors.click,
-      onLongPress: isSelectionMode ? null : onLongPress,
-      onTap: onTap,
-      child: Container(
-        color: isSelected
-            ? Colors.white.withValues(alpha: 0.05)
-            : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _HomeNoteCardLeadingIcon(
-              isSelectionMode: isSelectionMode,
-              isSelected: isSelected,
-            ),
-            const SizedBox(width: 16),
-            Expanded(child: _HomeNoteCardText(note: note)),
-          ],
-        ),
+    final title = note.title.isNotEmpty ? note.title : note.previewText;
+    final supportingText =
+        note.title.isNotEmpty &&
+            note.previewText.isNotEmpty &&
+            note.title != note.previewText
+        ? note.previewText
+        : null;
+    final formattedDate = _formatDate(note.updatedAt);
+
+    return MechanixListTile(
+      variant: ListTileVariant.standard,
+      labelText: title,
+      supportingText: supportingText,
+      trailingText: formattedDate,
+      leading: isSelectionMode
+          ? HomeCardSelectionIcon(isSelected: isSelected)
+          : null,
+      showLeading: isSelectionMode,
+      selected: isSelected,
+      contentPadding: const EdgeInsets.symmetric(
+        horizontal: 24.0,
+        vertical: 8.0,
       ),
-    );
-  }
-}
-
-class _HomeNoteCardLeadingIcon extends StatelessWidget {
-  final bool isSelectionMode;
-  final bool isSelected;
-
-  const _HomeNoteCardLeadingIcon({
-    required this.isSelectionMode,
-    required this.isSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return isSelectionMode
-        ? HomeCardSelectionIcon(isSelected: isSelected)
-        : const HomeCardIcon();
-  }
-}
-
-class _HomeNoteCardText extends StatelessWidget {
-  final NoteMetaData note;
-
-  const _HomeNoteCardText({required this.note});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          note.title.isNotEmpty ? note.title : note.previewText,
-          style: const TextStyle(
-            // color: NotesColors.titleColor,
-            fontSize: 17,
-            fontWeight: FontWeight.w500,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          _formatDate(context, note.updatedAt),
-          style: const TextStyle(
-            // color: NotesColors.timeLabelColor,
-            fontSize: 14,
-          ),
-        ),
-      ],
+      labelColor: context.colorScheme.onSurface,
+      supportingTextColor: context.colorScheme.onSurfaceVariant,
+      onTap: onTap,
+      onLongPress: isSelectionMode ? null : onLongPress,
     );
   }
 
-  String _formatDate(BuildContext context, DateTime date) {
+  String _formatDate(DateTime date) {
     final now = DateTime.now();
-    final difference = now.difference(date);
-
-    final isToday =
-        date.year == now.year && date.month == now.month && date.day == now.day;
-    if (isToday) {
-      if (difference.inMinutes < 1) {
-        return AppLocalizations.of(context)!.justNow;
-      } else if (difference.inMinutes < 60) {
-        return AppLocalizations.of(context)!.minutesAgo(difference.inMinutes);
-      } else {
-        return AppLocalizations.of(context)!.hoursAgo(difference.inHours);
-      }
+    if (now.year != date.year) {
+      return DateFormat('dd MMM yy').format(date).toUpperCase();
     }
-
-    return DateFormat("d MMM yyyy").format(date);
+    return DateFormat('dd MMM').format(date).toUpperCase();
   }
 }
