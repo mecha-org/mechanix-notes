@@ -11,6 +11,7 @@ import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_top_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
+import 'package:widgets/widgets.dart';
 
 class EditorView extends StatefulWidget {
   const EditorView({super.key});
@@ -139,7 +140,11 @@ class _EditorViewState extends State<EditorView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  Icon(
+                    Icons.error_outline,
+                    color: context.colorScheme.error,
+                    size: 48,
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     localizeError(context, state.error),
@@ -149,7 +154,7 @@ class _EditorViewState extends State<EditorView> {
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     style: TextButton.styleFrom(
-                      backgroundColor: Colors.red,
+                      backgroundColor: context.colorScheme.error,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 24,
                         vertical: 12,

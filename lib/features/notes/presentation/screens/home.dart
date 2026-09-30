@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_bottom_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_notes_view.dart';
 import 'package:widgets/widgets.dart';
@@ -10,7 +11,17 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: context.colorScheme.surfaceContainerLowest,
-      appBar: const MechanixAppBar.large(title: Text("Notes")),
+      appBar: MechanixAppBar.largeIcon(
+        title: const Text("Notes"),
+        actions: [
+          MechanixIconButton.standard(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              Navigator.pushNamed(context, AppRoutes.search);
+            },
+          ),
+        ],
+      ),
       floatingActionButton: MechanixFloatingActionButton(
         icon: const Icon(Icons.add),
         onPressed: () {

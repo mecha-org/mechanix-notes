@@ -69,7 +69,8 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    child: MechanixFilledButton(
+                    // child: MechanixFilledButton(
+                    child: MechanixButton.filled(
                       widthSizing: ButtonLayoutSizing.fill,
                       size: ButtonSize.large,
                       label: 'TRASH',

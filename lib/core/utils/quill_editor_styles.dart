@@ -5,6 +5,8 @@ import 'package:widgets/widgets.dart';
 DefaultStyles quillEditorStyle(BuildContext context) {
   final bodyLarge =
       Theme.of(context).textTheme.emphasized.bodyLarge ?? const TextStyle();
+  final headlineLarge =
+      Theme.of(context).textTheme.emphasized.headlineLarge ?? const TextStyle();
   final headlineSmall =
       Theme.of(context).textTheme.emphasized.headlineSmall ?? const TextStyle();
   final titleLarge =
@@ -32,17 +34,11 @@ DefaultStyles quillEditorStyle(BuildContext context) {
       null,
     ),
 
-    h1: const DefaultTextBlockStyle(
-      TextStyle(
-        fontSize: 26,
-        fontWeight: FontWeight.w700,
-        color: Colors.white,
-        height: 1.3,
-        letterSpacing: 0,
-      ),
-      HorizontalSpacing(0, 0),
-      VerticalSpacing(10, 10),
-      VerticalSpacing(0, 0),
+    h1: DefaultTextBlockStyle(
+      headlineLarge,
+      const HorizontalSpacing(0, 0),
+      const VerticalSpacing(10, 10),
+      const VerticalSpacing(0, 0),
       null,
     ),
 
@@ -54,17 +50,11 @@ DefaultStyles quillEditorStyle(BuildContext context) {
       null,
     ),
 
-    placeHolder: const DefaultTextBlockStyle(
-      TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.w400,
-        color: Colors.white30,
-        height: 1.2,
-        letterSpacing: 0.2,
-      ),
-      HorizontalSpacing(0, 0),
-      VerticalSpacing(14, 8),
-      VerticalSpacing(0, 0),
+    placeHolder: DefaultTextBlockStyle(
+      titleLarge.copyWith(color: context.colorScheme.onSurfaceVariant),
+      const HorizontalSpacing(0, 0),
+      const VerticalSpacing(14, 8),
+      const VerticalSpacing(0, 0),
       null,
     ),
     quote: const DefaultTextBlockStyle(
