@@ -23,11 +23,22 @@ class EditorView extends StatefulWidget {
 class _EditorViewState extends State<EditorView> {
   QuillController? _quillController;
   late final FocusNode _focusNode;
+  bool _canPop = false;
+  bool _isSavingAndExiting = false;
 
   @override
   void initState() {
     super.initState();
     _focusNode = FocusNode();
+    final currentState = context.read<EditorBloc>().state;
+    if (currentState is EditorLoaded &&
+        !currentState.isContentLoading &&
+        currentState.quillDocument != null) {
+      _quillController = QuillController(
+        document: currentState.quillDocument!,
+        selection: const TextSelection.collapsed(offset: 0),
+      );
+    }
   }
 
   @override
@@ -47,6 +58,21 @@ class _EditorViewState extends State<EditorView> {
     });
   }
 
+  void _saveAndExit() {
+    if (_isSavingAndExiting) return;
+    _isSavingAndExiting = true;
+    if (_quillController != null) {
+      final delta = _quillController!.document.toDelta().toJson();
+      final plainText = _quillController!.document.toPlainText().trim();
+      context.read<EditorBloc>().add(
+        EditorSaveRequested(content: delta, plainText: plainText),
+      );
+    } else {
+      _canPop = true;
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<EditorBloc, EditorState>(
@@ -61,17 +87,21 @@ class _EditorViewState extends State<EditorView> {
           if (state.noteId != null) {
             context.read<NotesBloc>().add(RefreshNote(noteId: state.noteId!));
           }
+          _canPop = true;
           Navigator.of(context).pop();
         }
         if (state is EditorSaveSuccess) {
           context.read<NotesBloc>().add(RefreshNote(noteId: state.noteId));
+          _canPop = true;
           Navigator.of(context).pop();
         }
         if (state is EditorDeleteRequest) {
           context.read<NotesBloc>().add(DeleteNotes(noteIds: [state.noteId]));
+          _canPop = true;
           Navigator.of(context).pop();
         }
         if (state is EditorFailure) {
+          _isSavingAndExiting = false;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(localizeError(context, state.error))),
           );
@@ -120,15 +150,24 @@ class _EditorViewState extends State<EditorView> {
                   ),
           );
 
+          final wrappedShell = PopScope(
+            canPop: _canPop,
+            onPopInvokedWithResult: (didPop, _) {
+              if (didPop) return;
+              _saveAndExit();
+            },
+            child: shell,
+          );
+
           if (_quillController != null) {
             return QuillControllerProvider(
               controller: _quillController!,
               focusNode: _focusNode,
-              child: shell,
+              child: wrappedShell,
             );
           }
 
-          return shell;
+          return wrappedShell;
         }
 
         if (state is EditorFailure) {

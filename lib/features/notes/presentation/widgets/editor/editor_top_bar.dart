@@ -15,6 +15,21 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => const MechanixAppBar().preferredSize;
 
+  void _handleBack(BuildContext context) {
+    final quillController = QuillControllerProvider.maybeOf(
+      context,
+    )?.controller;
+    if (quillController != null) {
+      final delta = quillController.document.toDelta().toJson();
+      final plainText = quillController.document.toPlainText().trim();
+      context.read<EditorBloc>().add(
+        EditorSaveRequested(content: delta, plainText: plainText),
+      );
+    } else {
+      Navigator.maybePop(context);
+    }
+  }
+
   void _showTrashConfirmationSheet(BuildContext context) {
     final editorBloc = context.read<EditorBloc>();
     final notesBloc = context.read<NotesBloc>();
@@ -48,7 +63,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
     return MechanixAppBar(
       leading: MechanixIconButton.standard(
         type: IconButtonType.rounded,
-        onPressed: () => Navigator.maybePop(context),
+        onPressed: () => _handleBack(context),
         foregroundColor: context.colorScheme.onSurface,
         icon: const ImageIcon(AssetImage(NotesIcon.backIcon)),
       ),

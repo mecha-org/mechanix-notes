@@ -43,7 +43,7 @@ void main() {
       );
       expect(find.text('CANCEL'), findsOneWidget);
       expect(find.text('TRASH'), findsOneWidget);
-      expect(find.byType(MechanixFilledButton), findsWidgets);
+      expect(find.byType(MechanixButton), findsWidgets);
 
       await tester.tap(find.text('CANCEL'));
       await tester.pump();
@@ -97,6 +97,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(cancelled, isTrue);
+      expect(confirmed, isFalse);
       expect(
         find.text('Do you want to move this note to trash?'),
         findsNothing,
