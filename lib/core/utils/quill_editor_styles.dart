@@ -88,8 +88,7 @@ DefaultStyles quillEditorStyle(BuildContext context) {
       const VerticalSpacing(4, 4),
       const VerticalSpacing(4, 4),
       null,
-      // NotesQuillCheckboxBuilder(),
-      null,
+      NotesQuillCheckboxBuilder(),
     ),
 
     link: const TextStyle(
