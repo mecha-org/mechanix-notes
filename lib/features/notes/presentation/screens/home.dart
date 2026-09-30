@@ -13,6 +13,7 @@ class HomeScreen extends StatelessWidget {
       backgroundColor: context.colorScheme.surfaceContainerLowest,
       appBar: MechanixAppBar.largeIcon(
         title: const Text("Notes"),
+        backgroundColor: context.colorScheme.surfaceContainerLowest,
         actions: [
           MechanixIconButton.standard(
             icon: const Icon(Icons.search),

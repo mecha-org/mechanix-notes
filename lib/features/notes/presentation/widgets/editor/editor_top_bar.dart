@@ -61,6 +61,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
     )?.controller;
 
     return MechanixAppBar(
+      backgroundColor: context.colorScheme.surfaceContainerLowest,
       leading: MechanixIconButton.standard(
         type: IconButtonType.rounded,
         onPressed: () => _handleBack(context),

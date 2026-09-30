@@ -85,9 +85,10 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     lists: DefaultListBlockStyle(
       titleLarge,
       const HorizontalSpacing(0, 18),
-      const VerticalSpacing(0, 0),
-      const VerticalSpacing(9, 9),
+      const VerticalSpacing(4, 4),
+      const VerticalSpacing(4, 4),
       null,
+      // NotesQuillCheckboxBuilder(),
       null,
     ),
 
@@ -98,4 +99,81 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     ),
     color: Colors.white,
   );
+}
+
+class FocusPreserveButton extends StatelessWidget {
+  const FocusPreserveButton({required this.child, super.key});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      canRequestFocus: false,
+      descendantsAreFocusable: false,
+      child: child,
+    );
+  }
+}
+
+class NotesQuillCheckboxBuilder extends QuillCheckboxBuilder {
+  NotesQuillCheckboxBuilder();
+
+  @override
+  Widget build({
+    required BuildContext context,
+    required bool isChecked,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final colorScheme = context.colorScheme;
+
+    return FocusPreserveButton(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => onChanged(!isChecked),
+        child: Container(
+          width: 32,
+          alignment: Alignment.topLeft,
+          padding: const EdgeInsets.only(top: 4, left: 4),
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: IgnorePointer(
+              child: MechanixCheckbox(
+                value: isChecked,
+                showFocusIndicator: false,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                checkColor: colorScheme.onPrimary,
+                fillColor: WidgetStateProperty.resolveWith<Color>((
+                  Set<WidgetState> states,
+                ) {
+                  if (states.contains(WidgetState.selected)) {
+                    return colorScheme.primary;
+                  }
+                  return Colors.transparent;
+                }),
+                side: WidgetStateBorderSide.resolveWith((states) {
+                  if (states.contains(WidgetState.selected)) {
+                    return const BorderSide(
+                      color: Colors.transparent,
+                      width: 0,
+                    );
+                  }
+                  return BorderSide(
+                    color: colorScheme.onSurfaceVariant,
+                    width: 2,
+                  );
+                }),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                onChanged: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

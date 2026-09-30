@@ -135,9 +135,9 @@ class _EditorViewState extends State<EditorView> {
                     children: [
                       Positioned.fill(child: EditorContent()),
                       Positioned(
-                        left: 16,
-                        right: 16,
-                        bottom: 16,
+                        left: 26,
+                        right: 26,
+                        bottom: 20,
                         child: SafeArea(
                           top: false,
                           child: Align(

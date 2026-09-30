@@ -162,7 +162,6 @@ class EditorBottomBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: context.colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: context.colorScheme.outlineVariant.withValues(alpha: 0.4),
           width: 0.5,
@@ -175,7 +174,6 @@ class EditorBottomBar extends StatelessWidget {
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: content,
     );
   }

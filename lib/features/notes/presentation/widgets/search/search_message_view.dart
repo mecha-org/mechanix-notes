@@ -12,11 +12,8 @@ class SearchMessageView extends StatelessWidget {
     super.key,
     required this.message,
     this.isError = false,
-    this.alignment = const Alignment(-1.0, -0.6),
-    this.padding = const EdgeInsets.symmetric(
-      horizontal: 24.0,
-      vertical: 40.0,
-    ),
+    this.alignment = Alignment.topLeft,
+    this.padding = const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
   });
 
   const SearchMessageView.centered({
@@ -38,9 +35,9 @@ class SearchMessageView extends StatelessWidget {
         padding: padding,
         child: Text(
           message,
-          style: (context.textTheme.titleMedium ??
-                  const TextStyle(fontSize: 18))
-              .copyWith(color: textColor, fontWeight: FontWeight.w400),
+          style:
+              (context.textTheme.titleMedium ?? const TextStyle(fontSize: 18))
+                  .copyWith(color: textColor, fontWeight: FontWeight.w400),
         ),
       ),
     );

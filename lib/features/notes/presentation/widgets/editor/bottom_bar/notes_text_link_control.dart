@@ -36,13 +36,9 @@ class NotesTextLinkControl extends StatefulWidget {
     this.onChecklistPressed,
     this.isChecklistActive = false,
     this.onLinkContextualPressed,
-    this.onImagePressed,
-    this.onFilePressed,
     this.onCodePressed,
     this.isCodeActive = false,
-    this.onMusicPressed,
     this.size = IconButtonSize.small,
-    this.spacing = 8.0,
     this.enabled = true,
   });
 
@@ -106,26 +102,14 @@ class NotesTextLinkControl extends StatefulWidget {
   /// Callback when the Link contextual button is tapped.
   final VoidCallback? onLinkContextualPressed;
 
-  /// Callback when the Image button is tapped.
-  final VoidCallback? onImagePressed;
-
-  /// Callback when the File button is tapped.
-  final VoidCallback? onFilePressed;
-
   /// Callback when the Code block button is tapped.
   final VoidCallback? onCodePressed;
 
   /// Whether Code block format is currently active.
   final bool isCodeActive;
 
-  /// Callback when the Music button is tapped.
-  final VoidCallback? onMusicPressed;
-
   /// Sizing scale for the icon buttons. Defaults to [IconButtonSize.small].
   final IconButtonSize size;
-
-  /// Horizontal spacing between buttons. Defaults to `8.0`.
-  final double spacing;
 
   /// Whether the controls are enabled. Defaults to `true`.
   final bool enabled;
@@ -159,127 +143,132 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
   @override
   Widget build(BuildContext context) {
     final isTextMode = _effectiveMode == NotesBottomBarMode.text;
-    final spacingWidget = SizedBox(width: widget.spacing);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _ModeToggleGroup(
-          key: const Key('notes_mode_toggle_group'),
-          isTextMode: isTextMode,
-          size: widget.size,
-          spacing: widget.spacing,
-          enabled: widget.enabled,
-          onModeSelected: _handleModeSelected,
-        ),
-        const SizedBox(width: 12),
-        if (isTextMode) ...[
-          _ContextualButton(
-            buttonKey: const Key('notes_text_contextual_button'),
-            isSelected: widget.isTextContextualActive,
+    return Container(
+      height: 56,
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        spacing: 12,
+        children: [
+          _ModeToggleGroup(
+            key: const Key('notes_mode_toggle_group'),
+            isTextMode: isTextMode,
             size: widget.size,
             enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.h1Icon)),
-            onPressed: widget.onTextContextualPressed,
+            onModeSelected: _handleModeSelected,
           ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_h2_button'),
-            isSelected: widget.isH2Active,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.h2Icon)),
-            onPressed: widget.onH2Pressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_body_button'),
-            isSelected: widget.isBodyActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.textstyleIcon)),
-            onPressed: widget.onBodyPressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_bold_button'),
-            isSelected: widget.isBoldActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.boldIcon)),
-            onPressed: widget.onBoldPressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_italic_button'),
-            isSelected: widget.isItalicActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.italicIcon)),
-            onPressed: widget.onItalicPressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_underline_button'),
-            isSelected: widget.isUnderlineActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.underlineIcon)),
-            onPressed: widget.onUnderlinePressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_text_strikethrough_button'),
-            isSelected: widget.isStrikethroughActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.strikethroughIcon)),
-            onPressed: widget.onStrikethroughPressed,
-          ),
-        ] else ...[
-          _ContextualButton(
-            buttonKey: const Key('notes_link_image_button'),
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.imageIcon)),
-            onPressed: widget.onImagePressed ?? widget.onLinkContextualPressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_link_file_button'),
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.fileIcon)),
-            onPressed: widget.onFilePressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_link_code_button'),
-            isSelected: widget.isCodeActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.codeBlockIcon)),
-            onPressed: widget.onCodePressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_link_checklist_button'),
-            isSelected: widget.isChecklistActive,
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.todoIcon)),
-            onPressed: widget.onChecklistPressed,
-          ),
-          spacingWidget,
-          _ContextualButton(
-            buttonKey: const Key('notes_link_music_button'),
-            size: widget.size,
-            enabled: widget.enabled,
-            icon: const ImageIcon(AssetImage(NotesIcon.musicIcon)),
-            onPressed: widget.onMusicPressed,
-          ),
+          if (isTextMode) ...[
+            _ContextualButton(
+              buttonKey: const Key('notes_text_contextual_button'),
+              isSelected: widget.isTextContextualActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(AssetImage(NotesIcon.h1Icon), size: 16),
+              onPressed: widget.onTextContextualPressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_h2_button'),
+              isSelected: widget.isH2Active,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(AssetImage(NotesIcon.h2Icon), size: 16),
+              onPressed: widget.onH2Pressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_body_button'),
+              isSelected: widget.isBodyActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(
+                AssetImage(NotesIcon.textstyleIcon),
+                size: 16,
+              ),
+              onPressed: widget.onBodyPressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_bold_button'),
+              isSelected: widget.isBoldActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(AssetImage(NotesIcon.boldIcon), size: 16),
+              onPressed: widget.onBoldPressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_italic_button'),
+              isSelected: widget.isItalicActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(AssetImage(NotesIcon.italicIcon), size: 16),
+              onPressed: widget.onItalicPressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_underline_button'),
+              isSelected: widget.isUnderlineActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(
+                AssetImage(NotesIcon.underlineIcon),
+                size: 16,
+              ),
+              onPressed: widget.onUnderlinePressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_text_strikethrough_button'),
+              isSelected: widget.isStrikethroughActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(
+                AssetImage(NotesIcon.strikethroughIcon),
+                size: 16,
+              ),
+              onPressed: widget.onStrikethroughPressed,
+            ),
+          ] else ...[
+            // TODO: This feature is not implemented
+            // _ContextualButton(
+            //   buttonKey: const Key('notes_link_image_button'),
+            //   size: widget.size,
+            //   enabled: widget.enabled,
+            //   icon: const ImageIcon(AssetImage(NotesIcon.imageIcon), size: 16),
+            //   onPressed: widget.onLinkContextualPressed,
+            // ),
+            // _ContextualButton(
+            //   buttonKey: const Key('notes_link_file_button'),
+            //   size: widget.size,
+            //   enabled: widget.enabled,
+            //   icon: const ImageIcon(AssetImage(NotesIcon.fileIcon), size: 16),
+            //   onPressed: null,
+            // ),
+            _ContextualButton(
+              buttonKey: const Key('notes_link_code_button'),
+              isSelected: widget.isCodeActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(
+                AssetImage(NotesIcon.codeBlockIcon),
+                size: 16,
+              ),
+              onPressed: widget.onCodePressed,
+            ),
+            _ContextualButton(
+              buttonKey: const Key('notes_link_checklist_button'),
+              isSelected: widget.isChecklistActive,
+              size: widget.size,
+              enabled: widget.enabled,
+              icon: const ImageIcon(AssetImage(NotesIcon.todoIcon), size: 16),
+              onPressed: widget.onChecklistPressed,
+            ),
+            // TODO: This feature is not implemented
+            // _ContextualButton(
+            //   buttonKey: const Key('notes_link_music_button'),
+            //   size: widget.size,
+            //   enabled: widget.enabled,
+            //   icon: const ImageIcon(AssetImage(NotesIcon.musicIcon), size: 16),
+            //   onPressed: null,
+            // ),
+          ],
         ],
-      ],
+      ),
     );
   }
 }
@@ -289,47 +278,49 @@ class _ModeToggleGroup extends StatelessWidget {
     super.key,
     required this.isTextMode,
     required this.size,
-    required this.spacing,
     required this.enabled,
     required this.onModeSelected,
   });
 
   final bool isTextMode;
   final IconButtonSize size;
-  final double spacing;
   final bool enabled;
   final ValueChanged<NotesBottomBarMode> onModeSelected;
 
   @override
   Widget build(BuildContext context) {
     return Container(
+      height: 48,
       decoration: BoxDecoration(
         color: context.colorScheme.surfaceContainerHighest.withValues(
           alpha: 0.5,
         ),
-        borderRadius: BorderRadius.circular(8),
       ),
-      padding: const EdgeInsets.all(2),
+      padding: EdgeInsets.zero,
       child: Row(
         mainAxisSize: MainAxisSize.min,
+        spacing: 12,
         children: [
+          // Text mode toggle button
           MechanixIconButton.filled(
             key: const Key('notes_text_toggle'),
             isSelected: isTextMode,
             type: IconButtonType.square,
             size: size,
-            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon)),
+            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon), size: 13),
+            foregroundColor: context.colorScheme.onSurface,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.text)
                 : null,
           ),
-          SizedBox(width: spacing),
+          // Link mode toggle button
           MechanixIconButton.filled(
             key: const Key('notes_link_toggle'),
             isSelected: !isTextMode,
             type: IconButtonType.square,
             size: size,
-            icon: const Icon(Icons.attach_file_rounded),
+            foregroundColor: context.colorScheme.onSurface,
+            icon: const Icon(Icons.attach_file_rounded, size: 18),
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)
                 : null,
