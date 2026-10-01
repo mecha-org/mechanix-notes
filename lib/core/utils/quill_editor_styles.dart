@@ -67,11 +67,7 @@ DefaultStyles quillEditorStyle(BuildContext context) {
       HorizontalSpacing(0, 0),
       VerticalSpacing(8, 8),
       VerticalSpacing(0, 0),
-      BoxDecoration(
-        border: Border(
-          // left: BorderSide(color: NotesColors.appTitleColor, width: 3),
-        ),
-      ),
+      BoxDecoration(border: Border()),
     ),
 
     code: DefaultTextBlockStyle(
@@ -85,17 +81,13 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     lists: DefaultListBlockStyle(
       titleLarge,
       const HorizontalSpacing(0, 18),
-      const VerticalSpacing(4, 4),
-      const VerticalSpacing(4, 4),
+      const VerticalSpacing(16, 16),
+      const VerticalSpacing(16, 16),
       null,
       NotesQuillCheckboxBuilder(),
     ),
 
-    link: const TextStyle(
-      // color: NotesColors.linkColor,
-      decoration: TextDecoration.underline,
-      // decorationColor: NotesColors.linkColor,
-    ),
+    link: const TextStyle(decoration: TextDecoration.underline),
     color: Colors.white,
   );
 }
