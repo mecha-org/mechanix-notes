@@ -57,6 +57,7 @@ class HomeGroupAccordion extends StatelessWidget {
       children: [
         MechanixExpandableListTile(
           key: ValueKey('accordion_${group.category}_${group.customLabel}'),
+          showAccordionButton: false,
           initiallyExpanded: true,
           expandedBackgroundColor: context.colorScheme.surfaceContainerLowest,
           variant: ListTileVariant.standard,
