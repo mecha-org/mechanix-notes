@@ -20,6 +20,7 @@ void main() {
     registerFallbackValue(
       EditorSaveRequested(content: const [], plainText: ''),
     );
+    registerFallbackValue(EditorPinToggled());
   });
 
   group('EditorTopBar Back Button Tests', () {
@@ -132,6 +133,27 @@ void main() {
         expect(find.byType(EditorTopBar), findsNothing);
         expect(find.text('Home'), findsOneWidget);
         verifyNever(() => mockEditorBloc.add(any()));
+      },
+    );
+
+    testWidgets(
+      'tapping pin menu item dispatches EditorPinToggled',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(withQuillController: true));
+
+        // Open menu (last MechanixIconButton)
+        final menuButton = find.byType(MechanixIconButton).last;
+        await tester.tap(menuButton);
+        await tester.pumpAndSettle();
+
+        // Find "Pin note" item
+        final pinItem = find.text('Pin note');
+        expect(pinItem, findsOneWidget);
+
+        await tester.tap(pinItem);
+        await tester.pumpAndSettle();
+
+        verify(() => mockEditorBloc.add(any(that: isA<EditorPinToggled>()))).called(1);
       },
     );
   });

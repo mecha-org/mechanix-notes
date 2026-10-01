@@ -12,6 +12,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notes => 'Notes';
 
   @override
+  String get pinned => 'Pinned';
+
+  @override
   String get last7Days => 'Last 7 Days';
 
   @override

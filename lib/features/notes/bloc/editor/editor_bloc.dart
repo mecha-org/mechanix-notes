@@ -26,6 +26,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     on<EditorToolbarToggled>(_onToolbarToggled);
     on<EditorSaveRequested>(_onSaveRequested);
     on<EditorAutoSaveRequested>(_onAutoSaveRequested);
+    on<EditorPinToggled>(_onPinToggled);
   }
 
   // Event Handlers
@@ -72,6 +73,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
             quillDocument: quillDoc,
             isContentLoading: false,
             isNewNote: false,
+            isPinned: note.isPinned,
           ),
         );
       } else {
@@ -151,7 +153,9 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
       // Check if content is unchanged
       if (existing != null) {
-        if (existing.title == note.title && existing.content == deltaJson) {
+        if (existing.title == note.title &&
+            existing.content == deltaJson &&
+            existing.isPinned == note.isPinned) {
           AppLogger.i('EditorBloc: Discarding unchanged edit');
           emit(
             EditorDiscarded(noteId: current.isDirty ? current.noteId : null),
@@ -236,6 +240,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       height: _estimateHeight(plainText),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      isPinned: current.isPinned,
     );
   }
 
@@ -260,7 +265,8 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       // Don't auto-save if nothing changed
       if (existing != null &&
           existing.title == note.title &&
-          existing.content == deltaJson) {
+          existing.content == deltaJson &&
+          existing.isPinned == note.isPinned) {
         return;
       }
 
@@ -286,6 +292,20 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       emit(const EditorFailure(ErrorCategory.storageFull));
     } catch (e) {
       AppLogger.e('EditorBloc: Auto-save failed: $e');
+    }
+  }
+
+  Future<void> _onPinToggled(
+    EditorPinToggled event,
+    Emitter<EditorState> emit,
+  ) async {
+    final current = state;
+    if (current is! EditorLoaded) return;
+    final nextPinned = !current.isPinned;
+    emit(current.copyWith(isPinned: nextPinned, isDirty: true));
+
+    if (!current.isNewNote) {
+      await _repository.togglePinNote(current.noteId);
     }
   }
 

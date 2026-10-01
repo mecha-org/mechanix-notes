@@ -70,40 +70,53 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
       ),
       actions: [
         EditorUndoRedoActions(quillController: quillController),
-        MechanixMenu<String>(
-          alignment: MechanixMenuAlignment.end,
-          offset: const Offset(0, 4),
-          // style: const MenuThemeDataConfig(focusBorderWidth: 0.0),
-          anchorBuilder: (context, controller, child) {
-            return MechanixIconButton.standard(
-              type: IconButtonType.rounded,
-              onPressed: controller.toggle,
-              foregroundColor: context.colorScheme.onSurface,
-              icon: const ImageIcon(AssetImage(NotesIcon.moreVertIcon)),
+        BlocBuilder<EditorBloc, EditorState>(
+          buildWhen: (prev, curr) {
+            final prevPinned = prev is EditorLoaded && prev.isPinned;
+            final currPinned = curr is EditorLoaded && curr.isPinned;
+            return prevPinned != currPinned;
+          },
+          builder: (context, state) {
+            final isPinned = state is EditorLoaded && state.isPinned;
+
+            return MechanixMenu<String>(
+              alignment: MechanixMenuAlignment.end,
+              offset: const Offset(0, 4),
+              anchorBuilder: (context, controller, child) {
+                return MechanixIconButton.standard(
+                  type: IconButtonType.rounded,
+                  onPressed: controller.toggle,
+                  foregroundColor: context.colorScheme.onSurface,
+                  icon: const ImageIcon(AssetImage(NotesIcon.moreVertIcon)),
+                );
+              },
+              entries: [
+                MechanixMenuItem<String>(
+                  value: 'pin',
+                  labelText: isPinned ? 'Unpin note' : 'Pin note',
+                  trailing: const ImageIcon(AssetImage(NotesIcon.pinIcon), size: 15),
+                  onTap: () {
+                    context.read<EditorBloc>().add(EditorPinToggled());
+                  },
+                ),
+                MechanixMenuItem<String>(
+                  value: 'trash',
+                  label: Text(
+                    'Move to trash',
+                    style: context.textTheme.titleSmall?.copyWith(
+                      color: context.colorScheme.error,
+                    ),
+                  ),
+                  trailing: ImageIcon(
+                    const AssetImage(NotesIcon.trashIcon),
+                    size: 15,
+                    color: context.colorScheme.error,
+                  ),
+                  onTap: () => _showTrashConfirmationSheet(context),
+                ),
+              ],
             );
           },
-          entries: [
-            const MechanixMenuItem<String>(
-              value: 'pin',
-              labelText: 'Pin note',
-              trailing: ImageIcon(AssetImage(NotesIcon.pinIcon), size: 15),
-            ),
-            MechanixMenuItem<String>(
-              value: 'trash',
-              label: Text(
-                'Move to trash',
-                style: context.textTheme.titleSmall?.copyWith(
-                  color: context.colorScheme.error,
-                ),
-              ),
-              trailing: ImageIcon(
-                const AssetImage(NotesIcon.trashIcon),
-                size: 15,
-                color: context.colorScheme.error,
-              ),
-              onTap: () => _showTrashConfirmationSheet(context),
-            ),
-          ],
         ),
       ],
     );

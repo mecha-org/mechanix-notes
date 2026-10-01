@@ -100,6 +100,12 @@ abstract class AppLocalizations {
   /// **'Notes'**
   String get notes;
 
+  /// No description provided for @pinned.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get pinned;
+
   /// No description provided for @last7Days.
   ///
   /// In en, this message translates to:

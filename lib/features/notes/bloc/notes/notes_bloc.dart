@@ -22,6 +22,7 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     on<ToggleNoteSelection>(_toggleNoteSelection);
     on<SelectAllNotes>(_selectAllNotes);
     on<ClearSelection>(_clearSelection);
+    on<TogglePinNote>(_togglePinNote);
 
     add(LoadNotes());
   }
@@ -90,7 +91,9 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       }
 
       final lastNote = state.groupedNotes.whereType<NoteMetaData>().last;
-      final lastGroup = _getTimeGroupForNote(lastNote);
+      final lastGroup = lastNote.isPinned
+          ? const TimeGroup(TimeCategory.pinned)
+          : _getTimeGroupForNote(lastNote);
       final newEntries = _buildFlattenedNotes(
         newBatch,
         existingGroup: lastGroup,
@@ -118,9 +121,22 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     if (notes.isEmpty) return [];
 
     final List<Object> flattened = [];
-    TimeGroup? currentGroup = existingGroup;
+    final pinnedNotes = notes.where((n) => n.isPinned).toList();
+    final unpinnedNotes = notes.where((n) => !n.isPinned).toList();
 
-    for (final note in notes) {
+    // 1. Pinned notes section at the top
+    if (pinnedNotes.isNotEmpty) {
+      if (existingGroup?.category != TimeCategory.pinned) {
+        flattened.add(const TimeGroup(TimeCategory.pinned));
+      }
+      flattened.addAll(pinnedNotes);
+    }
+
+    // 2. Unpinned notes grouped by time
+    TimeGroup? currentGroup =
+        existingGroup?.category == TimeCategory.pinned ? null : existingGroup;
+
+    for (final note in unpinnedNotes) {
       final group = _getTimeGroupForNote(note);
       if (group != currentGroup) {
         flattened.add(group);
@@ -140,14 +156,21 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       if (updatedNote == null) return;
       final group = _getTimeGroupForNote(updatedNote);
 
-      if (group.category != TimeCategory.recent) return;
+      if (!updatedNote.isPinned && group.category != TimeCategory.recent) return;
       emit(state.copyWith(isRefreshed: false));
 
-      // Remove old entry and insert updated note at top (most recently updated)
+      // Remove old entry and insert updated note
       final updatedNotes = [
         updatedNote,
         ...state.notes.where((n) => n.id != event.noteId),
       ];
+
+      updatedNotes.sort((a, b) {
+        if (a.isPinned != b.isPinned) {
+          return a.isPinned ? -1 : 1;
+        }
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
 
       // Reset pagination to first page only
       final firstPage = updatedNotes.take(Constants.pageSize).toList();
@@ -167,6 +190,19 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       );
     } catch (e) {
       AppLogger.e("Error refreshing note: $e");
+    }
+  }
+
+  Future<void> _togglePinNote(
+    TogglePinNote event,
+    Emitter<NotesState> emit,
+  ) async {
+    try {
+      emit(state.copyWith(isRefreshed: false));
+      await noteRepository.togglePinNote(event.noteId);
+      add(LoadNotes());
+    } catch (e) {
+      AppLogger.e("Error toggling pin note: $e");
     }
   }
 

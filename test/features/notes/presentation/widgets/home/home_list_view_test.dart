@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
+import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_selection_icon.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_note_card_content.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_list_view.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
@@ -188,6 +190,53 @@ void main() {
           ),
         ),
       ).called(1);
+    });
+
+    testWidgets('renders Pinned section and pin icon for pinned notes', (
+      tester,
+    ) async {
+      final pinnedNote = NoteMetaData(
+        id: 'p1',
+        title: 'Important Note',
+        previewText: 'This note is pinned',
+        createdAt: DateTime(2026, 9, 9, 9, 0),
+        updatedAt: DateTime(2026, 9, 9, 10, 0),
+        height: 60.0,
+        isPinned: true,
+      );
+
+      final groupedNotes = [
+        const TimeGroup(TimeCategory.pinned),
+        pinnedNote,
+        const TimeGroup(TimeCategory.recent),
+        note1,
+      ];
+
+      when(() => mockNotesBloc.state).thenReturn(
+        NotesState(groupedNotes: groupedNotes),
+      );
+
+      await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Pinned'), findsOneWidget);
+      expect(find.text('Important Note'), findsOneWidget);
+      expect(find.text('Recent'), findsOneWidget);
+      expect(find.text('Daily Journal'), findsOneWidget);
+
+      final imageIconFinder = find.byType(ImageIcon);
+      expect(imageIconFinder, findsOneWidget);
+      final imageIcon = tester.widget<ImageIcon>(imageIconFinder);
+      expect(imageIcon.image, const AssetImage(NotesIcon.pinIcon));
+
+      final noteCardTile = tester.widget<MechanixListTile>(
+        find.descendant(
+          of: find.byType(HomeNoteCardContent).first,
+          matching: find.byType(MechanixListTile),
+        ),
+      );
+      expect(noteCardTile.leading, isA<ImageIcon>());
+      expect(noteCardTile.trailingWidgets, isEmpty);
     });
   });
 }

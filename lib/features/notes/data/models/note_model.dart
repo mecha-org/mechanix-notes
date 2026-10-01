@@ -23,6 +23,9 @@ class NoteModel {
   String previewText;
   double height;
 
+  @Index()
+  bool isPinned;
+
   NoteModel({
     this.obxId = 0,
     required this.id,
@@ -33,5 +36,6 @@ class NoteModel {
     required this.plainText,
     required this.previewText,
     required this.height,
+    this.isPinned = false,
   });
 }

@@ -1,11 +1,9 @@
-import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
-import 'package:objectbox/objectbox.dart';
+import 'package:mocktail/mocktail.dart';
 
 // ---------------------------------------------------------------------------
 // Mocks & Fakes
@@ -20,6 +18,7 @@ class FakeQueryProperty extends Fake implements QueryProperty<NoteModel, Object?
 class FakeQueryPropertyDateTime extends Fake implements QueryProperty<NoteModel, DateTime> {}
 class FakeQueryPropertyInt extends Fake implements QueryProperty<NoteModel, int> {}
 class FakeQueryPropertyString extends Fake implements QueryProperty<NoteModel, String> {}
+class FakeQueryPropertyBool extends Fake implements QueryProperty<NoteModel, bool> {}
 class FakeCondition extends Fake implements Condition<NoteModel> {}
 
 // ---------------------------------------------------------------------------
@@ -55,6 +54,7 @@ NoteModel _makeNote({
   double height = 200,
   DateTime? createdAt,
   DateTime? updatedAt,
+  bool isPinned = false,
 }) {
   final now = DateTime.now();
   return NoteModel(
@@ -66,6 +66,7 @@ NoteModel _makeNote({
     height: height,
     createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
+    isPinned: isPinned,
   );
 }
 
@@ -95,6 +96,7 @@ void main() {
     registerFallbackValue(FakeQueryPropertyDateTime());
     registerFallbackValue(FakeQueryPropertyInt());
     registerFallbackValue(FakeQueryPropertyString());
+    registerFallbackValue(FakeQueryPropertyBool());
     registerFallbackValue(FakeCondition());
     registerFallbackValue(const <int>[]);
   });
@@ -120,6 +122,7 @@ void main() {
     when(() => mockQueryBuilder.order<DateTime>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
     when(() => mockQueryBuilder.order<int>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
     when(() => mockQueryBuilder.order<String>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
+    when(() => mockQueryBuilder.order<bool>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
     when(() => mockQueryBuilder.order(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
     
     when(() => mockQueryBuilder.build()).thenReturn(mockQuery);
@@ -192,11 +195,12 @@ void main() {
       expect(meta.updatedAt, equals(updatedAt));
     });
 
-    test('orders query by updatedAt in descending order', () async {
+    test('orders query by isPinned and updatedAt in descending order', () async {
       when(() => mockQuery.find()).thenReturn([]);
 
       await repository.getNotes(0, 10);
 
+      verify(() => mockQueryBuilder.order(NoteModel_.isPinned, flags: Order.descending)).called(1);
       verify(() => mockQueryBuilder.order(NoteModel_.updatedAt, flags: Order.descending)).called(1);
     });
 
@@ -298,6 +302,45 @@ void main() {
 
       expect(result, hasLength(2));
       expect(result.map((n) => n.id), containsAll(['1', '2']));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // togglePinNote
+  // -------------------------------------------------------------------------
+
+  group('togglePinNote', () {
+    test('toggles note from false to true', () async {
+      final note = _makeNote(id: '1', title: 'Note 1', isPinned: false);
+      when(() => mockQuery.findFirst()).thenReturn(note);
+      when(() => mockBox.put(any())).thenReturn(1);
+
+      final result = await repository.togglePinNote('1');
+
+      expect(result, isTrue);
+      expect(note.isPinned, isTrue);
+      verify(() => mockBox.put(note)).called(1);
+    });
+
+    test('toggles note from true to false', () async {
+      final note = _makeNote(id: '2', title: 'Note 2', isPinned: true);
+      when(() => mockQuery.findFirst()).thenReturn(note);
+      when(() => mockBox.put(any())).thenReturn(1);
+
+      final result = await repository.togglePinNote('2');
+
+      expect(result, isFalse);
+      expect(note.isPinned, isFalse);
+      verify(() => mockBox.put(note)).called(1);
+    });
+
+    test('returns false when note is not found', () async {
+      when(() => mockQuery.findFirst()).thenReturn(null);
+
+      final result = await repository.togglePinNote('unknown');
+
+      expect(result, isFalse);
+      verifyNever(() => mockBox.put(any()));
     });
   });
 }

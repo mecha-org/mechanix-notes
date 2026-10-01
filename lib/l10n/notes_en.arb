@@ -1,5 +1,6 @@
 {
   "notes": "Notes",
+  "pinned": "Pinned",
   "last7Days": "Last 7 Days",
   "failedToLoadNotes": "Failed to load notes. Please try again.",
   "failedToDeleteNotes": "Failed to delete notes. Please try again.",

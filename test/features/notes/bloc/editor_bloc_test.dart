@@ -30,6 +30,7 @@ NoteModel makeNote({
   String plainText = kSomePlainText,
   DateTime? createdAt,
   DateTime? updatedAt,
+  bool isPinned = false,
 }) {
   final now = DateTime(2024, 1, 1);
   final previewText = plainText.length > 40
@@ -44,6 +45,7 @@ NoteModel makeNote({
     height: 104.0,
     createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
+    isPinned: isPinned,
   );
 }
 
@@ -1945,6 +1947,72 @@ void main() {
         expect(note.title, 'Single Line Title Only');
         expect(note.previewText, 'Single Line Title Only');
       },
+    );
+  });
+
+  group('EditorPinToggled Tests', () {
+    blocTest<EditorBloc, EditorState>(
+      'toggles isPinned in EditorLoaded and calls togglePinNote for existing note',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.togglePinNote(kTestNoteId))
+            .thenAnswer((_) async => true);
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: kTestTitle,
+        quillDocument: Document(),
+        isNewNote: false,
+        isPinned: false,
+      ),
+      act: (bloc) => bloc.add(EditorPinToggled()),
+      expect: () => [
+        isA<EditorLoaded>()
+            .having((s) => s.isPinned, 'isPinned', true)
+            .having((s) => s.isDirty, 'isDirty', true),
+      ],
+      verify: (_) {
+        verify(() => repository.togglePinNote(kTestNoteId)).called(1);
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'toggles isPinned for new note without calling togglePinNote immediately',
+      build: buildBloc,
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: '',
+        quillDocument: Document(),
+        isNewNote: true,
+        isPinned: false,
+      ),
+      act: (bloc) => bloc.add(EditorPinToggled()),
+      expect: () => [
+        isA<EditorLoaded>()
+            .having((s) => s.isPinned, 'isPinned', true)
+            .having((s) => s.isDirty, 'isDirty', true),
+      ],
+      verify: (_) {
+        verifyNever(() => repository.togglePinNote(any()));
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'loads existing note with isPinned status set properly',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
+          (_) async => makeNote(isPinned: true),
+        );
+      },
+      act: (bloc) => bloc.add(EditorInitialised(noteId: kTestNoteId)),
+      wait: const Duration(milliseconds: 300),
+      expect: () => [
+        isA<EditorLoaded>().having((s) => s.isContentLoading, 'loading', true),
+        isA<EditorLoaded>()
+            .having((s) => s.isPinned, 'isPinned', true)
+            .having((s) => s.isContentLoading, 'loading', false),
+      ],
     );
   });
 }

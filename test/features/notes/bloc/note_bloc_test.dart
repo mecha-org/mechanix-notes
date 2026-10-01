@@ -39,7 +39,11 @@ class MockNoteRepository extends Mock implements NoteRepository {
 // ---------------------------------------------------------------------------
 
 /// Creates a [NoteMetaData] with a [updatedAt] offset from now.
-NoteMetaData makeNote({required String id, required DateTime updatedAt}) =>
+NoteMetaData makeNote({
+  required String id,
+  required DateTime updatedAt,
+  bool isPinned = false,
+}) =>
     NoteMetaData(
       id: id,
       updatedAt: updatedAt,
@@ -47,7 +51,11 @@ NoteMetaData makeNote({required String id, required DateTime updatedAt}) =>
       height: 0,
       createdAt: DateTime.now(),
       previewText: 'Preview $id',
+      isPinned: isPinned,
     );
+
+NoteMetaData pinnedNote(String id) =>
+    makeNote(id: id, updatedAt: now, isPinned: true);
 
 /// Returns the list of [NoteMetaData] objects extracted from a flattened list.
 List<NoteMetaData> extractNotes(List<Object> grouped) =>
@@ -78,7 +86,12 @@ NoteMetaData recentNote(String id) =>
     makeNote(id: id, updatedAt: now.subtract(const Duration(minutes: 10)));
 
 NoteMetaData todayNote(String id) =>
-    makeNote(id: id, updatedAt: now.subtract(const Duration(hours: 3)));
+    makeNote(
+      id: id,
+      updatedAt: now.hour >= 2
+          ? DateTime(now.year, now.month, now.day)
+          : now.subtract(const Duration(hours: 3)),
+    );
 
 NoteMetaData yesterdayNote(String id) =>
     makeNote(id: id, updatedAt: today.subtract(const Duration(days: 1)));
@@ -92,7 +105,9 @@ NoteMetaData lastWeekNote(String id) =>
     makeNote(id: id, updatedAt: now.subtract(const Duration(days: 6)));
 
 NoteMetaData thisMonthNote(String id) {
-  final candidate = thisMonthStart;
+  final candidate = now.day > 7
+      ? thisMonthStart
+      : now.subtract(const Duration(days: 10));
   return makeNote(id: id, updatedAt: candidate);
 }
 
@@ -1387,5 +1402,44 @@ void main() {
       const b = NotesState(currentPage: 1);
       expect(a, isNot(equals(b)));
     });
+  });
+
+  group('Pinned Notes Tests', () {
+    blocTest<NotesBloc, NotesState>(
+      'places TimeCategory.pinned at top when pinned notes are present',
+      build: () {
+        when(
+          () => mockRepo.getNotes(any(), any()),
+        ).thenAnswer((_) async => [pinnedNote('p1'), recentNote('r1')]);
+        return NotesBloc(noteRepository: mockRepo);
+      },
+      skip: 1,
+      act: (bloc) => bloc.add(LoadNotes()),
+      verify: (bloc) {
+        expect(
+          hasCategory(bloc.state.groupedNotes, TimeCategory.pinned),
+          isTrue,
+        );
+        expect(
+          extractCategories(bloc.state.groupedNotes).first,
+          TimeCategory.pinned,
+        );
+      },
+    );
+
+    blocTest<NotesBloc, NotesState>(
+      'TogglePinNote calls repository.togglePinNote and reloads notes',
+      build: () {
+        when(() => mockRepo.togglePinNote('p1'))
+            .thenAnswer((_) async => true);
+        when(() => mockRepo.getNotes(any(), any()))
+            .thenAnswer((_) async => [pinnedNote('p1')]);
+        return NotesBloc(noteRepository: mockRepo);
+      },
+      act: (bloc) => bloc.add(TogglePinNote(noteId: 'p1')),
+      verify: (bloc) {
+        verify(() => mockRepo.togglePinNote('p1')).called(1);
+      },
+    );
   });
 }
