@@ -13,13 +13,13 @@ import 'package:mechanix_notes/features/notes/presentation/widgets/search/search
 class SearchView extends StatefulWidget {
   const SearchView({
     super.key,
-    this.emptyMessage = 'No note found',
+    this.emptyMessage,
     this.onResultSelected,
     this.onClose,
   });
 
   /// Text shown when no search results match.
-  final String emptyMessage;
+  final String? emptyMessage;
 
   /// Optional callback invoked when a result is tapped.
   final ValueChanged<NoteMetaData>? onResultSelected;

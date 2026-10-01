@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
 class EditorTrashConfirmationSheet extends StatelessWidget {
@@ -35,6 +36,8 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return SafeArea(
       top: false,
       child: Padding(
@@ -44,7 +47,7 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Do you want to move this note to trash?',
+              l10n?.moveToTrashPrompt ?? 'Do you want to move this note to trash?',
               style: context.textTheme.titleMedium?.copyWith(
                 color: context.colorScheme.onSurface,
                 fontWeight: FontWeight.w400,
@@ -60,7 +63,7 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
                     child: MechanixButton.outline(
                       widthSizing: ButtonLayoutSizing.fill,
                       size: ButtonSize.large,
-                      label: 'CANCEL',
+                      label: (l10n?.cancel ?? 'Cancel').toUpperCase(),
                       icon: const ImageIcon(
                         AssetImage(NotesIcon.closeIcon),
                         size: 24,
@@ -73,7 +76,7 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
                     child: MechanixButton.filled(
                       widthSizing: ButtonLayoutSizing.fill,
                       size: ButtonSize.large,
-                      label: 'TRASH',
+                      label: (l10n?.trash ?? 'Trash').toUpperCase(),
                       backgroundColor:
                           context.colorScheme.surfaceContainerHighest,
                       foregroundColor: context.colorScheme.error,

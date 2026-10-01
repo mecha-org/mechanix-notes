@@ -141,4 +141,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get storageFull => 'Storage is full';
+
+  @override
+  String get pinNote => 'Pin note';
+
+  @override
+  String get unpinNote => 'Unpin note';
+
+  @override
+  String get moveToTrash => 'Move to trash';
+
+  @override
+  String get moveToTrashPrompt => 'Do you want to move this note to trash?';
+
+  @override
+  String get trash => 'Trash';
+
+  @override
+  String get searchNote => 'Search note';
+
+  @override
+  String get failedToPerformSearch => 'Failed to perform search';
 }

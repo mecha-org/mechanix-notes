@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
 /// An app bar that wraps [MechanixAppBar] and supports toggling between
@@ -11,8 +12,8 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.isSearchActive,
     required this.controller,
     required this.focusNode,
-    this.title = const Text('NOTES'),
-    this.searchHint = 'SEARCH NOTE',
+    this.title,
+    this.searchHint,
     this.collapsedVariant = AppBarVariant.small,
     this.onQueryChanged,
     this.onSubmitted,
@@ -40,10 +41,10 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   final FocusNode focusNode;
 
   /// Title displayed in the collapsed state.
-  final Widget title;
+  final Widget? title;
 
   /// Placeholder hint text in active search mode.
-  final String searchHint;
+  final String? searchHint;
 
   /// Variant to use when collapsed ([AppBarVariant.small] or [AppBarVariant.large]).
   final AppBarVariant collapsedVariant;
@@ -75,6 +76,12 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final effectiveTitle =
+        title ?? Text((l10n?.notes ?? 'Notes').toUpperCase());
+    final effectiveSearchHint =
+        searchHint ?? (l10n?.searchNote ?? 'Search note').toUpperCase();
+
     if (!isSearchActive) {
       final searchAction = IconButton(
         // icon: const Icon(Icons.search),
@@ -84,14 +91,14 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
 
       if (collapsedVariant == AppBarVariant.large) {
         return MechanixAppBar.large(
-          title: title,
+          title: effectiveTitle,
           actions: [searchAction],
           backgroundColor: context.colorScheme.surfaceContainerLowest,
         );
       }
 
       return MechanixAppBar.small(
-        title: title,
+        title: effectiveTitle,
         actions: [searchAction],
         backgroundColor: context.colorScheme.surfaceContainerLowest,
       );
@@ -138,7 +145,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                       disabledBorder: InputBorder.none,
                       contentPadding: EdgeInsets.zero,
                       fillColor: Colors.transparent,
-                      hintText: searchHint,
+                      hintText: effectiveSearchHint,
                       hintStyle: textTheme.bodyLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),

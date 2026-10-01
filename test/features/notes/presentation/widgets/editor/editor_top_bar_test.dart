@@ -8,6 +8,7 @@ import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_top_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:widgets/widgets.dart';
 
@@ -63,6 +64,8 @@ void main() {
       if (withQuillController) {
         return MaterialApp(
           theme: MechanixTheme.dark,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: QuillControllerProvider(
             controller: quillController,
             focusNode: focusNode,
@@ -71,7 +74,12 @@ void main() {
         );
       }
 
-      return MaterialApp(theme: MechanixTheme.dark, home: child);
+      return MaterialApp(
+        theme: MechanixTheme.dark,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: child,
+      );
     }
 
     testWidgets(

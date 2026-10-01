@@ -7,6 +7,7 @@ import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_trash_confirmation_sheet.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/topbar/editor_undo_redo_actions.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
 class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
@@ -78,6 +79,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
           },
           builder: (context, state) {
             final isPinned = state is EditorLoaded && state.isPinned;
+            final l10n = AppLocalizations.of(context);
 
             return MechanixMenu<String>(
               alignment: MechanixMenuAlignment.end,
@@ -93,7 +95,9 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
               entries: [
                 MechanixMenuItem<String>(
                   value: 'pin',
-                  labelText: isPinned ? 'Unpin note' : 'Pin note',
+                  labelText: isPinned
+                      ? (l10n?.unpinNote ?? 'Unpin note')
+                      : (l10n?.pinNote ?? 'Pin note'),
                   trailing: const ImageIcon(AssetImage(NotesIcon.pinIcon), size: 15),
                   onTap: () {
                     context.read<EditorBloc>().add(EditorPinToggled());
@@ -102,7 +106,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
                 MechanixMenuItem<String>(
                   value: 'trash',
                   label: Text(
-                    'Move to trash',
+                    l10n?.moveToTrash ?? 'Move to trash',
                     style: context.textTheme.titleSmall?.copyWith(
                       color: context.colorScheme.error,
                     ),

@@ -5,6 +5,7 @@ import 'package:mechanix_notes/features/notes/bloc/search/search_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/search/search_list_view.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/search/search_message_view.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 
 /// The container widget displaying the results, empty state, or loading state
 /// based on the current [SearchBloc] state.
@@ -12,7 +13,7 @@ class SearchList extends StatelessWidget {
   const SearchList({
     super.key,
     required this.query,
-    this.emptyMessage = 'No note found',
+    this.emptyMessage,
     this.onResultSelected,
   });
 
@@ -20,13 +21,17 @@ class SearchList extends StatelessWidget {
   final String query;
 
   /// Message to show when no matches are found.
-  final String emptyMessage;
+  final String? emptyMessage;
 
   /// Callback when a note result is tapped.
   final ValueChanged<NoteMetaData>? onResultSelected;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final resolvedEmptyMessage =
+        emptyMessage ?? l10n?.noNotesFound ?? 'No notes found';
+
     return BlocBuilder<SearchBloc, SearchState>(
       builder: (context, state) {
         // Active, empty query state: clean slate waiting for input
@@ -41,15 +46,16 @@ class SearchList extends StatelessWidget {
 
         // Error state
         if (state.status == SearchStatus.failure) {
-          return const SearchMessageView.centered(
-            message: 'Failed to perform search',
+          return SearchMessageView.centered(
+            message:
+                l10n?.failedToPerformSearch ?? 'Failed to perform search',
             isError: true,
           );
         }
 
         // Active, query with no matches
         if (state.results.isEmpty) {
-          return SearchMessageView(message: emptyMessage);
+          return SearchMessageView(message: resolvedEmptyMessage);
         }
 
         // Active, query with matches

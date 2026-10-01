@@ -10,12 +10,12 @@ import 'package:widgets/widgets.dart';
 class SearchScreen extends StatelessWidget {
   const SearchScreen({
     super.key,
-    this.emptyMessage = 'No note found',
+    this.emptyMessage,
     this.onResultSelected,
   });
 
   /// Custom empty state message when no notes match.
-  final String emptyMessage;
+  final String? emptyMessage;
 
   /// Optional callback invoked when a result note is tapped.
   final ValueChanged<NoteMetaData>? onResultSelected;
