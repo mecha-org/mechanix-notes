@@ -1,17 +1,24 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_quill/flutter_quill.dart' show QuillEditor;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
-import 'package:flutter_quill/flutter_quill.dart' show QuillEditor;
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
 
 class IntegrationTestHelper {
   NoteRepository? noteRepository;
+  Directory? tempDir;
 
-  Future<void> setUp() async {
-    noteRepository = NoteRepositoryImpl();
+  Future<void> setUp({bool useTempDir = false}) async {
+    if (useTempDir) {
+      tempDir = Directory.systemTemp.createTempSync('mechanix_notes_it_');
+      noteRepository = NoteRepositoryImpl();
+    } else {
+      noteRepository = NoteRepositoryImpl();
+    }
   }
 
   Future<void> tearDown() async {
@@ -21,6 +28,11 @@ class IntegrationTestHelper {
         if (notes.isNotEmpty) {
           await noteRepository!.deleteNotes(notes.map((n) => n.id).toList());
         }
+      } catch (_) {}
+    }
+    if (tempDir != null && tempDir!.existsSync()) {
+      try {
+        tempDir!.deleteSync(recursive: true);
       } catch (_) {}
     }
   }

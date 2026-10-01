@@ -38,7 +38,6 @@ class HomeBottomBar extends StatelessWidget {
 
         return Container(
           height: 60,
-          // decoration: const BoxDecoration(color: NotesColors.bottomBarBg),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: SafeArea(
             top: false,

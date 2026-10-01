@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A utility to highlight case-insensitive occurrences of a query string within a text.
 class SearchTextHighlighter {
-  /// Builds a [TextSpan] where all case-insensitive occurrences of [query]
-  /// within [text] are styled with [highlightStyle], while remaining text
-  /// is styled with [baseStyle].
   static TextSpan highlight({
     required String text,
     required String query,

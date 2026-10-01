@@ -3,16 +3,8 @@ import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:widgets/widgets.dart';
 
 /// Defines the active mode in [NotesTextLinkControl].
-enum NotesBottomBarMode {
-  /// Text formatting mode is active.
-  text,
+enum NotesBottomBarMode { text, link }
 
-  /// Link editing/insertion mode is active.
-  link,
-}
-
-/// A Notes-specific bottom bar control providing Text/Link toggles
-/// and a contextual small square button adjacent to the active mode.
 class NotesTextLinkControl extends StatefulWidget {
   const NotesTextLinkControl({
     super.key,
@@ -143,6 +135,9 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
   @override
   Widget build(BuildContext context) {
     final isTextMode = _effectiveMode == NotesBottomBarMode.text;
+    VoidCallback? onPressed(VoidCallback? callback) =>
+        widget.enabled ? callback : null;
+
     return Container(
       height: 56,
       padding: const EdgeInsets.all(4),
@@ -162,80 +157,71 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_contextual_button'),
               isSelected: widget.isTextContextualActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(AssetImage(NotesIcon.h1Icon), size: 16),
-              onPressed: widget.onTextContextualPressed,
+              onPressed: onPressed(widget.onTextContextualPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_h2_button'),
               isSelected: widget.isH2Active,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(AssetImage(NotesIcon.h2Icon), size: 16),
-              onPressed: widget.onH2Pressed,
+              onPressed: onPressed(widget.onH2Pressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_body_button'),
               isSelected: widget.isBodyActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(
                 AssetImage(NotesIcon.textstyleIcon),
                 size: 16,
               ),
-              onPressed: widget.onBodyPressed,
+              onPressed: onPressed(widget.onBodyPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_bold_button'),
               isSelected: widget.isBoldActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(AssetImage(NotesIcon.boldIcon), size: 16),
-              onPressed: widget.onBoldPressed,
+              onPressed: onPressed(widget.onBoldPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_italic_button'),
               isSelected: widget.isItalicActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(AssetImage(NotesIcon.italicIcon), size: 16),
-              onPressed: widget.onItalicPressed,
+              onPressed: onPressed(widget.onItalicPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_underline_button'),
               isSelected: widget.isUnderlineActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(
                 AssetImage(NotesIcon.underlineIcon),
                 size: 16,
               ),
-              onPressed: widget.onUnderlinePressed,
+              onPressed: onPressed(widget.onUnderlinePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(
                 AssetImage(NotesIcon.strikethroughIcon),
                 size: 16,
               ),
-              onPressed: widget.onStrikethroughPressed,
+              onPressed: onPressed(widget.onStrikethroughPressed),
             ),
           ] else ...[
             // TODO: This feature is not implemented
             // _ContextualButton(
             //   buttonKey: const Key('notes_link_image_button'),
             //   size: widget.size,
-            //   enabled: widget.enabled,
             //   icon: const ImageIcon(AssetImage(NotesIcon.imageIcon), size: 16),
-            //   onPressed: widget.onLinkContextualPressed,
+            //   onPressed: onPressed(widget.onLinkContextualPressed),
             // ),
             // _ContextualButton(
             //   buttonKey: const Key('notes_link_file_button'),
             //   size: widget.size,
-            //   enabled: widget.enabled,
             //   icon: const ImageIcon(AssetImage(NotesIcon.fileIcon), size: 16),
             //   onPressed: null,
             // ),
@@ -243,26 +229,23 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_link_code_button'),
               isSelected: widget.isCodeActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(
                 AssetImage(NotesIcon.codeBlockIcon),
                 size: 16,
               ),
-              onPressed: widget.onCodePressed,
+              onPressed: onPressed(widget.onCodePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_link_checklist_button'),
               isSelected: widget.isChecklistActive,
               size: widget.size,
-              enabled: widget.enabled,
               icon: const ImageIcon(AssetImage(NotesIcon.todoIcon), size: 16),
-              onPressed: widget.onChecklistPressed,
+              onPressed: onPressed(widget.onChecklistPressed),
             ),
             // TODO: This feature is not implemented
             // _ContextualButton(
             //   buttonKey: const Key('notes_link_music_button'),
             //   size: widget.size,
-            //   enabled: widget.enabled,
             //   icon: const ImageIcon(AssetImage(NotesIcon.musicIcon), size: 16),
             //   onPressed: null,
             // ),
@@ -338,7 +321,6 @@ class _ContextualButton extends StatelessWidget {
     required this.onPressed,
     this.isSelected = false,
     required this.size,
-    required this.enabled,
   });
 
   final Key buttonKey;
@@ -346,7 +328,6 @@ class _ContextualButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isSelected;
   final IconButtonSize size;
-  final bool enabled;
 
   @override
   Widget build(BuildContext context) {
@@ -361,7 +342,7 @@ class _ContextualButton extends StatelessWidget {
       foregroundColor: scheme.onSurfaceVariant,
       selectedBackgroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.08),
       selectedForegroundColor: scheme.onSurface,
-      onPressed: enabled ? onPressed : null,
+      onPressed: onPressed,
     );
   }
 }

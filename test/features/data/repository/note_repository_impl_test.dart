@@ -10,15 +10,28 @@ import 'package:mocktail/mocktail.dart';
 // ---------------------------------------------------------------------------
 
 class MockBox extends Mock implements Box<NoteModel> {}
+
 class MockQueryBuilder extends Mock implements QueryBuilder<NoteModel> {}
+
 class MockQuery extends Mock implements Query<NoteModel> {}
+
 class MockIndexingService extends Mock implements IndexingService {}
 
-class FakeQueryProperty extends Fake implements QueryProperty<NoteModel, Object?> {}
-class FakeQueryPropertyDateTime extends Fake implements QueryProperty<NoteModel, DateTime> {}
-class FakeQueryPropertyInt extends Fake implements QueryProperty<NoteModel, int> {}
-class FakeQueryPropertyString extends Fake implements QueryProperty<NoteModel, String> {}
-class FakeQueryPropertyBool extends Fake implements QueryProperty<NoteModel, bool> {}
+class FakeQueryProperty extends Fake
+    implements QueryProperty<NoteModel, Object?> {}
+
+class FakeQueryPropertyDateTime extends Fake
+    implements QueryProperty<NoteModel, DateTime> {}
+
+class FakeQueryPropertyInt extends Fake
+    implements QueryProperty<NoteModel, int> {}
+
+class FakeQueryPropertyString extends Fake
+    implements QueryProperty<NoteModel, String> {}
+
+class FakeQueryPropertyBool extends Fake
+    implements QueryProperty<NoteModel, bool> {}
+
 class FakeCondition extends Fake implements Condition<NoteModel> {}
 
 // ---------------------------------------------------------------------------
@@ -30,7 +43,7 @@ class TestableNoteRepositoryImpl extends NoteRepositoryImpl {
   bool ensureStoreCalled = false;
 
   TestableNoteRepositoryImpl(this.fakeBox, IndexingService indexingService)
-      : super(indexingService: indexingService);
+    : super(indexingService: indexingService);
 
   /// Override the getter so the implementation uses our fake box.
   @override
@@ -82,16 +95,18 @@ void main() {
   late TestableNoteRepositoryImpl repository;
 
   setUpAll(() {
-    registerFallbackValue(NoteModel(
-      id: '',
-      title: '',
-      content: '',
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      plainText: '',
-      previewText: '',
-      height: 0.0,
-    ));
+    registerFallbackValue(
+      NoteModel(
+        id: '',
+        title: '',
+        content: '',
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+        plainText: '',
+        previewText: '',
+        height: 0.0,
+      ),
+    );
     registerFallbackValue(FakeQueryProperty());
     registerFallbackValue(FakeQueryPropertyDateTime());
     registerFallbackValue(FakeQueryPropertyInt());
@@ -110,21 +125,35 @@ void main() {
 
     // Setup default indexing stubs
     when(() => mockIndexingService.initialize()).thenAnswer((_) async {});
-    when(() => mockIndexingService.upsertNote(any(), any(), any())).thenAnswer((_) async {});
-    when(() => mockIndexingService.deleteNotesBatch(any())).thenAnswer((_) async {});
+    when(
+      () => mockIndexingService.upsertNote(any(), any(), any()),
+    ).thenAnswer((_) async {});
+    when(
+      () => mockIndexingService.deleteNotesBatch(any()),
+    ).thenAnswer((_) async {});
     when(() => mockIndexingService.search(any())).thenAnswer((_) async => []);
 
     // Setup default query builder stubbing
     when(() => mockBox.query(any())).thenReturn(mockQueryBuilder);
     when(() => mockBox.query(null)).thenReturn(mockQueryBuilder);
     when(() => mockBox.query()).thenReturn(mockQueryBuilder);
-    
-    when(() => mockQueryBuilder.order<DateTime>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
-    when(() => mockQueryBuilder.order<int>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
-    when(() => mockQueryBuilder.order<String>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
-    when(() => mockQueryBuilder.order<bool>(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
-    when(() => mockQueryBuilder.order(any(), flags: any(named: 'flags'))).thenReturn(mockQueryBuilder);
-    
+
+    when(
+      () => mockQueryBuilder.order<DateTime>(any(), flags: any(named: 'flags')),
+    ).thenReturn(mockQueryBuilder);
+    when(
+      () => mockQueryBuilder.order<int>(any(), flags: any(named: 'flags')),
+    ).thenReturn(mockQueryBuilder);
+    when(
+      () => mockQueryBuilder.order<String>(any(), flags: any(named: 'flags')),
+    ).thenReturn(mockQueryBuilder);
+    when(
+      () => mockQueryBuilder.order<bool>(any(), flags: any(named: 'flags')),
+    ).thenReturn(mockQueryBuilder);
+    when(
+      () => mockQueryBuilder.order(any(), flags: any(named: 'flags')),
+    ).thenReturn(mockQueryBuilder);
+
     when(() => mockQueryBuilder.build()).thenReturn(mockQuery);
     when(() => mockQuery.close()).thenAnswer((_) {});
   });
@@ -195,14 +224,27 @@ void main() {
       expect(meta.updatedAt, equals(updatedAt));
     });
 
-    test('orders query by isPinned and updatedAt in descending order', () async {
-      when(() => mockQuery.find()).thenReturn([]);
+    test(
+      'orders query by isPinned and updatedAt in descending order',
+      () async {
+        when(() => mockQuery.find()).thenReturn([]);
 
-      await repository.getNotes(0, 10);
+        await repository.getNotes(0, 10);
 
-      verify(() => mockQueryBuilder.order(NoteModel_.isPinned, flags: Order.descending)).called(1);
-      verify(() => mockQueryBuilder.order(NoteModel_.updatedAt, flags: Order.descending)).called(1);
-    });
+        verify(
+          () => mockQueryBuilder.order(
+            NoteModel_.isPinned,
+            flags: Order.descending,
+          ),
+        ).called(1);
+        verify(
+          () => mockQueryBuilder.order(
+            NoteModel_.updatedAt,
+            flags: Order.descending,
+          ),
+        ).called(1);
+      },
+    );
 
     test('returns empty list and does not throw on exception', () async {
       when(() => mockQuery.find()).thenThrow(Exception('ObjectBox error'));
@@ -277,13 +319,21 @@ void main() {
       verify(() => mockBox.put(note)).called(1);
     });
 
-    test('upsertNote propagates DbFullException when writing to box fails', () async {
-      final note = _makeNote(id: '1', title: 'New Title');
-      when(() => mockQuery.findFirst()).thenReturn(null);
-      when(() => mockBox.put(any())).thenThrow(DbFullException('Disk full', 1018));
+    test(
+      'upsertNote propagates DbFullException when writing to box fails',
+      () async {
+        final note = _makeNote(id: '1', title: 'New Title');
+        when(() => mockQuery.findFirst()).thenReturn(null);
+        when(
+          () => mockBox.put(any()),
+        ).thenThrow(DbFullException('Disk full', 1018));
 
-      expect(() => repository.upsertNote(note), throwsA(isA<DbFullException>()));
-    });
+        expect(
+          () => repository.upsertNote(note),
+          throwsA(isA<DbFullException>()),
+        );
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
@@ -293,9 +343,15 @@ void main() {
   group('searchNotes', () {
     test('queries box with title and preview text contains', () async {
       final note1 = _makeNote(id: '1', title: 'matching title');
-      final note2 = _makeNote(id: '2', title: 'other', previewText: 'matching preview');
+      final note2 = _makeNote(
+        id: '2',
+        title: 'other',
+        previewText: 'matching preview',
+      );
 
-      when(() => mockIndexingService.search('match')).thenAnswer((_) async => ['1', '2']);
+      when(
+        () => mockIndexingService.search('match'),
+      ).thenAnswer((_) async => ['1', '2']);
       when(() => mockQuery.find()).thenReturn([note1, note2]);
 
       final result = await repository.searchNotes('match');
@@ -323,7 +379,11 @@ void main() {
     });
 
     test('toggles note from true to false', () async {
-      final note = _makeNote(id: '2', title: 'Note 2', isPinned: true);
+      final note = _makeNote(
+        id: '2',
+        title: 'Note 2',
+        isPinned: true,
+      );
       when(() => mockQuery.findFirst()).thenReturn(note);
       when(() => mockBox.put(any())).thenReturn(1);
 

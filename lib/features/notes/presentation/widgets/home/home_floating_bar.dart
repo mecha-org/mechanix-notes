@@ -29,13 +29,9 @@ class HomeFloatingBar extends StatelessWidget {
                           Navigator.pushNamed(context, '/search');
                         }
                       : null,
-                  // backgroundColor: NotesColors.bottomBarBg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
-                    side: const BorderSide(
-                      // color: NotesColors.borderColor,
-                      width: 0.5,
-                    ),
+                    side: const BorderSide(width: 0.5),
                   ),
                   child: Image.asset(
                     NotesIcon.searchIcon,
@@ -54,7 +50,6 @@ class HomeFloatingBar extends StatelessWidget {
               onPressed: () {
                 Navigator.pushNamed(context, '/note-editor');
               },
-              // backgroundColor: NotesColors.borderColor,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),

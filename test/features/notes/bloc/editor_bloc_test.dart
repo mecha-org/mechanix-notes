@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_quill/flutter_quill.dart' show Document;
 import 'package:mechanix_notes/core/utils/enums.dart';
@@ -6,8 +7,8 @@ import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:test/test.dart';
 import 'package:objectbox/objectbox.dart';
+import 'package:test/test.dart';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -89,16 +90,12 @@ void main() {
             .having((s) => s.isNewNote, 'isNewNote', true)
             .having((s) => s.isContentLoading, 'isContentLoading', false)
             .having((s) => s.quillDocument, 'quillDocument', isNotNull)
-            .having(
-              (s) => s.quillDocument!.toDelta().toJson(),
-              'delta',
-              [
-                {
-                  'insert': '\n',
-                  'attributes': {'header': 1},
-                },
-              ],
-            ),
+            .having((s) => s.quillDocument!.toDelta().toJson(), 'delta', [
+              {
+                'insert': '\n',
+                'attributes': {'header': 1},
+              },
+            ]),
       ],
       verify: (_) => verifyNever(() => repository.getNoteById(any())),
     );
@@ -1910,14 +1907,12 @@ void main() {
         ),
       ),
       verify: (_) {
-        final captured =
-            verify(() => repository.upsertNote(captureAny())).captured;
+        final captured = verify(
+          () => repository.upsertNote(captureAny()),
+        ).captured;
         final note = captured.first as NoteModel;
         expect(note.title, 'My Note Title');
-        expect(
-          note.previewText,
-          'This is the body of my note that provide',
-        );
+        expect(note.previewText, 'This is the body of my note that provide');
       },
     );
 
@@ -1941,8 +1936,9 @@ void main() {
         ),
       ),
       verify: (_) {
-        final captured =
-            verify(() => repository.upsertNote(captureAny())).captured;
+        final captured = verify(
+          () => repository.upsertNote(captureAny()),
+        ).captured;
         final note = captured.first as NoteModel;
         expect(note.title, 'Single Line Title Only');
         expect(note.previewText, 'Single Line Title Only');
@@ -1955,8 +1951,9 @@ void main() {
       'toggles isPinned in EditorLoaded and calls togglePinNote for existing note',
       build: buildBloc,
       setUp: () {
-        when(() => repository.togglePinNote(kTestNoteId))
-            .thenAnswer((_) async => true);
+        when(
+          () => repository.togglePinNote(kTestNoteId),
+        ).thenAnswer((_) async => true);
       },
       seed: () => EditorLoaded(
         noteId: kTestNoteId,
@@ -2001,9 +1998,9 @@ void main() {
       'loads existing note with isPinned status set properly',
       build: buildBloc,
       setUp: () {
-        when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
-          (_) async => makeNote(isPinned: true),
-        );
+        when(
+          () => repository.getNoteById(kTestNoteId),
+        ).thenAnswer((_) async => makeNote(isPinned: true));
       },
       act: (bloc) => bloc.add(EditorInitialised(noteId: kTestNoteId)),
       wait: const Duration(milliseconds: 300),

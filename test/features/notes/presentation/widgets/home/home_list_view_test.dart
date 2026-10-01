@@ -13,6 +13,7 @@ import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/hom
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_note_card_content.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_list_view.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:widgets/widgets.dart';
@@ -82,8 +83,8 @@ void main() {
     height: 60.0,
   );
 
-  group('HomeListView with Accordion Groups', () {
-    testWidgets('renders accordion sections for Recent and Yesterday', (
+  group('HomeListView with Grouped Notes', () {
+    testWidgets('renders headers and note cards for Recent and Yesterday', (
       tester,
     ) async {
       final groupedNotes = [
@@ -102,16 +103,15 @@ void main() {
       await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
       await tester.pumpAndSettle();
 
-      // Verify accordion sections rendered
-      expect(find.byType(HomeGroupAccordion), findsNWidgets(2));
-      expect(find.byType(MechanixExpandableListTile), findsNWidgets(2));
+      // Verify headers rendered
+      expect(find.byType(HomeGroupHeader), findsNWidgets(2));
 
-      // Verify headers
+      // Verify headers text
       expect(find.text('Recent'), findsOneWidget);
       expect(find.text('Yesterday'), findsOneWidget);
       expect(find.text('[01]'), findsOneWidget);
 
-      // Verify notes rendered inside expanded sections
+      // Verify notes rendered inside virtualized list
       expect(find.text('Daily Journal'), findsOneWidget);
       expect(find.text('09 SEP'), findsOneWidget);
       expect(find.text('Skit dialogues'), findsOneWidget);
@@ -121,7 +121,7 @@ void main() {
       expect(find.text('09 AUG'), findsOneWidget);
     });
 
-    testWidgets('tapping section header collapses section with accordion button hidden', (
+    testWidgets('renders flat virtualized list of headers and note cards', (
       tester,
     ) async {
       final groupedNotes = [
@@ -136,22 +136,10 @@ void main() {
       await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
       await tester.pumpAndSettle();
 
+      expect(find.text('Recent'), findsOneWidget);
       expect(find.text('Daily Journal'), findsOneWidget);
-
-      // Accordion chevron button is hidden (showAccordionButton: false)
-      expect(find.byType(MechanixAccordionButton), findsNothing);
-
-      // Tap header text to collapse
-      await tester.tap(find.text('Recent'));
-      await tester.pumpAndSettle();
-
-      // Child is now collapsed (height factor 0.0)
-      final alignFinder = find.descendant(
-        of: find.byType(ClipRect),
-        matching: find.byType(Align),
-      );
-      final align = tester.widget<Align>(alignFinder.first);
-      expect(align.heightFactor, equals(0.0));
+      expect(find.byType(HomeGroupHeader), findsOneWidget);
+      expect(find.byType(HomeNoteCard), findsOneWidget);
     });
 
     testWidgets('selection mode renders selection checkboxes and toggles on tap', (

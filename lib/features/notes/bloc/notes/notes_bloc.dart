@@ -12,8 +12,13 @@ import 'package:mechanix_notes/core/utils/enums.dart';
 
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
   final NoteRepository noteRepository;
+  final DateTime Function() clock;
 
-  NotesBloc({required this.noteRepository}) : super(const NotesState()) {
+  NotesBloc({
+    required this.noteRepository,
+    DateTime Function()? clock,
+  })  : clock = clock ?? DateTime.now,
+        super(const NotesState()) {
     on<LoadNotes>(_loadNotes);
     on<LoadMoreNotes>(_loadMoreNotes);
     on<RefreshNote>(_refreshNote);
@@ -295,7 +300,7 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
   }
 
   TimeGroup _getTimeGroupForNote(NoteMetaData note) {
-    final now = DateTime.now();
+    final now = clock();
     final updated = note.updatedAt;
     final today = DateTime(now.year, now.month, now.day);
     final dateOnly = DateTime(updated.year, updated.month, updated.day);

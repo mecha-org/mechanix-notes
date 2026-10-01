@@ -24,9 +24,7 @@ class HomeTitleBar extends StatelessWidget {
               if (state.isSelectionMode)
                 Text(
                   AppLocalizations.of(context)!.notesSelected(count),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    // color: NotesColors.appTitleColor,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(),
                 )
               else
                 Text(

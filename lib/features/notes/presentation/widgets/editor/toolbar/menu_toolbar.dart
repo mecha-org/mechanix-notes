@@ -35,14 +35,7 @@ class MenuToolbar extends StatelessWidget {
       height: 48,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
-        // color: NotesColors.searchBarColor,
-        boxShadow: [
-          BoxShadow(
-            // color: NotesColors.boxShadowColor,
-            offset: Offset(0, -4),
-            blurRadius: 4,
-          ),
-        ],
+        boxShadow: [BoxShadow(offset: Offset(0, -4), blurRadius: 4)],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListenableBuilder(

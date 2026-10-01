@@ -1,13 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
 
 class HomeListView extends StatefulWidget {
   const HomeListView({super.key, required this.groupedNotes});
@@ -46,33 +46,18 @@ class _HomeListViewState extends State<HomeListView> {
     }
   }
 
-  List<_NoteSectionData> _buildSections(List<dynamic> items) {
-    final sections = <_NoteSectionData>[];
-    TimeGroup? currentGroup;
-    List<NoteMetaData> currentNotes = [];
-
+  Map<TimeGroup, int> _countNotesPerGroup(List<dynamic> items) {
+    final counts = <TimeGroup, int>{};
+    TimeGroup? current;
     for (final item in items) {
       if (item is TimeGroup) {
-        if (currentGroup != null) {
-          sections.add(
-            _NoteSectionData(group: currentGroup, notes: currentNotes),
-          );
-        }
-        currentGroup = item;
-        currentNotes = [];
-      } else if (item is NoteMetaData) {
-        currentGroup ??= const TimeGroup(TimeCategory.recent);
-        currentNotes.add(item);
+        current = item;
+        counts[current] = 0;
+      } else if (item is NoteMetaData && current != null) {
+        counts[current] = (counts[current] ?? 0) + 1;
       }
     }
-
-    if (currentGroup != null) {
-      sections.add(
-        _NoteSectionData(group: currentGroup, notes: currentNotes),
-      );
-    }
-
-    return sections;
+    return counts;
   }
 
   @override
@@ -91,7 +76,7 @@ class _HomeListViewState extends State<HomeListView> {
       child: BlocBuilder<NotesBloc, NotesState>(
         buildWhen: (prev, curr) => prev.groupedNotes != curr.groupedNotes,
         builder: (context, state) {
-          final sections = _buildSections(state.groupedNotes);
+          final groupCounts = _countNotesPerGroup(state.groupedNotes);
 
           return Scrollbar(
             controller: _scrollController,
@@ -103,15 +88,23 @@ class _HomeListViewState extends State<HomeListView> {
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.only(top: 8.0, bottom: 40.0),
-                itemCount: sections.length,
+                itemCount: state.groupedNotes.length,
                 itemBuilder: (context, index) {
-                  final section = sections[index];
-                  return HomeGroupAccordion(
-                    key: ValueKey(section.group),
-                    group: section.group,
-                    notes: section.notes,
-                    isFirst: index == 0,
-                  );
+                  final item = state.groupedNotes[index];
+                  if (item is TimeGroup) {
+                    return HomeGroupHeader(
+                      key: ValueKey('header_${item.category}_${item.customLabel}'),
+                      group: item,
+                      count: groupCounts[item],
+                      isFirst: index == 0,
+                    );
+                  } else if (item is NoteMetaData) {
+                    return HomeNoteCard(
+                      key: ValueKey(item.id),
+                      note: item,
+                    );
+                  }
+                  return const SizedBox.shrink();
                 },
               ),
             ),
@@ -120,11 +113,4 @@ class _HomeListViewState extends State<HomeListView> {
       ),
     );
   }
-}
-
-class _NoteSectionData {
-  final TimeGroup group;
-  final List<NoteMetaData> notes;
-
-  const _NoteSectionData({required this.group, required this.notes});
 }

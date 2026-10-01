@@ -3,9 +3,6 @@ import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
-/// An app bar that wraps [MechanixAppBar] and supports toggling between
-/// a collapsed (inactive) state with a search icon and an active search state
-/// with a full text field, leading search icon, and trailing clear button.
 class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   const SearchAppBar({
     super.key,
@@ -14,7 +11,6 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     required this.focusNode,
     this.title,
     this.searchHint,
-    this.collapsedVariant = AppBarVariant.small,
     this.onQueryChanged,
     this.onSubmitted,
     this.onSearchIconTap,
@@ -46,9 +42,6 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Placeholder hint text in active search mode.
   final String? searchHint;
 
-  /// Variant to use when collapsed ([AppBarVariant.small] or [AppBarVariant.large]).
-  final AppBarVariant collapsedVariant;
-
   /// Called when the search query text changes.
   final ValueChanged<String>? onQueryChanged;
 
@@ -68,11 +61,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool autofocus;
 
   @override
-  Size get preferredSize => Size.fromHeight(
-    isSearchActive
-        ? 64.0
-        : (collapsedVariant == AppBarVariant.large ? 120.0 : 64.0),
-  );
+  Size get preferredSize => const MechanixAppBar.small().preferredSize;
 
   @override
   Widget build(BuildContext context) {
@@ -84,18 +73,9 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (!isSearchActive) {
       final searchAction = IconButton(
-        // icon: const Icon(Icons.search),
         icon: const ImageIcon(AssetImage(NotesIcon.searchIcon)),
         onPressed: onSearchIconTap,
       );
-
-      if (collapsedVariant == AppBarVariant.large) {
-        return MechanixAppBar.large(
-          title: effectiveTitle,
-          actions: [searchAction],
-          backgroundColor: context.colorScheme.surfaceContainerLowest,
-        );
-      }
 
       return MechanixAppBar.small(
         title: effectiveTitle,
@@ -153,7 +133,6 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 MechanixIconButton.standard(
-                  // icon: const Icon(Icons.close),
                   icon: const ImageIcon(AssetImage(NotesIcon.closeIcon)),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {

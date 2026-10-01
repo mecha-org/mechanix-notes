@@ -27,7 +27,7 @@ class HomeScreen extends StatelessWidget {
       floatingActionButton: MechanixFloatingActionButton(
         icon: const Icon(Icons.add),
         onPressed: () {
-          Navigator.pushNamed(context, '/note-editor');
+          Navigator.pushNamed(context, AppRoutes.noteEditor);
         },
       ),
       floatingActionButtonLocation: const _CustomFloatingActionButtonLocation(
