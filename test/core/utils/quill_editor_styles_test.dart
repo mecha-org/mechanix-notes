@@ -122,10 +122,10 @@ void main() {
               body: Builder(
                 builder: (context) {
                   final styles = quillEditorStyle(context);
-                  expect(styles.lists?.verticalSpacing.top, 4);
-                  expect(styles.lists?.verticalSpacing.bottom, 4);
-                  expect(styles.lists?.lineSpacing.top, 4);
-                  expect(styles.lists?.lineSpacing.bottom, 4);
+                  expect(styles.lists?.verticalSpacing.top, 16);
+                  expect(styles.lists?.verticalSpacing.bottom, 16);
+                  expect(styles.lists?.lineSpacing.top, 16);
+                  expect(styles.lists?.lineSpacing.bottom, 16);
                   return const SizedBox.shrink();
                 },
               ),

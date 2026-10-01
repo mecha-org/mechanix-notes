@@ -121,7 +121,7 @@ void main() {
       expect(find.text('09 AUG'), findsOneWidget);
     });
 
-    testWidgets('tapping accordion toggle button collapses section', (
+    testWidgets('tapping section header collapses section with accordion button hidden', (
       tester,
     ) async {
       final groupedNotes = [
@@ -138,10 +138,11 @@ void main() {
 
       expect(find.text('Daily Journal'), findsOneWidget);
 
-      // Tap accordion chevron button to collapse
-      final accordionButtons = find.byType(MechanixAccordionButton);
-      expect(accordionButtons, findsOneWidget);
-      await tester.tap(accordionButtons.first);
+      // Accordion chevron button is hidden (showAccordionButton: false)
+      expect(find.byType(MechanixAccordionButton), findsNothing);
+
+      // Tap header text to collapse
+      await tester.tap(find.text('Recent'));
       await tester.pumpAndSettle();
 
       // Child is now collapsed (height factor 0.0)

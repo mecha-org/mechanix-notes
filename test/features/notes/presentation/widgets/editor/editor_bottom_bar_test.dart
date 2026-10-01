@@ -84,13 +84,13 @@ void main() {
       },
     );
 
-    testWidgets('switching to Link mode reveals link image button', (
+    testWidgets('switching to Link mode reveals link action buttons', (
       tester,
     ) async {
       await tester.pumpWidget(buildTestWidget());
 
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
         findsNothing,
       );
 
@@ -98,12 +98,16 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('notes_link_checklist_button')),
         findsOneWidget,
       );
 
-      // Tapping link image button executes without error
-      await tester.tap(find.byKey(const Key('notes_link_image_button')));
+      // Tapping link code button executes without error
+      await tester.tap(find.byKey(const Key('notes_link_code_button')));
       await tester.pumpAndSettle();
     });
 

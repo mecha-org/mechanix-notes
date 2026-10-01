@@ -10,6 +10,8 @@ void main() {
     ValueChanged<NotesBottomBarMode>? onModeChanged,
     VoidCallback? onTextContextualPressed,
     VoidCallback? onLinkContextualPressed,
+    VoidCallback? onCodePressed,
+    VoidCallback? onChecklistPressed,
     bool enabled = true,
   }) {
     return MaterialApp(
@@ -21,6 +23,8 @@ void main() {
             onModeChanged: onModeChanged,
             onTextContextualPressed: onTextContextualPressed,
             onLinkContextualPressed: onLinkContextualPressed,
+            onCodePressed: onCodePressed,
+            onChecklistPressed: onChecklistPressed,
             enabled: enabled,
           ),
         ),
@@ -79,7 +83,7 @@ void main() {
       expect(textToggle.isSelected, isFalse);
     });
 
-    testWidgets('5. Link image button becomes visible in Link mode', (
+    testWidgets('5. Link action buttons become visible in Link mode', (
       tester,
     ) async {
       await tester.pumpWidget(buildTestWidget());
@@ -88,7 +92,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('notes_link_checklist_button')),
         findsOneWidget,
       );
     });
@@ -117,7 +125,7 @@ void main() {
       await tester.tap(find.byKey(const Key('notes_link_toggle')));
       await tester.pumpAndSettle();
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
         findsOneWidget,
       );
 
@@ -139,7 +147,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
         findsNothing,
       );
     });
@@ -149,13 +157,13 @@ void main() {
     ) async {
       NotesBottomBarMode? changedMode;
       var textActionCount = 0;
-      var linkActionCount = 0;
+      var codeActionCount = 0;
 
       await tester.pumpWidget(
         buildTestWidget(
           onModeChanged: (mode) => changedMode = mode,
           onTextContextualPressed: () => textActionCount++,
-          onLinkContextualPressed: () => linkActionCount++,
+          onCodePressed: () => codeActionCount++,
         ),
       );
 
@@ -163,17 +171,17 @@ void main() {
       await tester.tap(find.byKey(const Key('notes_text_contextual_button')));
       await tester.pumpAndSettle();
       expect(textActionCount, 1);
-      expect(linkActionCount, 0);
+      expect(codeActionCount, 0);
 
       // Switch mode to Link
       await tester.tap(find.byKey(const Key('notes_link_toggle')));
       await tester.pumpAndSettle();
       expect(changedMode, NotesBottomBarMode.link);
 
-      // Tap link image button
-      await tester.tap(find.byKey(const Key('notes_link_image_button')));
+      // Tap link code button
+      await tester.tap(find.byKey(const Key('notes_link_code_button')));
       await tester.pumpAndSettle();
-      expect(linkActionCount, 1);
+      expect(codeActionCount, 1);
     });
 
     testWidgets('9. Disabled behavior prevents interaction and callbacks', (
@@ -221,7 +229,7 @@ void main() {
       expect(linkToggle.isSelected, isTrue);
       expect(textToggle.isSelected, isFalse);
       expect(
-        find.byKey(const Key('notes_link_image_button')),
+        find.byKey(const Key('notes_link_code_button')),
         findsOneWidget,
       );
       expect(
@@ -257,22 +265,23 @@ void main() {
       );
     });
 
-    testWidgets('12. Link mode renders all 5 attachment and checklist action buttons', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        buildTestWidget(initialMode: NotesBottomBarMode.link),
-      );
+    testWidgets(
+      '12. Link mode renders active action buttons and hides unimplemented buttons',
+      (tester) async {
+        await tester.pumpWidget(
+          buildTestWidget(initialMode: NotesBottomBarMode.link),
+        );
 
-      expect(find.byKey(const Key('notes_link_image_button')), findsOneWidget);
-      expect(find.byKey(const Key('notes_link_file_button')), findsOneWidget);
-      expect(find.byKey(const Key('notes_link_code_button')), findsOneWidget);
-      expect(
-        find.byKey(const Key('notes_link_checklist_button')),
-        findsOneWidget,
-      );
-      expect(find.byKey(const Key('notes_link_music_button')), findsOneWidget);
-    });
+        expect(find.byKey(const Key('notes_link_code_button')), findsOneWidget);
+        expect(
+          find.byKey(const Key('notes_link_checklist_button')),
+          findsOneWidget,
+        );
+        expect(find.byKey(const Key('notes_link_image_button')), findsNothing);
+        expect(find.byKey(const Key('notes_link_file_button')), findsNothing);
+        expect(find.byKey(const Key('notes_link_music_button')), findsNothing);
+      },
+    );
 
     testWidgets('13. Active formatting button has correct selected background and foreground colors', (
       tester,
