@@ -52,7 +52,10 @@ dependencies:
       url: https://github.com/DhanishMecha/flutter_tantivy.git
       ref: main
   widgets:
-    path: ../mechanix.dart/widgets
+    git:
+      url: https://github.com/mecha-org/mechanix.dart.git
+      path: widgets
+      ref: pre-release
 
 dependency_overrides:
   intl: ^0.20.2
