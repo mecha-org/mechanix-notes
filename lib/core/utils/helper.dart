@@ -9,6 +9,8 @@ import 'package:mechanix_notes/core/utils/enums.dart';
 
 String getLocalizedLabelForTimeNotes(BuildContext context, TimeGroup group) {
   switch (group.category) {
+    case TimeCategory.pinned:
+      return AppLocalizations.of(context)!.pinned;
     case TimeCategory.recent:
       return AppLocalizations.of(context)!.recent;
     case TimeCategory.today:

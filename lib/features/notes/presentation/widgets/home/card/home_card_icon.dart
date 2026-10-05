@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 
 class HomeCardIcon extends StatelessWidget {
@@ -10,10 +9,7 @@ class HomeCardIcon extends StatelessWidget {
     return Container(
       width: 28,
       height: 28,
-      decoration: BoxDecoration(
-        color: NotesColors.borderColor,
-        borderRadius: BorderRadius.circular(4),
-      ),
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
       alignment: Alignment.center,
       child: Image.asset(NotesIcon.editIcon, width: 16, height: 16),
     );

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
@@ -25,9 +24,7 @@ class HomeTitleBar extends StatelessWidget {
               if (state.isSelectionMode)
                 Text(
                   AppLocalizations.of(context)!.notesSelected(count),
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: NotesColors.appTitleColor,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(),
                 )
               else
                 Text(

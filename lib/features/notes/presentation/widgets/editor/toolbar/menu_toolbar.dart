@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
@@ -36,14 +35,7 @@ class MenuToolbar extends StatelessWidget {
       height: 48,
       alignment: Alignment.center,
       decoration: const BoxDecoration(
-        color: NotesColors.searchBarColor,
-        boxShadow: [
-          BoxShadow(
-            color: NotesColors.boxShadowColor,
-            offset: Offset(0, -4),
-            blurRadius: 4,
-          ),
-        ],
+        boxShadow: [BoxShadow(offset: Offset(0, -4), blurRadius: 4)],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListenableBuilder(

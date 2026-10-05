@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
@@ -30,13 +29,9 @@ class HomeFloatingBar extends StatelessWidget {
                           Navigator.pushNamed(context, '/search');
                         }
                       : null,
-                  backgroundColor: NotesColors.bottomBarBg,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(4),
-                    side: const BorderSide(
-                      color: NotesColors.borderColor,
-                      width: 0.5,
-                    ),
+                    side: const BorderSide(width: 0.5),
                   ),
                   child: Image.asset(
                     NotesIcon.searchIcon,
@@ -55,7 +50,6 @@ class HomeFloatingBar extends StatelessWidget {
               onPressed: () {
                 Navigator.pushNamed(context, '/note-editor');
               },
-              backgroundColor: NotesColors.borderColor,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),

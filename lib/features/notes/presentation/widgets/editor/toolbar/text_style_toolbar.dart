@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
-import 'package:mechanix_notes/core/utils/colors.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
@@ -42,21 +41,40 @@ class TextStyleToolbar extends StatelessWidget {
     return Container(
       height: 48,
       decoration: const BoxDecoration(
-        color: NotesColors.searchBarColor,
-        boxShadow: [
-          BoxShadow(
-            color: NotesColors.boxShadowColor,
-            offset: Offset(0, -4),
-            blurRadius: 4,
-          ),
-        ],
+        boxShadow: [BoxShadow(offset: Offset(0, -4), blurRadius: 4)],
       ),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListenableBuilder(
         listenable: controller,
         builder: (context, _) {
           final selectionStyle = controller.getSelectionStyle();
+          final toggledAttrs = controller.toggledStyle.attributes;
           final attrs = selectionStyle.attributes;
+
+          Attribute? getBlockAttribute(String key) {
+            if (toggledAttrs.containsKey(key)) {
+              return toggledAttrs[key];
+            }
+            if (attrs.containsKey(key)) {
+              return attrs[key];
+            }
+            final sel = controller.selection;
+            if (sel.isValid &&
+                sel.start >= 0 &&
+                sel.start <= controller.document.length) {
+              final child = controller.document.queryChild(sel.start);
+              final node = child.node;
+              if (node is Line) {
+                if (node.style.containsKey(key)) {
+                  return node.style.attributes[key];
+                }
+                if (node.parent is Block) {
+                  return (node.parent as Block).style.attributes[key];
+                }
+              }
+            }
+            return null;
+          }
 
           bool isActive(Attribute attribute) {
             final current = attrs[attribute.key];
@@ -64,12 +82,12 @@ class TextStyleToolbar extends StatelessWidget {
           }
 
           bool isParagraph() {
-            return !attrs.containsKey(Attribute.header.key) &&
+            return getBlockAttribute(Attribute.header.key) == null &&
                 !attrs.containsKey(Attribute.size.key);
           }
 
           bool isHeaderActive(int level) {
-            return attrs[Attribute.header.key]?.value == level;
+            return getBlockAttribute(Attribute.header.key)?.value == level;
           }
 
           return Row(

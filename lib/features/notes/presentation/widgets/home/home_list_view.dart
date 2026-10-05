@@ -46,6 +46,20 @@ class _HomeListViewState extends State<HomeListView> {
     }
   }
 
+  Map<TimeGroup, int> _countNotesPerGroup(List<dynamic> items) {
+    final counts = <TimeGroup, int>{};
+    TimeGroup? current;
+    for (final item in items) {
+      if (item is TimeGroup) {
+        current = item;
+        counts[current] = 0;
+      } else if (item is NoteMetaData && current != null) {
+        counts[current] = (counts[current] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<NotesBloc, NotesState>(
@@ -62,7 +76,7 @@ class _HomeListViewState extends State<HomeListView> {
       child: BlocBuilder<NotesBloc, NotesState>(
         buildWhen: (prev, curr) => prev.groupedNotes != curr.groupedNotes,
         builder: (context, state) {
-          final itemCount = widget.groupedNotes.length;
+          final groupCounts = _countNotesPerGroup(state.groupedNotes);
 
           return Scrollbar(
             controller: _scrollController,
@@ -73,16 +87,22 @@ class _HomeListViewState extends State<HomeListView> {
               child: ListView.builder(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 40.0),
-                itemCount: itemCount,
-                prototypeItem: const SizedBox(height: 68.0),
+                padding: const EdgeInsets.only(top: 8.0, bottom: 40.0),
+                itemCount: state.groupedNotes.length,
                 itemBuilder: (context, index) {
-                  final item = widget.groupedNotes[index];
+                  final item = state.groupedNotes[index];
                   if (item is TimeGroup) {
-                    return HomeGroupHeader(key: ValueKey(item), group: item);
-                  }
-                  if (item is NoteMetaData) {
-                    return HomeNoteCard(key: ValueKey(item.id), note: item);
+                    return HomeGroupHeader(
+                      key: ValueKey('header_${item.category}_${item.customLabel}'),
+                      group: item,
+                      count: groupCounts[item],
+                      isFirst: index == 0,
+                    );
+                  } else if (item is NoteMetaData) {
+                    return HomeNoteCard(
+                      key: ValueKey(item.id),
+                      note: item,
+                    );
                   }
                   return const SizedBox.shrink();
                 },

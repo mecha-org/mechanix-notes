@@ -72,6 +72,7 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
       final queryBuilder = box.query()
+        ..order(NoteModel_.isPinned, flags: Order.descending)
         ..order(NoteModel_.updatedAt, flags: Order.descending);
       final query = queryBuilder.build();
       query.offset = skip;
@@ -93,6 +94,7 @@ class NoteRepositoryImpl extends NoteRepository {
           createdAt: note.createdAt,
           updatedAt: note.updatedAt,
           previewText: note.previewText,
+          isPinned: note.isPinned,
         );
       }).toList();
 
@@ -121,6 +123,7 @@ class NoteRepositoryImpl extends NoteRepository {
           createdAt: note.createdAt,
           updatedAt: note.updatedAt,
           previewText: note.previewText,
+          isPinned: note.isPinned,
         );
       }
       return null;
@@ -216,6 +219,7 @@ class NoteRepositoryImpl extends NoteRepository {
               createdAt: note.createdAt,
               updatedAt: note.updatedAt,
               previewText: note.previewText,
+              isPinned: note.isPinned,
             ),
           );
         }
@@ -227,6 +231,27 @@ class NoteRepositoryImpl extends NoteRepository {
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
       return [];
+    }
+  }
+
+  @override
+  Future<bool> togglePinNote(String id) async {
+    try {
+      await ensureStoreConnected();
+      final query = box.query(NoteModel_.id.equals(id)).build();
+      final note = query.findFirst();
+      query.close();
+
+      if (note != null) {
+        note.isPinned = !note.isPinned;
+        box.put(note);
+        AppLogger.i('NoteRepository: togglePinNote($id) → ${note.isPinned}');
+        return note.isPinned;
+      }
+      return false;
+    } catch (e) {
+      AppLogger.e('NoteRepository: togglePinNote failed: $e');
+      return false;
     }
   }
 }

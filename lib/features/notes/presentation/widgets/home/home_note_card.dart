@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
-
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
+import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_note_card_content.dart';
 
 class HomeNoteCard extends StatelessWidget {

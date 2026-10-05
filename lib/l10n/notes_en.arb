@@ -1,5 +1,6 @@
 {
   "notes": "Notes",
+  "pinned": "Pinned",
   "last7Days": "Last 7 Days",
   "failedToLoadNotes": "Failed to load notes. Please try again.",
   "failedToDeleteNotes": "Failed to delete notes. Please try again.",
@@ -73,5 +74,12 @@
     }
   },
   "failedToSaveNote": "Failed to save note",
-  "storageFull": "Storage is full"
+  "storageFull": "Storage is full",
+  "pinNote": "Pin note",
+  "unpinNote": "Unpin note",
+  "moveToTrash": "Move to trash",
+  "moveToTrashPrompt": "Do you want to move this note to trash?",
+  "trash": "Trash",
+  "searchNote": "Search note",
+  "failedToPerformSearch": "Failed to perform search"
 }

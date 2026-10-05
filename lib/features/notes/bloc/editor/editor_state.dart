@@ -24,6 +24,7 @@ final class EditorLoaded extends EditorState {
   final EditorToolbar activeToolbar;
   final bool isNewNote;
   final bool isDirty;
+  final bool isPinned;
 
   const EditorLoaded({
     required this.noteId,
@@ -34,6 +35,7 @@ final class EditorLoaded extends EditorState {
     this.activeToolbar = EditorToolbar.none,
     this.isNewNote = false,
     this.isDirty = false,
+    this.isPinned = false,
   });
 
   EditorLoaded copyWith({
@@ -45,6 +47,7 @@ final class EditorLoaded extends EditorState {
     EditorToolbar? activeToolbar,
     bool? isNewNote,
     bool? isDirty,
+    bool? isPinned,
   }) {
     return EditorLoaded(
       noteId: noteId ?? this.noteId,
@@ -55,6 +58,7 @@ final class EditorLoaded extends EditorState {
       activeToolbar: activeToolbar ?? this.activeToolbar,
       isNewNote: isNewNote ?? this.isNewNote,
       isDirty: isDirty ?? this.isDirty,
+      isPinned: isPinned ?? this.isPinned,
     );
   }
 
@@ -68,6 +72,7 @@ final class EditorLoaded extends EditorState {
     activeToolbar,
     isNewNote,
     isDirty,
+    isPinned,
   ];
 }
 

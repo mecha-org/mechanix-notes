@@ -1,4 +1,5 @@
 enum TimeCategory {
+  pinned,
   recent,
   today,
   yesterday,
