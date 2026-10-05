@@ -97,7 +97,7 @@ abstract class AppLocalizations {
   /// No description provided for @notes.
   ///
   /// In en, this message translates to:
-  /// **'Notes'**
+  /// **'NOTES'**
   String get notes;
 
   /// No description provided for @pinned.
@@ -139,8 +139,14 @@ abstract class AppLocalizations {
   /// No description provided for @noNotesFound.
   ///
   /// In en, this message translates to:
-  /// **'No notes found'**
+  /// **'No note found'**
   String get noNotesFound;
+
+  /// No description provided for @writeANote.
+  ///
+  /// In en, this message translates to:
+  /// **'Write a note'**
+  String get writeANote;
 
   /// No description provided for @recent.
   ///

@@ -9,7 +9,7 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get notes => 'Notes';
+  String get notes => 'NOTES';
 
   @override
   String get pinned => 'Pinned';
@@ -31,7 +31,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noteNotFound => 'Note not found';
 
   @override
-  String get noNotesFound => 'No notes found';
+  String get noNotesFound => 'No note found';
+
+  @override
+  String get writeANote => 'Write a note';
 
   @override
   String get recent => 'Recent';
