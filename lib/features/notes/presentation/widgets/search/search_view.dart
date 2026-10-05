@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/bloc/search/search_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/search/search_event.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
@@ -63,14 +64,32 @@ class _SearchViewState extends State<SearchView> {
   void _onQueryChanged(String query) {
     setState(() {}); // Re-render to reflect empty/active query state
     _debounceTimer?.cancel();
+
+    // Instant clear when query is cleared or empty (bypass debounce)
+    if (query.trim().isEmpty) {
+      context.read<SearchBloc>().add(ClearSearch());
+      return;
+    }
+
     _debounceTimer = Timer(_debounceDuration, () {
       if (!mounted) return;
       context.read<SearchBloc>().add(SearchQueryChanged(query: query));
     });
   }
 
+  void _onSubmitted(String query) {
+    _debounceTimer?.cancel();
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      context.read<SearchBloc>().add(ClearSearch());
+    } else {
+      context.read<SearchBloc>().add(SearchQueryChanged(query: trimmed));
+    }
+  }
+
   void _onClear() {
     _debounceTimer?.cancel();
+    _searchController.clear();
     setState(() {});
     context.read<SearchBloc>().add(ClearSearch());
   }
@@ -105,12 +124,15 @@ class _SearchViewState extends State<SearchView> {
 
     Navigator.pushNamed(
       context,
-      '/note-editor',
+      AppRoutes.noteEditor,
       arguments: {'noteId': note.id, 'noteTitle': note.title},
     ).then((_) {
       if (mounted && _searchController.text.isNotEmpty) {
         final searchBloc = context.read<SearchBloc>();
-        searchBloc.add(SearchQueryChanged(query: searchBloc.state.query));
+        final currentQuery = searchBloc.state.query.isNotEmpty
+            ? searchBloc.state.query
+            : _searchController.text.trim();
+        searchBloc.add(SearchQueryChanged(query: currentQuery));
       }
     });
   }
@@ -118,16 +140,15 @@ class _SearchViewState extends State<SearchView> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: !_isSearchActive,
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
-        if (_isSearchActive) {
-          _debounceTimer?.cancel();
-          setState(() {
-            _isSearchActive = false;
-            _searchController.clear();
-          });
-          context.read<SearchBloc>().add(ClearSearch());
+        if (_searchController.text.isNotEmpty) {
+          _onClear();
+        } else if (_isSearchActive) {
+          _onClose();
+        } else if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
         }
       },
       child: SafeArea(
@@ -138,6 +159,7 @@ class _SearchViewState extends State<SearchView> {
               controller: _searchController,
               focusNode: _focusNode,
               onQueryChanged: _onQueryChanged,
+              onSubmitted: _onSubmitted,
               onClear: _onClear,
               onClose: _onClose,
               onSearchIconTap: _onSearchIconTap,

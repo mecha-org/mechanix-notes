@@ -82,8 +82,6 @@ class _SearchListViewState extends State<SearchListView> {
   }
 }
 
-/// A search result list tile rendering the note title with query highlighting,
-/// an optional content preview snippet, and an uppercase top-aligned date.
 class SearchResultTile extends StatelessWidget {
   const SearchResultTile({
     super.key,
@@ -136,7 +134,6 @@ class SearchResultTile extends StatelessWidget {
       supportingText: subtitle,
       trailingText: formattedDate,
       trailingTextColor: context.colorScheme.onSurfaceVariant,
-      // crossAxisAlignment: CrossAxisAlignment.start,
       contentPadding: const EdgeInsets.symmetric(
         horizontal: 24.0,
         vertical: 8.0,

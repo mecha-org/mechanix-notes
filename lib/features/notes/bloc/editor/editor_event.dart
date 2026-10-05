@@ -8,15 +8,6 @@ final class EditorInitialised extends EditorEvent {
   EditorInitialised({this.noteId, this.noteTitle});
 }
 
-final class EditorTitleChanged extends EditorEvent {
-  final String title;
-  EditorTitleChanged(this.title);
-}
-
-final class EditorToolbarToggled extends EditorEvent {
-  final EditorToolbar toolbar;
-  EditorToolbarToggled(this.toolbar);
-}
 
 final class EditorSaveRequested extends EditorEvent {
   final List<dynamic> content;

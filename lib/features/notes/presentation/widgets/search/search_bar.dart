@@ -60,8 +60,11 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Whether the search field should autofocus when entering active mode.
   final bool autofocus;
 
+  static final Size _preferredSize =
+      const MechanixAppBar.small().preferredSize;
+
   @override
-  Size get preferredSize => const MechanixAppBar.small().preferredSize;
+  Size get preferredSize => _preferredSize;
 
   @override
   Widget build(BuildContext context) {
@@ -72,9 +75,12 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
         searchHint ?? (l10n?.searchNote ?? 'Search note').toUpperCase();
 
     if (!isSearchActive) {
-      final searchAction = IconButton(
+      final searchAction = MechanixIconButton.standard(
         icon: const ImageIcon(AssetImage(NotesIcon.searchIcon)),
-        onPressed: onSearchIconTap,
+        onPressed: () {
+          focusNode.requestFocus();
+          onSearchIconTap?.call();
+        },
       );
 
       return MechanixAppBar.small(
@@ -110,6 +116,8 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     controller: controller,
                     focusNode: focusNode,
                     autofocus: autofocus,
+                    textInputAction: TextInputAction.search,
+                    autocorrect: false,
                     onChanged: onQueryChanged,
                     onSubmitted: onSubmitted,
                     cursorColor: colorScheme.primary,
@@ -138,7 +146,11 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     if (controller.text.isNotEmpty) {
                       controller.clear();
                       focusNode.requestFocus();
-                      onClear?.call();
+                      if (onClear != null) {
+                        onClear?.call();
+                      } else {
+                        onQueryChanged?.call('');
+                      }
                     } else {
                       onClose?.call();
                     }
