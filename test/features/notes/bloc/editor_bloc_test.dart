@@ -123,15 +123,6 @@ void main() {
         expect((bloc.state as EditorLoaded).isDirty, false);
       },
     );
-
-    blocTest<EditorBloc, EditorState>(
-      'activeToolbar defaults to none in create mode',
-      build: buildBloc,
-      act: (bloc) => bloc.add(EditorInitialised()),
-      verify: (bloc) {
-        expect((bloc.state as EditorLoaded).activeToolbar, EditorToolbar.none);
-      },
-    );
   });
 
   // ════════════════════════════════════════════════════════════════════════════
@@ -313,183 +304,6 @@ void main() {
       wait: const Duration(milliseconds: 300),
       verify: (_) =>
           verify(() => repository.getNoteById(kTestNoteId)).called(1),
-    );
-  });
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // EditorTitleChanged
-  // ════════════════════════════════════════════════════════════════════════════
-
-  group('EditorTitleChanged', () {
-    blocTest<EditorBloc, EditorState>(
-      'updates title in EditorLoaded',
-      build: buildBloc,
-      seed: () => EditorLoaded(
-        noteId: kTestNoteId,
-        title: '',
-        quillDocument: Document(),
-        isNewNote: true,
-      ),
-      act: (bloc) => bloc.add(EditorTitleChanged('New Title')),
-      expect: () => [
-        isA<EditorLoaded>().having((s) => s.title, 'title', 'New Title'),
-      ],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'is a no-op when state is not EditorLoaded',
-      build: buildBloc,
-      act: (bloc) => bloc.add(EditorTitleChanged('Ignored')),
-      expect: () => [],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'handles empty string title',
-      build: buildBloc,
-      seed: () => EditorLoaded(
-        noteId: kTestNoteId,
-        title: 'Some Title',
-        quillDocument: Document(),
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(EditorTitleChanged('')),
-      expect: () => [isA<EditorLoaded>().having((s) => s.title, 'title', '')],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'does not reset other fields when title changes',
-      build: buildBloc,
-      seed: () => EditorLoaded(
-        noteId: kTestNoteId,
-        title: 'Old',
-        quillDocument: Document(),
-        isNewNote: false,
-        activeToolbar: EditorToolbar.textStyle,
-      ),
-      act: (bloc) => bloc.add(EditorTitleChanged('New')),
-      verify: (bloc) {
-        final s = bloc.state as EditorLoaded;
-        expect(s.activeToolbar, EditorToolbar.textStyle);
-        expect(s.isNewNote, false);
-        expect(s.noteId, kTestNoteId);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'multiple title changes only keeps last value',
-      build: buildBloc,
-      seed: () =>
-          const EditorLoaded(noteId: kTestNoteId, title: '', isNewNote: true),
-      act: (bloc) {
-        bloc.add(EditorTitleChanged('A'));
-        bloc.add(EditorTitleChanged('AB'));
-        bloc.add(EditorTitleChanged('ABC'));
-      },
-      verify: (bloc) {
-        expect((bloc.state as EditorLoaded).title, 'ABC');
-      },
-    );
-  });
-
-  // ════════════════════════════════════════════════════════════════════════════
-  // EditorToolbarToggled
-  // ════════════════════════════════════════════════════════════════════════════
-
-  group('EditorToolbarToggled', () {
-    blocTest<EditorBloc, EditorState>(
-      'activates a toolbar when none is active',
-      build: buildBloc,
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        activeToolbar: EditorToolbar.none,
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(EditorToolbarToggled(EditorToolbar.textStyle)),
-      expect: () => [
-        isA<EditorLoaded>().having(
-          (s) => s.activeToolbar,
-          'toolbar',
-          EditorToolbar.textStyle,
-        ),
-      ],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'closes toolbar when same toolbar toggled again',
-      build: buildBloc,
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        activeToolbar: EditorToolbar.textStyle,
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(EditorToolbarToggled(EditorToolbar.textStyle)),
-      expect: () => [
-        isA<EditorLoaded>().having(
-          (s) => s.activeToolbar,
-          'toolbar',
-          EditorToolbar.none,
-        ),
-      ],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'switches from one toolbar to another',
-      build: buildBloc,
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        activeToolbar: EditorToolbar.textStyle,
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(EditorToolbarToggled(EditorToolbar.menu)),
-      expect: () => [
-        isA<EditorLoaded>().having(
-          (s) => s.activeToolbar,
-          'toolbar',
-          EditorToolbar.menu,
-        ),
-      ],
-    );
-
-    for (final toolbar in EditorToolbar.values.where(
-      (t) => t != EditorToolbar.none,
-    )) {
-      blocTest<EditorBloc, EditorState>(
-        'can activate toolbar: $toolbar',
-        build: buildBloc,
-        seed: () => const EditorLoaded(
-          noteId: kTestNoteId,
-          title: kTestTitle,
-          activeToolbar: EditorToolbar.none,
-          isNewNote: false,
-        ),
-        act: (bloc) => bloc.add(EditorToolbarToggled(toolbar)),
-        verify: (bloc) {
-          expect((bloc.state as EditorLoaded).activeToolbar, toolbar);
-        },
-      );
-    }
-
-    blocTest<EditorBloc, EditorState>(
-      'is a no-op when state is not EditorLoaded',
-      build: buildBloc,
-      act: (bloc) => bloc.add(EditorToolbarToggled(EditorToolbar.menu)),
-      expect: () => [],
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'toggling none toolbar when already none keeps it none',
-      build: buildBloc,
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        activeToolbar: EditorToolbar.none,
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(EditorToolbarToggled(EditorToolbar.none)),
-      expect: () => <EditorState>[],
     );
   });
 
@@ -1698,7 +1512,6 @@ void main() {
       quillDocument: Document(),
       isContentLoading: false,
       isSaving: false,
-      activeToolbar: EditorToolbar.none,
       isNewNote: false,
     );
 
@@ -1708,7 +1521,6 @@ void main() {
       expect(copy.title, base.title);
       expect(copy.isContentLoading, base.isContentLoading);
       expect(copy.isSaving, base.isSaving);
-      expect(copy.activeToolbar, base.activeToolbar);
       expect(copy.isNewNote, base.isNewNote);
     });
 
@@ -1717,14 +1529,6 @@ void main() {
       expect(copy.title, 'Changed');
       expect(copy.isSaving, true);
       expect(copy.noteId, base.noteId);
-      expect(copy.activeToolbar, base.activeToolbar);
-    });
-
-    test('can set activeToolbar to every enum value', () {
-      for (final t in EditorToolbar.values) {
-        final copy = base.copyWith(activeToolbar: t);
-        expect(copy.activeToolbar, t);
-      }
     });
 
     test('isDirty defaults to false and can be toggled via copyWith', () {
@@ -1755,41 +1559,6 @@ void main() {
   // ════════════════════════════════════════════════════════════════════════════
 
   group('Edge cases', () {
-    blocTest<EditorBloc, EditorState>(
-      'title → toolbar toggle → save flows correctly in sequence',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
-      },
-      seed: () => EditorLoaded(
-        noteId: kTestNoteId,
-        title: '',
-        quillDocument: Document(),
-        isNewNote: true,
-      ),
-      act: (bloc) async {
-        bloc.add(EditorTitleChanged('Chained Title'));
-        bloc.add(EditorToolbarToggled(EditorToolbar.options));
-        bloc.add(
-          EditorSaveRequested(
-            content: jsonDecode(kSomeDelta),
-            plainText: kSomePlainText,
-          ),
-        );
-      },
-      expect: () => [
-        isA<EditorLoaded>().having((s) => s.title, 'title', 'Chained Title'),
-        isA<EditorLoaded>().having(
-          (s) => s.activeToolbar,
-          'toolbar',
-          EditorToolbar.options,
-        ),
-        isA<EditorLoaded>().having((s) => s.isSaving, 'isSaving', true),
-        isA<EditorSaveSuccess>(),
-      ],
-    );
-
     blocTest<EditorBloc, EditorState>(
       'auto-save then manual save calls upsertNote on second save',
       build: buildBloc,
@@ -1878,8 +1647,7 @@ void main() {
       build: buildBloc,
       seed: () => const EditorFailure(ErrorCategory.somethingWentWrong),
       act: (bloc) {
-        bloc.add(EditorTitleChanged('Should be ignored'));
-        bloc.add(EditorToolbarToggled(EditorToolbar.menu));
+        bloc.add(EditorPinToggled());
       },
       expect: () => [],
     );

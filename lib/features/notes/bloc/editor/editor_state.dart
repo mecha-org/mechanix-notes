@@ -11,9 +11,6 @@ final class EditorInitial extends EditorState {
   const EditorInitial();
 }
 
-final class EditorLoading extends EditorState {
-  const EditorLoading();
-}
 
 final class EditorLoaded extends EditorState {
   final String noteId;
@@ -21,7 +18,6 @@ final class EditorLoaded extends EditorState {
   final Document? quillDocument;
   final bool isContentLoading;
   final bool isSaving;
-  final EditorToolbar activeToolbar;
   final bool isNewNote;
   final bool isDirty;
   final bool isPinned;
@@ -32,7 +28,6 @@ final class EditorLoaded extends EditorState {
     this.quillDocument,
     this.isContentLoading = false,
     this.isSaving = false,
-    this.activeToolbar = EditorToolbar.none,
     this.isNewNote = false,
     this.isDirty = false,
     this.isPinned = false,
@@ -44,7 +39,6 @@ final class EditorLoaded extends EditorState {
     Document? quillDocument,
     bool? isContentLoading,
     bool? isSaving,
-    EditorToolbar? activeToolbar,
     bool? isNewNote,
     bool? isDirty,
     bool? isPinned,
@@ -55,7 +49,6 @@ final class EditorLoaded extends EditorState {
       quillDocument: quillDocument ?? this.quillDocument,
       isContentLoading: isContentLoading ?? this.isContentLoading,
       isSaving: isSaving ?? this.isSaving,
-      activeToolbar: activeToolbar ?? this.activeToolbar,
       isNewNote: isNewNote ?? this.isNewNote,
       isDirty: isDirty ?? this.isDirty,
       isPinned: isPinned ?? this.isPinned,
@@ -69,7 +62,6 @@ final class EditorLoaded extends EditorState {
     quillDocument,
     isContentLoading,
     isSaving,
-    activeToolbar,
     isNewNote,
     isDirty,
     isPinned,

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_notes/core/utils/app_routes.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_bottom_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_notes_view.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
@@ -34,7 +33,6 @@ class HomeScreen extends StatelessWidget {
         offsetFromRight: 24,
         offsetFromBottom: 44,
       ),
-      bottomNavigationBar: const HomeBottomBar(),
       body: const HomeNotesView(),
     );
   }

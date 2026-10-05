@@ -22,8 +22,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
   EditorBloc(this._repository) : super(const EditorInitial()) {
     on<EditorInitialised>(_onInitialised);
-    on<EditorTitleChanged>(_onTitleChanged);
-    on<EditorToolbarToggled>(_onToolbarToggled);
     on<EditorSaveRequested>(_onSaveRequested);
     on<EditorAutoSaveRequested>(_onAutoSaveRequested);
     on<EditorPinToggled>(_onPinToggled);
@@ -101,23 +99,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     }
   }
 
-  void _onTitleChanged(EditorTitleChanged event, Emitter<EditorState> emit) {
-    final current = state;
-    if (current is! EditorLoaded) return;
-    emit(current.copyWith(title: event.title));
-  }
-
-  void _onToolbarToggled(
-    EditorToolbarToggled event,
-    Emitter<EditorState> emit,
-  ) {
-    final current = state;
-    if (current is! EditorLoaded) return;
-    final next = current.activeToolbar == event.toolbar
-        ? EditorToolbar.none
-        : event.toolbar;
-    emit(current.copyWith(activeToolbar: next));
-  }
 
   Future<void> _onSaveRequested(
     EditorSaveRequested event,

@@ -47,7 +47,8 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              l10n?.moveToTrashPrompt ?? 'Do you want to move this note to trash?',
+              l10n?.moveToTrashPrompt ??
+                  'Do you want to move this note to trash?',
               style: context.textTheme.titleMedium?.copyWith(
                 color: context.colorScheme.onSurface,
                 fontWeight: FontWeight.w400,
@@ -72,7 +73,6 @@ class EditorTrashConfirmationSheet extends StatelessWidget {
                     ),
                   ),
                   Expanded(
-                    // child: MechanixFilledButton(
                     child: MechanixButton.filled(
                       widthSizing: ButtonLayoutSizing.fill,
                       size: ButtonSize.large,
