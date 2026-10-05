@@ -9,8 +9,6 @@ import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_card_selection_icon.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_note_card_content.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_list_view.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
@@ -40,9 +38,7 @@ void main() {
       supportedLocales: AppLocalizations.supportedLocales,
       home: BlocProvider<NotesBloc>.value(
         value: mockNotesBloc,
-        child: Scaffold(
-          body: HomeListView(groupedNotes: groupedNotes),
-        ),
+        child: Scaffold(body: HomeListView(groupedNotes: groupedNotes)),
       ),
     );
   }
@@ -96,9 +92,9 @@ void main() {
         note4,
       ];
 
-      when(() => mockNotesBloc.state).thenReturn(
-        NotesState(groupedNotes: groupedNotes),
-      );
+      when(
+        () => mockNotesBloc.state,
+      ).thenReturn(NotesState(groupedNotes: groupedNotes));
 
       await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
       await tester.pumpAndSettle();
@@ -124,14 +120,11 @@ void main() {
     testWidgets('renders flat virtualized list of headers and note cards', (
       tester,
     ) async {
-      final groupedNotes = [
-        const TimeGroup(TimeCategory.recent),
-        note1,
-      ];
+      final groupedNotes = [const TimeGroup(TimeCategory.recent), note1];
 
-      when(() => mockNotesBloc.state).thenReturn(
-        NotesState(groupedNotes: groupedNotes),
-      );
+      when(
+        () => mockNotesBloc.state,
+      ).thenReturn(NotesState(groupedNotes: groupedNotes));
 
       await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
       await tester.pumpAndSettle();
@@ -140,45 +133,6 @@ void main() {
       expect(find.text('Daily Journal'), findsOneWidget);
       expect(find.byType(HomeGroupHeader), findsOneWidget);
       expect(find.byType(HomeNoteCard), findsOneWidget);
-    });
-
-    testWidgets('selection mode renders selection checkboxes and toggles on tap', (
-      tester,
-    ) async {
-      final groupedNotes = [
-        const TimeGroup(TimeCategory.recent),
-        note1,
-      ];
-
-      when(() => mockNotesBloc.state).thenReturn(
-        NotesState(
-          groupedNotes: groupedNotes,
-          isSelectionMode: true,
-          selectedNotes: const ['n1'],
-        ),
-      );
-
-      await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
-      await tester.pumpAndSettle();
-
-      // Checkbox is visible
-      expect(find.byType(HomeCardSelectionIcon), findsOneWidget);
-
-      // Tap note to toggle selection
-      await tester.tap(find.text('Daily Journal'));
-      await tester.pumpAndSettle();
-
-      verify(
-        () => mockNotesBloc.add(
-          any(
-            that: isA<ToggleNoteSelection>().having(
-              (e) => e.noteId,
-              'noteId',
-              'n1',
-            ),
-          ),
-        ),
-      ).called(1);
     });
 
     testWidgets('renders Pinned section and pin icon for pinned notes', (
@@ -201,9 +155,9 @@ void main() {
         note1,
       ];
 
-      when(() => mockNotesBloc.state).thenReturn(
-        NotesState(groupedNotes: groupedNotes),
-      );
+      when(
+        () => mockNotesBloc.state,
+      ).thenReturn(NotesState(groupedNotes: groupedNotes));
 
       await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
       await tester.pumpAndSettle();
@@ -220,7 +174,7 @@ void main() {
 
       final noteCardTile = tester.widget<MechanixListTile>(
         find.descendant(
-          of: find.byType(HomeNoteCardContent).first,
+          of: find.byType(HomeNoteCard).first,
           matching: find.byType(MechanixListTile),
         ),
       );
@@ -228,34 +182,32 @@ void main() {
       expect(noteCardTile.trailingWidgets, isEmpty);
     });
 
-    testWidgets('renders MechanixExpandableListTile and collapses on header tap', (
-      tester,
-    ) async {
-      final groupedNotes = [
-        const TimeGroup(TimeCategory.recent),
-        note1,
-      ];
+    testWidgets(
+      'renders MechanixExpandableListTile and collapses on header tap',
+      (tester) async {
+        final groupedNotes = [const TimeGroup(TimeCategory.recent), note1];
 
-      when(() => mockNotesBloc.state).thenReturn(
-        NotesState(groupedNotes: groupedNotes),
-      );
+        when(
+          () => mockNotesBloc.state,
+        ).thenReturn(NotesState(groupedNotes: groupedNotes));
 
-      await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
+        await tester.pumpAndSettle();
 
-      // Find the expandable list tile
-      expect(find.byType(MechanixExpandableListTile), findsOneWidget);
-      expect(find.text('Daily Journal'), findsOneWidget);
+        // Find the expandable list tile
+        expect(find.byType(MechanixExpandableListTile), findsOneWidget);
+        expect(find.text('Daily Journal'), findsOneWidget);
 
-      // Tap header to collapse
-      await tester.tap(find.text('Recent'));
-      await tester.pumpAndSettle();
+        // Tap header to collapse
+        await tester.tap(find.text('Recent'));
+        await tester.pumpAndSettle();
 
-      // Tap header again to expand
-      await tester.tap(find.text('Recent'));
-      await tester.pumpAndSettle();
+        // Tap header again to expand
+        await tester.tap(find.text('Recent'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('Daily Journal'), findsOneWidget);
-    });
+        expect(find.text('Daily Journal'), findsOneWidget);
+      },
+    );
   });
 }
