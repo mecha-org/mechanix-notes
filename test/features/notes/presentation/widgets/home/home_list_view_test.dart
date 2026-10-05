@@ -227,5 +227,35 @@ void main() {
       expect(noteCardTile.leading, isA<ImageIcon>());
       expect(noteCardTile.trailingWidgets, isEmpty);
     });
+
+    testWidgets('renders MechanixExpandableListTile and collapses on header tap', (
+      tester,
+    ) async {
+      final groupedNotes = [
+        const TimeGroup(TimeCategory.recent),
+        note1,
+      ];
+
+      when(() => mockNotesBloc.state).thenReturn(
+        NotesState(groupedNotes: groupedNotes),
+      );
+
+      await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
+      await tester.pumpAndSettle();
+
+      // Find the expandable list tile
+      expect(find.byType(MechanixExpandableListTile), findsOneWidget);
+      expect(find.text('Daily Journal'), findsOneWidget);
+
+      // Tap header to collapse
+      await tester.tap(find.text('Recent'));
+      await tester.pumpAndSettle();
+
+      // Tap header again to expand
+      await tester.tap(find.text('Recent'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Daily Journal'), findsOneWidget);
+    });
   });
 }

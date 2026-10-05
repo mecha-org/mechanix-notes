@@ -10,7 +10,6 @@ class HomeNoteCardContent extends StatelessWidget {
   final bool isSelectionMode;
   final bool isSelected;
   final VoidCallback onTap;
-  final VoidCallback onLongPress;
 
   const HomeNoteCardContent({
     super.key,
@@ -18,7 +17,6 @@ class HomeNoteCardContent extends StatelessWidget {
     required this.isSelectionMode,
     required this.isSelected,
     required this.onTap,
-    required this.onLongPress,
   });
 
   @override
@@ -53,14 +51,9 @@ class HomeNoteCardContent extends StatelessWidget {
       leading: leading,
       showLeading: isSelectionMode || note.isPinned,
       selected: isSelected,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 24.0,
-        vertical: 8.0,
-      ),
       labelColor: context.colorScheme.onSurface,
       supportingTextColor: context.colorScheme.onSurfaceVariant,
       onTap: onTap,
-      onLongPress: isSelectionMode ? null : onLongPress,
     );
   }
 

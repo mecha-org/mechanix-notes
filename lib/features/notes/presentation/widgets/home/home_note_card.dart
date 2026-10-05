@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
-import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/card/home_note_card_content.dart';
@@ -28,18 +28,11 @@ class HomeNoteCard extends StatelessWidget {
           note: note,
           isSelectionMode: isSelectionMode,
           isSelected: isSelected,
-          onLongPress: () => context.read<NotesBloc>().add(
-            ToggleNoteSelection(noteId: note.id),
+          onTap: () => Navigator.pushNamed(
+            context,
+            AppRoutes.noteEditor,
+            arguments: {'noteId': note.id, 'noteTitle': note.title},
           ),
-          onTap: () => isSelectionMode
-              ? context.read<NotesBloc>().add(
-                  ToggleNoteSelection(noteId: note.id),
-                )
-              : Navigator.pushNamed(
-                  context,
-                  '/note-editor',
-                  arguments: {'noteId': note.id, 'noteTitle': note.title},
-                ),
         );
       },
     );
