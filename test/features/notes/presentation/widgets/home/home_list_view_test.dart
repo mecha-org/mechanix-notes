@@ -9,6 +9,7 @@ import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_delete_sheet.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_list_view.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
@@ -183,7 +184,7 @@ void main() {
     });
 
     testWidgets(
-      'renders MechanixExpandableListTile and collapses on header tap',
+      'renders MechanixSwipableListTile and reveals pin and delete actions on swipe',
       (tester) async {
         final groupedNotes = [const TimeGroup(TimeCategory.recent), note1];
 
@@ -194,20 +195,55 @@ void main() {
         await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
         await tester.pumpAndSettle();
 
-        // Find the expandable list tile
-        expect(find.byType(MechanixExpandableListTile), findsOneWidget);
+        // Find the swipable list tile
+        expect(find.byType(MechanixSwipableListTile), findsOneWidget);
         expect(find.text('Daily Journal'), findsOneWidget);
 
-        // Tap header to collapse
-        await tester.tap(find.text('Recent'));
+        // Swipe the note card to the left to reveal actions
+        await tester.drag(find.text('Daily Journal'), const Offset(-300, 0));
         await tester.pumpAndSettle();
 
-        // Tap header again to expand
-        await tester.tap(find.text('Recent'));
-        await tester.pumpAndSettle();
-
-        expect(find.text('Daily Journal'), findsOneWidget);
+        // Verify action buttons are revealed
+        expect(find.byKey(ValueKey('pin_action_${note1.id}')), findsOneWidget);
+        expect(
+          find.byKey(ValueKey('delete_action_${note1.id}')),
+          findsOneWidget,
+        );
       },
     );
+
+    testWidgets('tapping pin and delete actions triggers respective flows', (
+      tester,
+    ) async {
+      final groupedNotes = [const TimeGroup(TimeCategory.recent), note1];
+
+      when(
+        () => mockNotesBloc.state,
+      ).thenReturn(NotesState(groupedNotes: groupedNotes));
+
+      await tester.pumpWidget(buildTestWidget(groupedNotes: groupedNotes));
+      await tester.pumpAndSettle();
+
+      // Swipe open
+      await tester.drag(find.text('Daily Journal'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      // Tap pin action
+      await tester.tap(find.byKey(ValueKey('pin_action_${note1.id}')));
+      await tester.pumpAndSettle();
+
+      verify(() => mockNotesBloc.add(any(that: isA<TogglePinNote>()))).called(1);
+
+      // Swipe open again
+      await tester.drag(find.text('Daily Journal'), const Offset(-300, 0));
+      await tester.pumpAndSettle();
+
+      // Tap delete action
+      await tester.tap(find.byKey(ValueKey('delete_action_${note1.id}')));
+      await tester.pumpAndSettle();
+
+      // Verify delete bottom sheet opens
+      expect(find.byType(HomeDeleteSheet), findsOneWidget);
+    });
   });
 }

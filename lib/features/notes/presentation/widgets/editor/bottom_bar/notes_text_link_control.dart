@@ -143,7 +143,7 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
       padding: const EdgeInsets.all(4),
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 12,
+        spacing: 6,
         children: [
           _ModeToggleGroup(
             key: const Key('notes_mode_toggle_group'),
@@ -282,7 +282,7 @@ class _ModeToggleGroup extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 12,
+        spacing: 6,
         children: [
           // Text mode toggle button
           MechanixIconButton.filled(

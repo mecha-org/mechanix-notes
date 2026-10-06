@@ -1,4 +1,5 @@
 import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
@@ -9,6 +10,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
+import 'package:widgets/widgets.dart';
 
 class HomeListView extends StatefulWidget {
   const HomeListView({super.key, required this.groupedNotes});
@@ -86,7 +88,9 @@ class _HomeListViewState extends State<HomeListView> {
         buildWhen: (prev, curr) => prev.groupedNotes != curr.groupedNotes,
         builder: (context, state) {
           final sections = _groupNotes(
-            state.groupedNotes.isNotEmpty ? state.groupedNotes : widget.groupedNotes,
+            state.groupedNotes.isNotEmpty
+                ? state.groupedNotes
+                : widget.groupedNotes,
           );
 
           return Scrollbar(
@@ -95,30 +99,32 @@ class _HomeListViewState extends State<HomeListView> {
               behavior: ScrollConfiguration.of(context).copyWith(
                 dragDevices: {PointerDeviceKind.touch, PointerDeviceKind.mouse},
               ),
-              child: ListView.builder(
-                controller: _scrollController,
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(top: 8.0, bottom: 40.0),
-                itemCount: sections.length,
-                itemBuilder: (context, index) {
-                  final section = sections[index];
-                  return HomeGroupHeader(
-                    key: ValueKey(
-                      'header_${section.group.category}_${section.group.customLabel}',
-                    ),
-                    group: section.group,
-                    count: section.notes.length,
-                    isFirst: index == 0,
-                    children: section.notes
-                        .map(
-                          (note) => HomeNoteCard(
-                            key: ValueKey(note.id),
-                            note: note,
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
+              child: MechanixSwipableList(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.only(top: 8.0, bottom: 40.0),
+                  itemCount: sections.length,
+                  itemBuilder: (context, index) {
+                    final section = sections[index];
+                    return HomeGroupHeader(
+                      key: ValueKey(
+                        'header_${section.group.category}_${section.group.customLabel}',
+                      ),
+                      group: section.group,
+                      count: section.notes.length,
+                      isFirst: index == 0,
+                      children: section.notes
+                          .map(
+                            (note) => HomeNoteCard(
+                              key: ValueKey(note.id),
+                              note: note,
+                            ),
+                          )
+                          .toList(),
+                    );
+                  },
+                ),
               ),
             ),
           );
