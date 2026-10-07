@@ -99,7 +99,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     }
   }
 
-
   Future<void> _onSaveRequested(
     EditorSaveRequested event,
     Emitter<EditorState> emit,
@@ -178,8 +177,8 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     if (lines.length > 1) {
       final title = lines.first;
       final bodyText = lines.skip(1).join(' ');
-      final preview = bodyText.length > Constants.noteTitleMaxLength
-          ? bodyText.substring(0, Constants.noteTitleMaxLength)
+      final preview = bodyText.length > Constants.notePreviewTextMaxLength
+          ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
           : bodyText;
       return (title, preview);
     }
@@ -187,14 +186,14 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     // Only 1 line of text:
     final singleLine = lines.first;
     if (currentTitle.isNotEmpty && currentTitle != singleLine) {
-      final preview = singleLine.length > Constants.noteTitleMaxLength
-          ? singleLine.substring(0, Constants.noteTitleMaxLength)
+      final preview = singleLine.length > Constants.notePreviewTextMaxLength
+          ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
           : singleLine;
       return (currentTitle, preview);
     }
 
-    final preview = singleLine.length > Constants.noteTitleMaxLength
-        ? singleLine.substring(0, Constants.noteTitleMaxLength)
+    final preview = singleLine.length > Constants.notePreviewTextMaxLength
+        ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
         : singleLine;
     return (singleLine, preview);
   }

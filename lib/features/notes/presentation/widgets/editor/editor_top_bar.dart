@@ -98,7 +98,10 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
                   labelText: isPinned
                       ? (l10n?.unpinNote ?? 'Unpin note')
                       : (l10n?.pinNote ?? 'Pin note'),
-                  trailing: const ImageIcon(AssetImage(NotesIcon.pinIcon), size: 15),
+                  trailing: const ImageIcon(
+                    AssetImage(NotesIcon.pinIcon),
+                    size: 15,
+                  ),
                   onTap: () {
                     context.read<EditorBloc>().add(EditorPinToggled());
                   },

@@ -10,43 +10,61 @@ class HomeGroupHeader extends StatelessWidget {
     required this.group,
     this.count,
     this.isFirst = false,
+    this.children = const <Widget>[],
   });
 
   final TimeGroup group;
   final int? count;
   final bool isFirst;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
     final title = getLocalizedLabelForTimeNotes(context, group);
     final isRecent = group.category == TimeCategory.recent;
-    final countVal = count ?? 0;
+    final countVal = count ?? children.length;
     final countStr = countVal.toString().padLeft(2, '0');
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const MechanixDivider(space: 12),
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
-          children: [
-            Text(title),
-            if (!isRecent && countVal > 0) ...[
-              const SizedBox(width: 8),
+    return MechanixExpandableListTile(
+      key: ValueKey('tile_${group.category}_${group.customLabel}'),
+      label: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const MechanixDivider(space: 18),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                '[$countStr]',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                title,
+                style: context.textTheme.headlineSmall?.copyWith(
                   color: context.colorScheme.onSurfaceVariant,
                 ),
               ),
+              if (!isRecent && countVal > 0) ...[
+                const SizedBox(width: 4),
+                Transform.translate(
+                  offset: const Offset(0, -4),
+                  child: Text(
+                    '[$countStr]',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
-        const MechanixDivider(space: 12),
-      ],
+          ),
+          const MechanixDivider(space: 18),
+        ],
+      ),
+      showAccordionButton: false,
+      backgroundColor: context.colorScheme.surfaceContainerLowest,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
+      initiallyExpanded: true,
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      children: children,
     );
   }
 }
