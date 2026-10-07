@@ -27,36 +27,43 @@ class HomeGroupHeader extends StatelessWidget {
 
     return MechanixExpandableListTile(
       key: ValueKey('tile_${group.category}_${group.customLabel}'),
-      label: Row(
+      label: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title),
-          if (!isRecent && countVal > 0) ...[
-            const SizedBox(width: 4),
-            Transform.translate(
-              offset: const Offset(0, -4),
-              child: Text(
-                '[$countStr]',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          const MechanixDivider(space: 18),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: context.textTheme.headlineSmall?.copyWith(
                   color: context.colorScheme.onSurfaceVariant,
                 ),
               ),
-            ),
-          ],
+              if (!isRecent && countVal > 0) ...[
+                const SizedBox(width: 4),
+                Transform.translate(
+                  offset: const Offset(0, -4),
+                  child: Text(
+                    '[$countStr]',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const MechanixDivider(space: 18),
         ],
       ),
       showAccordionButton: false,
       backgroundColor: context.colorScheme.surfaceContainerLowest,
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 24.0,
-        vertical: 4.0,
-      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
       initiallyExpanded: true,
-      childrenPadding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8.0,
-      ),
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
       children: children,
     );
   }

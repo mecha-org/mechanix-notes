@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart';
@@ -55,9 +56,20 @@ class NotesApp extends StatelessWidget {
                 }
               : null,
           themeMode: ThemeMode.dark,
-          darkTheme: theme.dark,
-          theme: theme.light,
-
+          darkTheme: theme.dark.copyWith(
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+              },
+            ),
+          ),
+          theme: theme.light.copyWith(
+            pageTransitionsTheme: const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.linux: CupertinoPageTransitionsBuilder(),
+              },
+            ),
+          ),
           home: child,
           locale: const Locale('en'),
           localizationsDelegates: const [

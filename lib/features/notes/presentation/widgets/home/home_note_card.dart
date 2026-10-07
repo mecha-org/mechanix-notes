@@ -38,7 +38,7 @@ class HomeNoteCard extends StatelessWidget {
     if (note.isPinned) {
       leading = ImageIcon(
         const AssetImage(NotesIcon.pinIcon),
-        size: 16,
+        size: 20,
         color: context.colorScheme.primary,
       );
     } else {
@@ -49,6 +49,7 @@ class HomeNoteCard extends StatelessWidget {
       key: ValueKey('note_tile_${note.id}'),
       variant: ListTileVariant.standard,
       labelText: title,
+      extentRatio: 0.2,
       supportingText: supportingText,
       trailingText: formattedDate,
       leading: leading,
@@ -70,7 +71,7 @@ class HomeNoteCard extends StatelessWidget {
         MechanixIconButton.filled(
           key: ValueKey('pin_action_${note.id}'),
           type: IconButtonType.rounded,
-          size: IconButtonSize.small,
+          size: IconButtonSize.medium,
           backgroundColor: context.colorScheme.secondary,
           borderColor: Colors.transparent,
           borderWidth: 0,
@@ -92,7 +93,7 @@ class HomeNoteCard extends StatelessWidget {
         MechanixIconButton.filled(
           key: ValueKey('delete_action_${note.id}'),
           type: IconButtonType.rounded,
-          size: IconButtonSize.small,
+          size: IconButtonSize.medium,
           backgroundColor: context.colorScheme.secondary,
           borderColor: Colors.transparent,
           borderWidth: 0,

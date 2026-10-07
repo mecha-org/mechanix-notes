@@ -103,7 +103,7 @@ class _HomeListViewState extends State<HomeListView> {
                 child: ListView.builder(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(top: 8.0, bottom: 40.0),
+                  padding: const EdgeInsets.only(bottom: 40.0),
                   itemCount: sections.length,
                   itemBuilder: (context, index) {
                     final section = sections[index];

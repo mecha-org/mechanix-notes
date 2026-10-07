@@ -16,7 +16,7 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: context.colorScheme.surfaceContainerLowest,
         actions: [
           MechanixIconButton.standard(
-            icon: const Icon(Icons.search, size: 20),
+            icon: const Icon(Icons.search, size: 24),
             onPressed: () {
               Navigator.pushNamed(context, AppRoutes.search);
             },
