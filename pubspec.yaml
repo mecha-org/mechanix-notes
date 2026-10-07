@@ -47,6 +47,10 @@ dependencies:
   show_fps: ^1.1.0
   test: ^1.28.0
   objectbox_flutter_libs: ^5.3.2
+  mechanix_common:
+    git:
+      url: https://github.com/mineshp-mecha/mechanix-commons.git
+      ref: master
   flutter_tantivy:
     git:
       url: https://github.com/DhanishMecha/flutter_tantivy.git
