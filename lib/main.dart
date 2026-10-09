@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_quill/flutter_quill.dart';
+import 'package:mechanix_common/mechanix_common.dart';
 import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
@@ -15,8 +16,12 @@ import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:show_fps/show_fps.dart';
 import 'package:widgets/widgets.dart';
 
-void main() {
+void main(List<String> args) {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final _ = args.isNotEmpty ? args.first : null;
+  MechanixApp.registerSingleton('MechanixNotes', (path) {});
+
   runApp(
     MultiRepositoryProvider(
       providers: [
