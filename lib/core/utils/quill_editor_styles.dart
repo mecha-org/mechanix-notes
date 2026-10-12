@@ -29,7 +29,7 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     paragraph: DefaultTextBlockStyle(
       bodyLarge,
       const HorizontalSpacing(0, 0),
-      const VerticalSpacing(0, 0),
+      const VerticalSpacing(0, 24),
       const VerticalSpacing(0, 0),
       null,
     ),
@@ -37,7 +37,7 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     h1: DefaultTextBlockStyle(
       headlineLarge,
       const HorizontalSpacing(0, 0),
-      const VerticalSpacing(10, 10),
+      const VerticalSpacing(0, 24),
       const VerticalSpacing(0, 0),
       null,
     ),
@@ -45,7 +45,7 @@ DefaultStyles quillEditorStyle(BuildContext context) {
     h2: DefaultTextBlockStyle(
       headlineSmall,
       const HorizontalSpacing(0, 0),
-      const VerticalSpacing(5, 5),
+      const VerticalSpacing(0, 24),
       const VerticalSpacing(0, 0),
       null,
     ),
@@ -85,6 +85,19 @@ DefaultStyles quillEditorStyle(BuildContext context) {
       const VerticalSpacing(16, 16),
       null,
       NotesQuillCheckboxBuilder(),
+      indentWidthBuilder: (block, context, count, numberPointWidthBuilder) {
+        final attrs = block.style.attributes;
+        final listAttr = attrs[Attribute.list.key];
+        if (listAttr == Attribute.checked || listAttr == Attribute.unchecked) {
+          return const HorizontalSpacing(50, 0);
+        }
+        return TextBlockUtils.defaultIndentWidthBuilder(
+          block,
+          context,
+          count,
+          numberPointWidthBuilder,
+        );
+      },
     ),
 
     link: const TextStyle(decoration: TextDecoration.underline),
@@ -123,43 +136,47 @@ class NotesQuillCheckboxBuilder extends QuillCheckboxBuilder {
         borderRadius: BorderRadius.circular(6),
         onTap: () => onChanged(!isChecked),
         child: Container(
-          width: 32,
-          alignment: Alignment.topLeft,
-          padding: const EdgeInsets.only(top: 4, left: 4),
-          child: SizedBox(
-            width: 18,
-            height: 18,
-            child: IgnorePointer(
-              child: MechanixCheckbox(
-                value: isChecked,
-                showFocusIndicator: false,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity: VisualDensity.compact,
-                checkColor: colorScheme.onPrimary,
-                fillColor: WidgetStateProperty.resolveWith<Color>((
-                  Set<WidgetState> states,
-                ) {
-                  if (states.contains(WidgetState.selected)) {
-                    return colorScheme.primary;
-                  }
-                  return Colors.transparent;
-                }),
-                side: WidgetStateBorderSide.resolveWith((states) {
-                  if (states.contains(WidgetState.selected)) {
-                    return const BorderSide(
-                      color: Colors.transparent,
-                      width: 0,
+          width: 38,
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.only(right: 12),
+          child: Container(
+            padding: const EdgeInsets.all(4),
+            alignment: Alignment.center,
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: IgnorePointer(
+                child: MechanixCheckbox(
+                  value: isChecked,
+                  showFocusIndicator: false,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                  checkColor: colorScheme.onPrimary,
+                  fillColor: WidgetStateProperty.resolveWith<Color>((
+                    Set<WidgetState> states,
+                  ) {
+                    if (states.contains(WidgetState.selected)) {
+                      return colorScheme.primary;
+                    }
+                    return Colors.transparent;
+                  }),
+                  side: WidgetStateBorderSide.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return const BorderSide(
+                        color: Colors.transparent,
+                        width: 0,
+                      );
+                    }
+                    return BorderSide(
+                      color: colorScheme.onSurfaceVariant,
+                      width: 2,
                     );
-                  }
-                  return BorderSide(
-                    color: colorScheme.onSurfaceVariant,
-                    width: 2,
-                  );
-                }),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(2),
+                  }),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  onChanged: (_) {},
                 ),
-                onChanged: (_) {},
               ),
             ),
           ),

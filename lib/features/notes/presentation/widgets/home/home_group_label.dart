@@ -27,43 +27,51 @@ class HomeGroupHeader extends StatelessWidget {
 
     return MechanixExpandableListTile(
       key: ValueKey('tile_${group.category}_${group.customLabel}'),
-      label: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const MechanixDivider(space: 18),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: context.textTheme.headlineSmall?.copyWith(
-                  color: context.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              if (!isRecent && countVal > 0) ...[
-                const SizedBox(width: 4),
-                Transform.translate(
-                  offset: const Offset(0, -4),
-                  child: Text(
-                    '[$countStr]',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.colorScheme.onSurfaceVariant,
-                    ),
+      expandedContentGap: 12,
+      label: SizedBox(
+        height: 50,
+        child: Column(
+          mainAxisSize: MainAxisSize.max,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const MechanixDivider(space: 0),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: context.textTheme.headlineSmall?.copyWith(
+                    color: context.colorScheme.onSurfaceVariant,
+                    fontSize: 20,
+                    fontFamily: MechanixFontFamily.geist,
                   ),
                 ),
+                if (!isRecent && countVal > 0) ...[
+                  const SizedBox(width: 8),
+                  Transform.translate(
+                    offset: const Offset(0, 3),
+                    child: Text(
+                      '[$countStr]',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
-          ),
-          const MechanixDivider(space: 18),
-        ],
+            ),
+            const MechanixDivider(space: 0),
+          ],
+        ),
       ),
+      height: 50,
       showAccordionButton: false,
       backgroundColor: context.colorScheme.surfaceContainerLowest,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 0),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
       initiallyExpanded: true,
-      childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      childrenPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
       children: children,
     );
   }

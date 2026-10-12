@@ -93,7 +93,7 @@ class _EditorContentState extends State<EditorContent> {
             customShortcuts: const {},
             showCodeBlockLineNumbers: false,
             placeholder: AppLocalizations.of(context)!.startWriting,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 80),
+            padding: const EdgeInsets.all(24),
             customStyles: quillEditorStyle(context),
             expands: true,
             scrollable: true,

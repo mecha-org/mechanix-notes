@@ -60,8 +60,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Whether the search field should autofocus when entering active mode.
   final bool autofocus;
 
-  static final Size _preferredSize =
-      const MechanixAppBar.small().preferredSize;
+  static final Size _preferredSize = const MechanixAppBar.small().preferredSize;
 
   @override
   Size get preferredSize => _preferredSize;
@@ -121,7 +120,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     onChanged: onQueryChanged,
                     onSubmitted: onSubmitted,
                     cursorColor: colorScheme.primary,
-                    style: textTheme.bodyLarge?.copyWith(
+                    style: textTheme.headlineSmall?.copyWith(
                       color: colorScheme.onSurface,
                     ),
                     decoration: InputDecoration(
@@ -134,7 +133,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                       contentPadding: EdgeInsets.zero,
                       fillColor: Colors.transparent,
                       hintText: effectiveSearchHint,
-                      hintStyle: textTheme.bodyLarge?.copyWith(
+                      hintStyle: textTheme.headlineSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),

@@ -38,13 +38,17 @@ class EditorUndoRedoActions extends StatelessWidget {
           MechanixIconButton.standard(
             type: IconButtonType.rounded,
             onPressed: quillController!.hasUndo ? quillController!.undo : null,
-            foregroundColor: context.colorScheme.onSurface,
+            foregroundColor: quillController!.hasUndo
+                ? context.colorScheme.onSurface
+                : context.colorScheme.onSurfaceVariant,
             icon: const ImageIcon(AssetImage(NotesIcon.undoIcon)),
           ),
           MechanixIconButton.standard(
             type: IconButtonType.rounded,
             onPressed: quillController!.hasRedo ? quillController!.redo : null,
-            foregroundColor: context.colorScheme.onSurface,
+            foregroundColor: quillController!.hasRedo
+                ? context.colorScheme.onSurface
+                : context.colorScheme.onSurfaceVariant,
             icon: const ImageIcon(AssetImage(NotesIcon.redoIcon)),
           ),
         ],

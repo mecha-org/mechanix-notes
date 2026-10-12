@@ -103,25 +103,33 @@ class _HomeListViewState extends State<HomeListView> {
                 child: ListView.builder(
                   controller: _scrollController,
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 40.0),
                   itemCount: sections.length,
                   itemBuilder: (context, index) {
                     final section = sections[index];
-                    return HomeGroupHeader(
-                      key: ValueKey(
-                        'header_${section.group.category}_${section.group.customLabel}',
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: HomeGroupHeader(
+                        key: ValueKey(
+                          'header_${section.group.category}_${section.group.customLabel}',
+                        ),
+                        group: section.group,
+                        count: section.notes.length,
+                        isFirst: index == 0,
+                        children: section.notes
+                            .expand(
+                              (note) => [
+                                Padding(
+                                  padding: const EdgeInsets.all(0),
+                                  child: HomeNoteCard(
+                                    key: ValueKey(note.id),
+                                    note: note,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            )
+                            .toList(),
                       ),
-                      group: section.group,
-                      count: section.notes.length,
-                      isFirst: index == 0,
-                      children: section.notes
-                          .map(
-                            (note) => HomeNoteCard(
-                              key: ValueKey(note.id),
-                              note: note,
-                            ),
-                          )
-                          .toList(),
                     );
                   },
                 ),

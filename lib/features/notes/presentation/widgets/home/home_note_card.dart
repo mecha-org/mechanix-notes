@@ -50,6 +50,8 @@ class HomeNoteCard extends StatelessWidget {
       variant: ListTileVariant.standard,
       labelText: title,
       extentRatio: 0.2,
+      height: 50,
+      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 14),
       supportingText: supportingText,
       trailingText: formattedDate,
       leading: leading,

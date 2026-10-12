@@ -157,58 +157,49 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_contextual_button'),
               isSelected: widget.isTextContextualActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h1Icon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.h1Icon)),
               onPressed: onPressed(widget.onTextContextualPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_h2_button'),
               isSelected: widget.isH2Active,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h2Icon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.h2Icon)),
               onPressed: onPressed(widget.onH2Pressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_body_button'),
               isSelected: widget.isBodyActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.textstyleIcon),
-                size: 16,
-              ),
+              icon: const ImageIcon(AssetImage(NotesIcon.textstyleIcon)),
               onPressed: onPressed(widget.onBodyPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_bold_button'),
               isSelected: widget.isBoldActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.boldIcon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.boldIcon)),
               onPressed: onPressed(widget.onBoldPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_italic_button'),
               isSelected: widget.isItalicActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.italicIcon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.italicIcon)),
               onPressed: onPressed(widget.onItalicPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_underline_button'),
               isSelected: widget.isUnderlineActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.underlineIcon),
-                size: 16,
-              ),
+              icon: const ImageIcon(AssetImage(NotesIcon.underlineIcon)),
               onPressed: onPressed(widget.onUnderlinePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.strikethroughIcon),
-                size: 16,
-              ),
+              icon: const ImageIcon(AssetImage(NotesIcon.strikethroughIcon)),
               onPressed: onPressed(widget.onStrikethroughPressed),
             ),
           ] else ...[
@@ -229,17 +220,14 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_link_code_button'),
               isSelected: widget.isCodeActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.codeBlockIcon),
-                size: 16,
-              ),
+              icon: const ImageIcon(AssetImage(NotesIcon.codeBlockIcon)),
               onPressed: onPressed(widget.onCodePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_link_checklist_button'),
               isSelected: widget.isChecklistActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.todoIcon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.todoIcon)),
               onPressed: onPressed(widget.onChecklistPressed),
             ),
             // TODO: This feature is not implemented
@@ -290,7 +278,7 @@ class _ModeToggleGroup extends StatelessWidget {
             isSelected: isTextMode,
             type: IconButtonType.square,
             size: size,
-            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon), size: 13),
+            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon)),
             foregroundColor: context.colorScheme.onSurface,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.text)
@@ -303,7 +291,7 @@ class _ModeToggleGroup extends StatelessWidget {
             type: IconButtonType.square,
             size: size,
             foregroundColor: context.colorScheme.onSurface,
-            icon: const Icon(Icons.attach_file_rounded, size: 18),
+            icon: const Icon(Icons.attach_file_rounded),
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)
                 : null,
