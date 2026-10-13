@@ -170,7 +170,7 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_body_button'),
               isSelected: widget.isBodyActive,
               size: widget.size,
-              icon: Image.asset(NotesIcon.textstyleIcon, height: 11, width: 9),
+              icon: Image.asset(NotesIcon.textstyleIcon, height: 11, width: 13),
               onPressed: onPressed(widget.onBodyPressed),
             ),
             _ContextualButton(

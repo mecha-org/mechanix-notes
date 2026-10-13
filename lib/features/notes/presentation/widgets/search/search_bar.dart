@@ -104,10 +104,11 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
-                Icon(
-                  Icons.search,
-                  size: 20,
+                Image.asset(
+                  NotesIcon.searchIcon,
                   color: colorScheme.onSurfaceVariant,
+                  width: 19.5,
+                  height: 19.5,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -140,7 +141,12 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                   ),
                 ),
                 MechanixIconButton.standard(
-                  icon: const ImageIcon(AssetImage(NotesIcon.closeIcon)),
+                  icon: Image.asset(
+                    NotesIcon.closeIcon,
+                    color: colorScheme.onSurface,
+                    width: 15,
+                    height: 15,
+                  ),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {
                       controller.clear();

@@ -56,9 +56,7 @@ class _EditorViewState extends State<EditorView> {
     _isSavingAndExiting = true;
     if (_controller != null) {
       final markdown = _controller!.text;
-      context.read<EditorBloc>().add(
-        EditorSaveRequested(content: markdown),
-      );
+      context.read<EditorBloc>().add(EditorSaveRequested(content: markdown));
     } else {
       _canPop = true;
       Navigator.of(context).pop();

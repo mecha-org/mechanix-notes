@@ -163,5 +163,42 @@ void main() {
         () => mockEditorBloc.add(any(that: isA<EditorPinToggled>())),
       ).called(1);
     });
+
+    testWidgets(
+      'more vert background color is surfaceContainer when menu is open, surfaceContainerLowest when closed',
+      (tester) async {
+        await tester.pumpWidget(buildTestWidget(withMarkdownController: true));
+
+        final colorScheme = MechanixTheme.dark.colorScheme;
+        final menuButtonFinder = find.byType(MechanixIconButton).last;
+
+        // Initially closed: background color is surfaceContainerLowest (app bar color)
+        expect(
+          (tester.widget(menuButtonFinder) as MechanixIconButton).backgroundColor,
+          equals(colorScheme.surfaceContainerLowest),
+        );
+
+        // Open menu
+        await tester.tap(menuButtonFinder);
+        await tester.pumpAndSettle();
+
+        // While open: background color is surfaceContainer
+        expect(
+          (tester.widget(menuButtonFinder) as MechanixIconButton).backgroundColor,
+          equals(colorScheme.surfaceContainer),
+        );
+
+        // Close menu by selecting an item
+        final pinItem = find.text('Pin note');
+        await tester.tap(pinItem);
+        await tester.pumpAndSettle();
+
+        // Closed: background color is back to surfaceContainerLowest
+        expect(
+          (tester.widget(menuButtonFinder) as MechanixIconButton).backgroundColor,
+          equals(colorScheme.surfaceContainerLowest),
+        );
+      },
+    );
   });
 }

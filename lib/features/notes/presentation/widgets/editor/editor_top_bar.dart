@@ -14,15 +14,14 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
   const EditorTopBar({super.key});
 
   @override
-  Size get preferredSize => const MechanixAppBar().preferredSize;
+  Size get preferredSize =>
+      const MechanixAppBar(toolbarHeight: 73).preferredSize;
 
   void _handleBack(BuildContext context) {
     final controller = MarkdownControllerProvider.maybeOf(context)?.controller;
     if (controller != null) {
       final markdown = controller.text;
-      context.read<EditorBloc>().add(
-        EditorSaveRequested(content: markdown),
-      );
+      context.read<EditorBloc>().add(EditorSaveRequested(content: markdown));
     } else {
       Navigator.maybePop(context);
     }
@@ -58,11 +57,13 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     return MechanixAppBar(
       backgroundColor: context.colorScheme.surfaceContainerLowest,
+      toolbarHeight: 73,
       leading: MechanixIconButton.standard(
         type: IconButtonType.rounded,
+        size: IconButtonSize.small,
         onPressed: () => _handleBack(context),
         foregroundColor: context.colorScheme.onSurface,
-        icon: const ImageIcon(AssetImage(NotesIcon.backIcon)),
+        icon: Image.asset(NotesIcon.backIcon, width: 9, height: 16.5),
       ),
       actions: [
         EditorUndoRedoActions(controller: controller),
@@ -83,9 +84,17 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
               anchorBuilder: (context, controller, child) {
                 return MechanixIconButton.standard(
                   type: IconButtonType.rounded,
+                  size: IconButtonSize.small,
                   onPressed: controller.toggle,
                   foregroundColor: context.colorScheme.onSurface,
-                  icon: const ImageIcon(AssetImage(NotesIcon.moreVertIcon)),
+                  backgroundColor: controller.isOpen
+                      ? context.colorScheme.surfaceContainer
+                      : context.colorScheme.surfaceContainerLowest,
+                  icon: Image.asset(
+                    NotesIcon.moreVertIcon,
+                    width: 2.25,
+                    height: 15,
+                  ),
                 );
               },
               entries: [
@@ -94,9 +103,11 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
                   labelText: isPinned
                       ? (l10n?.unpinNote ?? 'Unpin note')
                       : (l10n?.pinNote ?? 'Pin note'),
-                  trailing: const ImageIcon(
-                    AssetImage(NotesIcon.pinIcon),
-                    size: 15,
+
+                  trailing: Image.asset(
+                    NotesIcon.pinIcon,
+                    width: 15,
+                    height: 17,
                   ),
                   onTap: () {
                     context.read<EditorBloc>().add(EditorPinToggled());
@@ -110,10 +121,10 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
                       color: context.colorScheme.error,
                     ),
                   ),
-                  trailing: ImageIcon(
-                    const AssetImage(NotesIcon.trashIcon),
-                    size: 15,
-                    color: context.colorScheme.error,
+                  trailing: Image.asset(
+                    NotesIcon.trashIcon,
+                    width: 15,
+                    height: 16.25,
                   ),
                   onTap: () => _showTrashConfirmationSheet(context),
                 ),
