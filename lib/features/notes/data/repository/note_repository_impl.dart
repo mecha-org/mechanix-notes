@@ -1,19 +1,25 @@
 import 'dart:io';
+
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
+import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
 
 class NoteRepositoryImpl extends NoteRepository {
   Store? _store;
   Box<NoteModel>? _box;
   final IndexingService _indexingService;
+  final NoteFileStorage _fileStorage;
 
-  NoteRepositoryImpl({IndexingService? indexingService})
-    : _indexingService = indexingService ?? IndexingService();
+  NoteRepositoryImpl({
+    IndexingService? indexingService,
+    NoteFileStorage? fileStorage,
+  }) : _indexingService = indexingService ?? IndexingService(),
+       _fileStorage = fileStorage ?? NoteFileStorage();
 
   Box<NoteModel> get box {
     if (_box == null) {
@@ -41,6 +47,12 @@ class NoteRepositoryImpl extends NoteRepository {
       await _indexingService.initialize();
     } catch (e) {
       AppLogger.e('Failed to initialize Tantivy: $e');
+    }
+
+    try {
+      await _fileStorage.ensureDirectoryExists();
+    } catch (e) {
+      AppLogger.e('Failed to initialize note file directory: $e');
     }
   }
 
@@ -140,9 +152,40 @@ class NoteRepositoryImpl extends NoteRepository {
       final query = box.query(NoteModel_.id.equals(id)).build();
       final note = query.findFirst();
       query.close();
-      AppLogger.i(
-        'NoteRepository: getNoteById($id) → ${note == null ? 'not found' : 'found'}',
-      );
+      if (note == null) {
+        AppLogger.i('NoteRepository: getNoteById($id) → not found');
+        return null;
+      }
+
+      // 1. Try reading using fileName
+      String? markdown;
+      final fileToRead = note.fileName;
+      if (fileToRead != null && fileToRead.isNotEmpty) {
+        markdown = await _fileStorage.readNoteContent(fileToRead);
+      }
+
+      // 2. Fallback: try resolving by title (e.g. if saved under title directly)
+      if (markdown == null) {
+        final titleFileName =
+            '${NoteFileStorage.sanitizeFileName(note.title)}.md';
+        if (await _fileStorage.noteFileExists(titleFileName)) {
+          markdown = await _fileStorage.readNoteContent(titleFileName);
+          if (markdown != null) {
+            note.fileName = titleFileName;
+            box.put(note);
+          }
+        }
+      }
+
+      // 3. Fallback: if file exists, use its content; if note.content had legacy text, keep it;
+      // if file was missing, reset note.content to empty string.
+      if (markdown != null) {
+        note.content = markdown;
+      } else if (note.fileName != null) {
+        note.content = '';
+      }
+
+      AppLogger.i('NoteRepository: getNoteById($id) → found');
       return note;
     } catch (e) {
       AppLogger.e('NoteRepository: getNoteById failed: $e');
@@ -157,6 +200,18 @@ class NoteRepositoryImpl extends NoteRepository {
       final query = box.query(NoteModel_.id.oneOf(ids)).build();
       final notesToDelete = query.find();
       query.close();
+
+      for (final note in notesToDelete) {
+        final fileToDelete = note.fileName;
+        if (fileToDelete != null && fileToDelete.isNotEmpty) {
+          await _fileStorage.deleteNoteFile(fileToDelete);
+        } else {
+          final titleFileName =
+              '${NoteFileStorage.sanitizeFileName(note.title)}.md';
+          await _fileStorage.deleteNoteFile(titleFileName);
+        }
+      }
+
       if (notesToDelete.isNotEmpty) {
         box.removeMany(notesToDelete.map((n) => n.obxId).toList());
       }
@@ -177,20 +232,36 @@ class NoteRepositoryImpl extends NoteRepository {
       if (existing != null) {
         note.obxId = existing.obxId;
       }
+
+      final currentFileName = existing?.fileName;
+
+      final rawMarkdown = note.content;
+      final savedFileName = await _fileStorage.writeNoteContent(
+        title: note.title,
+        markdown: rawMarkdown,
+        currentFileName: currentFileName,
+      );
+
+      // Store fileName in ObjectBox and keep content empty in database
+      note.fileName = savedFileName;
+      note.content = '';
       box.put(note);
+
+      // Restore full markdown in in-memory note instance
+      note.content = rawMarkdown;
+
       await _indexingService.upsertNote(note.id, note.title, note.plainText);
       AppLogger.i(
-        'NoteRepository: upsertNote(${note.id}) ${note.updatedAt} ${note.title} ✓',
+        'NoteRepository: upsertNote(${note.id}) ${note.updatedAt} ${note.title} saved to $savedFileName ✓',
       );
     } on DbFullException {
       rethrow;
     } on FileSystemException catch (e) {
-      AppLogger.e(
-        'NoteRepository: upsertNote failed due to index storage error: $e',
-      );
+      AppLogger.e('NoteRepository: upsertNote failed due to storage error: $e');
       throw DbFullException('Storage is full: $e', 1018);
     } catch (e) {
       AppLogger.e('NoteRepository: upsertNote failed: $e');
+      rethrow;
     }
   }
 

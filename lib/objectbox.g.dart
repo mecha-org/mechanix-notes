@@ -22,7 +22,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
     id: const obx_int.IdUid(1, 940365444142600783),
     name: 'NoteModel',
-    lastPropertyId: const obx_int.IdUid(11, 8297143530793730413),
+    lastPropertyId: const obx_int.IdUid(12, 49895023985911002),
     flags: 0,
     properties: <obx_int.ModelProperty>[
       obx_int.ModelProperty(
@@ -88,6 +88,12 @@ final _entities = <obx_int.ModelEntity>[
         type: 1,
         flags: 8,
         indexId: const obx_int.IdUid(4, 3439249776280742230),
+      ),
+      obx_int.ModelProperty(
+        id: const obx_int.IdUid(12, 49895023985911002),
+        name: 'fileName',
+        type: 9,
+        flags: 0,
       ),
     ],
     relations: <obx_int.ModelRelation>[],
@@ -166,7 +172,10 @@ obx_int.ModelDefinition getObjectBoxModel() {
         final contentOffset = fbb.writeString(object.content);
         final plainTextOffset = fbb.writeString(object.plainText);
         final previewTextOffset = fbb.writeString(object.previewText);
-        fbb.startTable(12);
+        final fileNameOffset = object.fileName == null
+            ? null
+            : fbb.writeString(object.fileName!);
+        fbb.startTable(13);
         fbb.addInt64(0, object.obxId);
         fbb.addOffset(1, idOffset);
         fbb.addOffset(2, titleOffset);
@@ -177,6 +186,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
         fbb.addOffset(7, previewTextOffset);
         fbb.addFloat64(8, object.height);
         fbb.addBool(9, object.isPinned);
+        fbb.addOffset(11, fileNameOffset);
         fbb.finish(fbb.endTable());
         return object.obxId;
       },
@@ -222,6 +232,9 @@ obx_int.ModelDefinition getObjectBoxModel() {
           22,
           false,
         );
+        final fileNameParam = const fb.StringReader(
+          asciiOptimization: true,
+        ).vTableGetNullable(buffer, rootOffset, 26);
         final object = NoteModel(
           obxId: obxIdParam,
           id: idParam,
@@ -233,6 +246,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
           previewText: previewTextParam,
           height: heightParam,
           isPinned: isPinnedParam,
+          fileName: fileNameParam,
         );
 
         return object;
@@ -293,5 +307,10 @@ class NoteModel_ {
   /// See [NoteModel.isPinned].
   static final isPinned = obx.QueryBooleanProperty<NoteModel>(
     _entities[0].properties[9],
+  );
+
+  /// See [NoteModel.fileName].
+  static final fileName = obx.QueryStringProperty<NoteModel>(
+    _entities[0].properties[10],
   );
 }

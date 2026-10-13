@@ -11,7 +11,7 @@ class NoteModel {
   @Index()
   String title;
   String content;
-  
+
   @Property(type: PropertyType.date)
   DateTime createdAt;
 
@@ -26,6 +26,8 @@ class NoteModel {
   @Index()
   bool isPinned;
 
+  String? fileName;
+
   NoteModel({
     this.obxId = 0,
     required this.id,
@@ -37,5 +39,6 @@ class NoteModel {
     required this.previewText,
     required this.height,
     this.isPinned = false,
+    this.fileName,
   });
 }

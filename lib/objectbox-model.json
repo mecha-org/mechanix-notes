@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:940365444142600783",
-      "lastPropertyId": "11:8297143530793730413",
+      "lastPropertyId": "12:49895023985911002",
       "name": "NoteModel",
       "properties": [
         {
@@ -66,6 +66,11 @@
           "indexId": "4:3439249776280742230",
           "type": 1,
           "flags": 8
+        },
+        {
+          "id": "12:49895023985911002",
+          "name": "fileName",
+          "type": 9
         }
       ],
       "relations": []
