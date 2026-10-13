@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
@@ -72,10 +71,7 @@ class NotesApp extends StatelessWidget {
           ),
           home: child,
           locale: const Locale('en'),
-          localizationsDelegates: const [
-            ...AppLocalizations.localizationsDelegates,
-            FlutterQuillLocalizations.delegate,
-          ],
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           routes: {
             AppRoutes.noteEditor: (context) => const EditorScreen(),

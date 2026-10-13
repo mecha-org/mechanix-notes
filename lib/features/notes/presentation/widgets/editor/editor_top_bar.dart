@@ -5,7 +5,7 @@ import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_trash_confirmation_sheet.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/markdown_controller_provider.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/topbar/editor_undo_redo_actions.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
@@ -17,14 +17,11 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => const MechanixAppBar().preferredSize;
 
   void _handleBack(BuildContext context) {
-    final quillController = QuillControllerProvider.maybeOf(
-      context,
-    )?.controller;
-    if (quillController != null) {
-      final delta = quillController.document.toDelta().toJson();
-      final plainText = quillController.document.toPlainText().trim();
+    final controller = MarkdownControllerProvider.maybeOf(context)?.controller;
+    if (controller != null) {
+      final markdown = controller.text;
       context.read<EditorBloc>().add(
-        EditorSaveRequested(content: delta, plainText: plainText),
+        EditorSaveRequested(content: markdown),
       );
     } else {
       Navigator.maybePop(context);
@@ -57,9 +54,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
-    final quillController = QuillControllerProvider.maybeOf(
-      context,
-    )?.controller;
+    final controller = MarkdownControllerProvider.maybeOf(context)?.controller;
 
     return MechanixAppBar(
       backgroundColor: context.colorScheme.surfaceContainerLowest,
@@ -70,7 +65,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
         icon: const ImageIcon(AssetImage(NotesIcon.backIcon)),
       ),
       actions: [
-        EditorUndoRedoActions(quillController: quillController),
+        EditorUndoRedoActions(controller: controller),
         BlocBuilder<EditorBloc, EditorState>(
           buildWhen: (prev, curr) {
             final prevPinned = prev is EditorLoaded && prev.isPinned;

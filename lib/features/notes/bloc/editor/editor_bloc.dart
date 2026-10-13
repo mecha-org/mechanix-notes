@@ -1,10 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:equatable/equatable.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_quill/flutter_quill.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
@@ -53,22 +50,16 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
           return;
         }
 
-        var quillDoc = await compute(decodeDocumentInIsolate, note.content);
-        if (quillDoc.isEmpty()) {
-          quillDoc = Document.fromJson([
-            {
-              'insert': '\n',
-              'attributes': {'header': 1},
-            },
-          ]);
-        }
+        final initialContent = note.content.trim().isEmpty
+            ? '# '
+            : note.content;
 
         AppLogger.i('EditorBloc: Content ready for ${event.noteId}');
         emit(
           EditorLoaded(
             noteId: note.id,
             title: event.noteTitle ?? note.title,
-            quillDocument: quillDoc,
+            markdownContent: initialContent,
             isContentLoading: false,
             isNewNote: false,
             isPinned: note.isPinned,
@@ -82,12 +73,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
           EditorLoaded(
             noteId: newId,
             title: '',
-            quillDocument: Document.fromJson([
-              {
-                'insert': '\n',
-                'attributes': {'header': 1},
-              },
-            ]),
+            markdownContent: '# ',
             isContentLoading: false,
             isNewNote: true,
           ),
@@ -108,10 +94,11 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
     try {
       final existing = await _repository.getNoteById(current.noteId);
-      final deltaJson = jsonEncode(event.content);
+      final markdown = event.content;
+      final plainText = (event.plainText ?? markdownToPlainText(markdown))
+          .trim();
 
-      final isEmpty =
-          current.title.trim().isEmpty && event.plainText.trim().isEmpty;
+      final isEmpty = current.title.trim().isEmpty && plainText.isEmpty;
 
       if (isEmpty) {
         if (current.isNewNote) {
@@ -126,15 +113,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
       final note = buildNote(
         current: current,
-        deltaJson: deltaJson,
-        plainText: event.plainText,
+        content: markdown,
+        plainText: plainText,
         existing: existing,
       );
 
       // Check if content is unchanged
       if (existing != null) {
         if (existing.title == note.title &&
-            existing.content == deltaJson &&
+            existing.content == markdown &&
             existing.isPinned == note.isPinned) {
           AppLogger.i('EditorBloc: Discarding unchanged edit');
           emit(
@@ -200,7 +187,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
   NoteModel buildNote({
     required EditorLoaded current,
-    required String deltaJson,
+    required String content,
     required String plainText,
     NoteModel? existing,
   }) {
@@ -214,7 +201,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     return NoteModel(
       id: current.noteId,
       title: title,
-      content: deltaJson,
+      content: content,
       plainText: plainText,
       previewText: previewText,
       height: _estimateHeight(plainText),
@@ -233,27 +220,27 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
     try {
       final existing = await _repository.getNoteById(current.noteId);
-      final deltaJson = jsonEncode(event.content);
+      final markdown = event.content;
+      final plainText = (event.plainText ?? markdownToPlainText(markdown))
+          .trim();
 
       final note = buildNote(
         current: current,
-        deltaJson: deltaJson,
-        plainText: event.plainText,
+        content: markdown,
+        plainText: plainText,
         existing: existing,
       );
 
       // Don't auto-save if nothing changed
       if (existing != null &&
           existing.title == note.title &&
-          existing.content == deltaJson &&
+          existing.content == markdown &&
           existing.isPinned == note.isPinned) {
         return;
       }
 
       // Don't auto-save if new and empty
-      if (current.isNewNote &&
-          note.title.trim().isEmpty &&
-          event.plainText.trim().isEmpty) {
+      if (current.isNewNote && note.title.trim().isEmpty && plainText.isEmpty) {
         return;
       }
 

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
+import 'package:live_markdown_editor/live_markdown_editor.dart'
+    show LiveMarkdownEditor;
 import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:flutter_quill/flutter_quill.dart' show QuillEditor;
+import 'package:mechanix_notes/main.dart' as app;
+
 import 'test_helper.dart';
 
 void main() {
@@ -31,7 +33,7 @@ void main() {
       await IntegrationTestHelper.waitForEditor(tester);
 
       expect(find.byType(TextField).first, findsOneWidget); // Title field
-      expect(find.byType(QuillEditor), findsOneWidget); // Content editor
+      expect(find.byType(LiveMarkdownEditor), findsOneWidget); // Content editor
 
       // Navigation back
       await tester.tap(

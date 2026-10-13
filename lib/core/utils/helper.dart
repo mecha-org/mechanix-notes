@@ -1,11 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
-import 'package:mechanix_notes/core/utils/app_logger.dart';
+import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
-import 'package:mechanix_notes/core/utils/enums.dart';
 
 String getLocalizedLabelForTimeNotes(BuildContext context, TimeGroup group) {
   switch (group.category) {
@@ -53,13 +49,43 @@ String localizeError(BuildContext context, ErrorCategory error) {
   }
 }
 
-/// Converts Quill JSON string into a Document object.
-Document decodeDocumentInIsolate(String contentJson) {
-  try {
-    final List<dynamic> deltaList = jsonDecode(contentJson) as List<dynamic>;
-    return Document.fromJson(deltaList);
-  } catch (e) {
-    AppLogger.e('Failed to decode document: $e');
-    return Document();
-  }
+/// Strips common Markdown formatting tokens to produce clean plain text
+/// suitable for search indexing (Tantivy) and preview text.
+String markdownToPlainText(String markdown) {
+  if (markdown.isEmpty) return '';
+
+  var text = markdown;
+  // Remove fenced code blocks completely or keep inner text
+  text = text.replaceAll(RegExp(r'```[^\n]*\n([\s\S]*?)\n```'), r'$1');
+  // Remove task list markers `- [ ] ` and `- [x] `
+  text = text.replaceAll(
+    RegExp(r'^\s*[-+*]\s+\[[ xX]\]\s+', multiLine: true),
+    '',
+  );
+  // Remove unordered list markers `* `, `- `, `+ `
+  text = text.replaceAll(RegExp(r'^\s*[-+*]\s+', multiLine: true), '');
+  // Remove ordered list markers `1. `
+  text = text.replaceAll(RegExp(r'^\s*\d+[.)]\s+', multiLine: true), '');
+  // Remove blockquote markers `> `
+  text = text.replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '');
+  // Remove headers `# `, `## `, etc.
+  text = text.replaceAll(RegExp(r'^\s*#{1,6}\s+', multiLine: true), '');
+  // Remove images `![alt](url)` -> `alt`
+  text = text.replaceAll(RegExp(r'!\[([^\]]*)\]\([^)]*\)'), r'$1');
+  // Remove links `[text](url)` -> `text`
+  text = text.replaceAll(RegExp(r'\[([^\]]+)\]\([^)]*\)'), r'$1');
+  // Remove bold/italic `**text**` or `__text__`
+  text = text.replaceAll(RegExp(r'(\*\*|__)(.*?)\1'), r'$2');
+  // Remove single `*text*` or `_text_`
+  text = text.replaceAll(RegExp(r'(\*|_)(.*?)\1'), r'$2');
+  // Remove strikethrough `~~text~~`
+  text = text.replaceAll(RegExp(r'~~(.*?)~~'), r'$1');
+  // Remove highlight `==text==`
+  text = text.replaceAll(RegExp(r'==(.*?)=='), r'$1');
+  // Remove inline code
+  text = text.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
+  // Remove horizontal rules
+  text = text.replaceAll(RegExp(r'^\s*([-*_]){3,}\s*$', multiLine: true), '');
+
+  return text;
 }

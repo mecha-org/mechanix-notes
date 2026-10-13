@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
 import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/main.dart' as app;
+
 import 'test_helper.dart';
 
 void main() {
@@ -65,7 +66,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        IntegrationTestHelper.findImageAsset(NotesIcon.deleteIcon),
+        IntegrationTestHelper.findImageAsset(NotesIcon.trashIcon),
         findsWidgets,
       );
 
@@ -114,7 +115,7 @@ void main() {
       // Since it might be multiple delete icons, get the one on the bottom bar
       // Here we assume tapping deleteIcon triggers delete. Let's just tap the first delete icon.
       final deleteIconFinder = IntegrationTestHelper.findImageAsset(
-        NotesIcon.deleteIcon,
+        NotesIcon.trashIcon,
       ).first;
       await tester.tap(deleteIconFinder);
       await tester.pumpAndSettle();

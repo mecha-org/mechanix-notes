@@ -11,11 +11,10 @@ final class EditorInitial extends EditorState {
   const EditorInitial();
 }
 
-
 final class EditorLoaded extends EditorState {
   final String noteId;
   final String title;
-  final Document? quillDocument;
+  final String markdownContent;
   final bool isContentLoading;
   final bool isSaving;
   final bool isNewNote;
@@ -25,7 +24,7 @@ final class EditorLoaded extends EditorState {
   const EditorLoaded({
     required this.noteId,
     required this.title,
-    this.quillDocument,
+    this.markdownContent = '',
     this.isContentLoading = false,
     this.isSaving = false,
     this.isNewNote = false,
@@ -36,7 +35,7 @@ final class EditorLoaded extends EditorState {
   EditorLoaded copyWith({
     String? noteId,
     String? title,
-    Document? quillDocument,
+    String? markdownContent,
     bool? isContentLoading,
     bool? isSaving,
     bool? isNewNote,
@@ -46,7 +45,7 @@ final class EditorLoaded extends EditorState {
     return EditorLoaded(
       noteId: noteId ?? this.noteId,
       title: title ?? this.title,
-      quillDocument: quillDocument ?? this.quillDocument,
+      markdownContent: markdownContent ?? this.markdownContent,
       isContentLoading: isContentLoading ?? this.isContentLoading,
       isSaving: isSaving ?? this.isSaving,
       isNewNote: isNewNote ?? this.isNewNote,
@@ -59,7 +58,7 @@ final class EditorLoaded extends EditorState {
   List<Object?> get props => [
     noteId,
     title,
-    quillDocument,
+    markdownContent,
     isContentLoading,
     isSaving,
     isNewNote,

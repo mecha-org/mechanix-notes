@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:live_markdown_editor/live_markdown_editor.dart'
+    show LiveMarkdownEditor;
 import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/main.dart' as app;
-import 'package:flutter_quill/flutter_quill.dart' show QuillEditor;
 
 import 'test_helper.dart';
 
@@ -194,7 +195,7 @@ void main() {
       await IntegrationTestHelper.waitForEditor(tester);
 
       expect(find.text(title), findsWidgets);
-      expect(find.byType(QuillEditor), findsOneWidget);
+      expect(find.byType(LiveMarkdownEditor), findsOneWidget);
 
       await tester.tap(
         IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),

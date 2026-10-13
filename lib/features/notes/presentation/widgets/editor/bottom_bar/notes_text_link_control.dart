@@ -139,11 +139,10 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
         widget.enabled ? callback : null;
 
     return Container(
-      height: 56,
-      padding: const EdgeInsets.all(4),
+      height: 48,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 6,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _ModeToggleGroup(
             key: const Key('notes_mode_toggle_group'),
@@ -157,49 +156,58 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_contextual_button'),
               isSelected: widget.isTextContextualActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h1Icon)),
+              icon: Image.asset(NotesIcon.h1Icon, height: 15, width: 20),
               onPressed: onPressed(widget.onTextContextualPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_h2_button'),
               isSelected: widget.isH2Active,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h2Icon)),
+              icon: Image.asset(NotesIcon.h2Icon, height: 13, width: 20),
               onPressed: onPressed(widget.onH2Pressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_body_button'),
               isSelected: widget.isBodyActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.textstyleIcon)),
+              icon: Image.asset(NotesIcon.textstyleIcon, height: 11, width: 9),
               onPressed: onPressed(widget.onBodyPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_bold_button'),
               isSelected: widget.isBoldActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.boldIcon)),
+              icon: Image.asset(NotesIcon.boldIcon, height: 16, width: 13),
               onPressed: onPressed(widget.onBoldPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_italic_button'),
               isSelected: widget.isItalicActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.italicIcon)),
+              icon: Image.asset(NotesIcon.italicIcon, height: 15, width: 13.5),
               onPressed: onPressed(widget.onItalicPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_underline_button'),
               isSelected: widget.isUnderlineActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.underlineIcon)),
+              icon: Image.asset(
+                NotesIcon.underlineIcon,
+                height: 17.25,
+                width: 13.5,
+              ),
               onPressed: onPressed(widget.onUnderlinePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.strikethroughIcon)),
+              // icon: const ImageIcon(AssetImage(NotesIcon.strikethroughIcon)),
+              icon: Image.asset(
+                NotesIcon.strikethroughIcon,
+                height: 16.5,
+                width: 18,
+              ),
               onPressed: onPressed(widget.onStrikethroughPressed),
             ),
           ] else ...[
@@ -261,25 +269,26 @@ class _ModeToggleGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: context.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.5,
-        ),
-      ),
-      padding: EdgeInsets.zero,
+      color: context.colorScheme.surfaceContainerHigh,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 6,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        spacing: 0,
         children: [
           // Text mode toggle button
           MechanixIconButton.filled(
             key: const Key('notes_text_toggle'),
             isSelected: isTextMode,
             type: IconButtonType.square,
-            size: size,
-            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon)),
+            size: IconButtonSize.xSmall,
+            icon: Image.asset(
+              NotesIcon.textModeIcon,
+              height: 12.5,
+              width: 12.5,
+            ),
             foregroundColor: context.colorScheme.onSurface,
+            backgroundColor: context.colorScheme.surfaceContainerHigh,
+            borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.text)
                 : null,
@@ -289,9 +298,16 @@ class _ModeToggleGroup extends StatelessWidget {
             key: const Key('notes_link_toggle'),
             isSelected: !isTextMode,
             type: IconButtonType.square,
-            size: size,
+            size: IconButtonSize.xSmall,
             foregroundColor: context.colorScheme.onSurface,
-            icon: const Icon(Icons.attach_file_rounded),
+            backgroundColor: context.colorScheme.surfaceContainerHigh,
+            icon: const Icon(Icons.attach_file_rounded, size: 15),
+            // icon: Image.asset(
+            //   NotesIcon.linkModeIcon,
+            //   height: 12.5,
+            //   width: 12.5,
+            // ),
+            borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)
                 : null,
@@ -324,7 +340,7 @@ class _ContextualButton extends StatelessWidget {
       key: buttonKey,
       isSelected: isSelected,
       type: IconButtonType.square,
-      size: size,
+      size: IconButtonSize.small,
       icon: icon,
       backgroundColor: Colors.transparent,
       foregroundColor: scheme.onSurfaceVariant,

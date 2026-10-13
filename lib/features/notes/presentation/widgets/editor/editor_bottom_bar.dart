@@ -1,180 +1,361 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:flutter_quill/flutter_quill.dart';
+import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/bottom_bar/notes_text_link_control.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/markdown_controller_provider.dart';
 import 'package:widgets/widgets.dart';
 
-class EditorBottomBar extends StatelessWidget {
+class EditorBottomBar extends StatefulWidget {
   const EditorBottomBar({super.key});
 
-  void _handleLinkAction(BuildContext context) {
-    // Stub for future link insertion or editing dialog.
+  @override
+  State<EditorBottomBar> createState() => _EditorBottomBarState();
+}
+
+class _EditorBottomBarState extends State<EditorBottomBar> {
+  static const int _flagH1 = 1 << 0;
+  static const int _flagH2 = 1 << 1;
+  static const int _flagChecklist = 1 << 2;
+  static const int _flagCode = 1 << 3;
+  static const int _flagBold = 1 << 4;
+  static const int _flagItalic = 1 << 5;
+  static const int _flagStrikethrough = 1 << 6;
+  static const int _flagBody = 1 << 7;
+
+  static final _hPrefixRegex = RegExp(r'^#{1,6}\s+');
+  static final _taskPrefixRegex = RegExp(r'^[-+*]\s+\[[ xX]\]\s+');
+  static final _bulletPrefixRegex = RegExp(r'^[-+*]\s+');
+  static final _orderedPrefixRegex = RegExp(r'^\d+[.)]\s+');
+  static final _quotePrefixRegex = RegExp(r'^>\s+');
+
+  MarkdownEditorController? _controller;
+  int _currentMask = _flagBody;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final newController = MarkdownControllerProvider.maybeOf(
+      context,
+    )?.controller;
+    if (newController != _controller) {
+      _controller?.removeListener(_onControllerChanged);
+      _controller = newController;
+      _controller?.addListener(_onControllerChanged);
+      _currentMask = _computeStyleMask();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_onControllerChanged);
+    super.dispose();
+  }
+
+  void _onControllerChanged() {
+    final newMask = _computeStyleMask();
+    if (newMask != _currentMask) {
+      setState(() {
+        _currentMask = newMask;
+      });
+    }
+  }
+
+  static String _stripLinePrefix(String line) {
+    return line
+        .replaceFirst(_hPrefixRegex, '')
+        .replaceFirst(_taskPrefixRegex, '')
+        .replaceFirst(_bulletPrefixRegex, '')
+        .replaceFirst(_orderedPrefixRegex, '')
+        .replaceFirst(_quotePrefixRegex, '');
+  }
+
+  ({int lineStart, int lineEnd, String currentLine, int clampedCaret})
+  _getLineInfo(MarkdownEditorController controller) {
+    final text = controller.text;
+    final sel = controller.selection;
+    final caret = sel.isValid ? sel.start : 0;
+    final clampedCaret = caret.clamp(0, text.length);
+
+    final lineStart = clampedCaret == 0
+        ? 0
+        : text.lastIndexOf('\n', clampedCaret - 1) + 1;
+    final nextNewline = text.indexOf('\n', clampedCaret);
+    final lineEnd = nextNewline < 0 ? text.length : nextNewline;
+    final currentLine = text.substring(lineStart, lineEnd);
+    return (
+      lineStart: lineStart,
+      lineEnd: lineEnd,
+      currentLine: currentLine,
+      clampedCaret: clampedCaret,
+    );
+  }
+
+  int _computeStyleMask() {
+    final controller = _controller;
+    if (controller == null) return _flagBody;
+
+    final info = _getLineInfo(controller);
+    final currentLine = info.currentLine;
+    final clampedCaret = info.clampedCaret;
+    final sel = controller.selection;
+    final text = controller.text;
+
+    final isH1 = currentLine.startsWith('# ') && !currentLine.startsWith('## ');
+    final isH2 =
+        currentLine.startsWith('## ') && !currentLine.startsWith('### ');
+    final isChecklist =
+        currentLine.trimLeft().startsWith('- [ ] ') ||
+        currentLine.trimLeft().startsWith('- [x] ') ||
+        currentLine.trimLeft().startsWith('- [X] ');
+
+    var isCode = currentLine.trim().startsWith('```');
+    if (!isCode) {
+      for (final block in controller.document.blocks) {
+        if ((block.type == MarkdownBlockType.fencedCode ||
+                block.type == MarkdownBlockType.indentedCode) &&
+            block.range.contains(clampedCaret)) {
+          isCode = true;
+          break;
+        }
+      }
+    }
+
+    final isBody = !isH1 && !isH2 && !isChecklist && !isCode;
+
+    bool hasInline(MarkdownInlineType type, String delimiter) {
+      if (sel.isValid && !sel.isCollapsed && sel.end <= text.length) {
+        final selectedText = text.substring(sel.start, sel.end);
+        if (selectedText.startsWith(delimiter) &&
+            selectedText.endsWith(delimiter) &&
+            selectedText.length >= delimiter.length * 2) {
+          return true;
+        }
+      }
+      for (final block in controller.document.blocks) {
+        if (block.range.contains(clampedCaret)) {
+          for (final node in block.inlineNodes) {
+            if (node.type == type && node.range.contains(clampedCaret)) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    final isBold = hasInline(MarkdownInlineType.bold, '**');
+    final isItalic = hasInline(MarkdownInlineType.italic, '*');
+    final isStrikethrough = hasInline(MarkdownInlineType.strikethrough, '~~');
+
+    var mask = 0;
+    if (isH1) mask |= _flagH1;
+    if (isH2) mask |= _flagH2;
+    if (isChecklist) mask |= _flagChecklist;
+    if (isCode) mask |= _flagCode;
+    if (isBold) mask |= _flagBold;
+    if (isItalic) mask |= _flagItalic;
+    if (isStrikethrough) mask |= _flagStrikethrough;
+    if (isBody) mask |= _flagBody;
+    return mask;
+  }
+
+  static void _replaceLine(
+    MarkdownEditorController controller,
+    int lineStart,
+    int lineEnd,
+    String newLine,
+    int clampedCaret,
+  ) {
+    final text = controller.text;
+    final newText = text.replaceRange(lineStart, lineEnd, newLine);
+    final delta = newLine.length - (lineEnd - lineStart);
+    final newCaret = math.max(
+      0,
+      math.min(clampedCaret + delta, newText.length),
+    );
+    controller.applyEditingValue(
+      TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newCaret),
+      ),
+    );
+  }
+
+  static void _replaceRange(
+    MarkdownEditorController controller,
+    int start,
+    int end,
+    String replacement,
+  ) {
+    final text = controller.text;
+    final newText = text.replaceRange(start, end, replacement);
+    controller.applyEditingValue(
+      TextEditingValue(
+        text: newText,
+        selection: TextSelection(
+          baseOffset: start,
+          extentOffset: start + replacement.length,
+        ),
+      ),
+    );
+  }
+
+  void _toggleHeader(int level) {
+    final provider = MarkdownControllerProvider.maybeOf(context);
+    if (provider == null) return;
+    final controller = provider.controller;
+    final info = _getLineInfo(controller);
+    final isH1Active = (_currentMask & _flagH1) != 0;
+    final isH2Active = (_currentMask & _flagH2) != 0;
+
+    final prefix = '${'#' * level} ';
+    if ((level == 1 && isH1Active) || (level == 2 && isH2Active)) {
+      _replaceLine(
+        controller,
+        info.lineStart,
+        info.lineEnd,
+        _stripLinePrefix(info.currentLine),
+        info.clampedCaret,
+      );
+    } else {
+      final clean = _stripLinePrefix(info.currentLine);
+      _replaceLine(
+        controller,
+        info.lineStart,
+        info.lineEnd,
+        '$prefix$clean',
+        info.clampedCaret,
+      );
+    }
+    provider.focusNode.requestFocus();
+  }
+
+  void _clearToParagraph() {
+    final provider = MarkdownControllerProvider.maybeOf(context);
+    if (provider == null) return;
+    final controller = provider.controller;
+    final info = _getLineInfo(controller);
+    _replaceLine(
+      controller,
+      info.lineStart,
+      info.lineEnd,
+      _stripLinePrefix(info.currentLine),
+      info.clampedCaret,
+    );
+    provider.focusNode.requestFocus();
+  }
+
+  void _toggleChecklist() {
+    final provider = MarkdownControllerProvider.maybeOf(context);
+    if (provider == null) return;
+    final controller = provider.controller;
+    final info = _getLineInfo(controller);
+    final isChecklistActive = (_currentMask & _flagChecklist) != 0;
+
+    if (isChecklistActive) {
+      _replaceLine(
+        controller,
+        info.lineStart,
+        info.lineEnd,
+        _stripLinePrefix(info.currentLine),
+        info.clampedCaret,
+      );
+    } else {
+      final clean = _stripLinePrefix(info.currentLine);
+      _replaceLine(
+        controller,
+        info.lineStart,
+        info.lineEnd,
+        '- [ ] $clean',
+        info.clampedCaret,
+      );
+    }
+    provider.focusNode.requestFocus();
+  }
+
+  void _toggleInline(String delimiter, MarkdownCommand command) {
+    final provider = MarkdownControllerProvider.maybeOf(context);
+    if (provider == null) return;
+    final controller = provider.controller;
+    final sel = controller.selection;
+    final text = controller.text;
+
+    if (sel.isValid && !sel.isCollapsed && sel.end <= text.length) {
+      final selectedText = text.substring(sel.start, sel.end);
+      final dLen = delimiter.length;
+      if (selectedText.startsWith(delimiter) &&
+          selectedText.endsWith(delimiter) &&
+          selectedText.length >= 2 * dLen) {
+        final unwrapped = selectedText.substring(
+          dLen,
+          selectedText.length - dLen,
+        );
+        _replaceRange(controller, sel.start, sel.end, unwrapped);
+        provider.focusNode.requestFocus();
+        return;
+      }
+    }
+    controller.execute(command);
+    provider.focusNode.requestFocus();
+  }
+
+  void _toggleCodeBlock() {
+    final provider = MarkdownControllerProvider.maybeOf(context);
+    if (provider == null) return;
+    provider.controller.execute(MarkdownCommand.fencedCode);
+    provider.focusNode.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = QuillControllerProvider.maybeOf(context);
+    final provider = MarkdownControllerProvider.maybeOf(context);
 
     Widget content;
     if (provider == null) {
-      content = NotesTextLinkControl(
-        onLinkContextualPressed: () => _handleLinkAction(context),
-      );
+      content = const NotesTextLinkControl();
     } else {
-      final controller = provider.controller;
-      final focusNode = provider.focusNode;
-
-      content = ListenableBuilder(
-        listenable: controller,
-        builder: (context, _) {
-          final selectionStyle = controller.getSelectionStyle();
-          final toggledStyle = controller.toggledStyle;
-          final attrs = selectionStyle.attributes;
-          final toggledAttrs = toggledStyle.attributes;
-
-          Attribute? getBlockAttribute(String key) {
-            if (toggledAttrs.containsKey(key)) {
-              return toggledAttrs[key];
-            }
-            if (attrs.containsKey(key)) {
-              return attrs[key];
-            }
-            final sel = controller.selection;
-            if (sel.isValid &&
-                sel.start >= 0 &&
-                sel.start <= controller.document.length) {
-              final child = controller.document.queryChild(sel.start);
-              final node = child.node;
-              if (node is Line) {
-                if (node.style.containsKey(key)) {
-                  return node.style.attributes[key];
-                }
-                if (node.parent is Block) {
-                  return (node.parent as Block).style.attributes[key];
-                }
-              }
-            }
-            return null;
-          }
-
-          bool isAttrActive(Attribute attribute) {
-            if (toggledAttrs.containsKey(attribute.key)) {
-              return toggledAttrs[attribute.key]?.value == attribute.value;
-            }
-            final current = attrs[attribute.key];
-            return current != null && current.value == attribute.value;
-          }
-
-          bool isHeaderActive(int level) {
-            return getBlockAttribute(Attribute.header.key)?.value == level;
-          }
-
-          bool isParagraphActive() {
-            return getBlockAttribute(Attribute.header.key) == null &&
-                !attrs.containsKey(Attribute.size.key) &&
-                getBlockAttribute(Attribute.list.key) == null;
-          }
-
-          void toggleInline(Attribute attribute) {
-            if (isAttrActive(attribute)) {
-              controller.formatSelection(Attribute.clone(attribute, null));
-            } else {
-              controller.formatSelection(attribute);
-            }
-            focusNode.requestFocus();
-          }
-
-          void toggleHeader(int level) {
-            final currentLevel = getBlockAttribute(Attribute.header.key)?.value;
-            if (currentLevel == level) {
-              controller.formatSelection(
-                Attribute.clone(Attribute.header, null),
-              );
-            } else {
-              controller.formatSelection(Attribute.clone(Attribute.size, null));
-              controller.formatSelection(
-                Attribute.fromKeyValue(Attribute.header.key, level),
-              );
-            }
-            focusNode.requestFocus();
-          }
-
-          void clearToParagraph() {
-            controller.formatSelection(Attribute.clone(Attribute.header, null));
-            controller.formatSelection(Attribute.clone(Attribute.size, null));
-            controller.formatSelection(Attribute.clone(Attribute.list, null));
-            focusNode.requestFocus();
-          }
-
-          void toggleChecklist() {
-            final currentList = getBlockAttribute(Attribute.list.key)?.value;
-            if (currentList == Attribute.unchecked.value ||
-                currentList == Attribute.checked.value) {
-              controller.formatSelection(Attribute.clone(Attribute.list, null));
-            } else {
-              controller.formatSelection(Attribute.unchecked);
-            }
-            focusNode.requestFocus();
-          }
-
-          void toggleCodeBlock() {
-            final isCode = isAttrActive(Attribute.codeBlock);
-            if (isCode) {
-              controller.formatSelection(
-                Attribute.clone(Attribute.codeBlock, null),
-              );
-            } else {
-              controller.formatSelection(Attribute.codeBlock);
-            }
-            focusNode.requestFocus();
-          }
-
-          final listAttr = getBlockAttribute(Attribute.list.key);
-          final isChecklistActive =
-              listAttr?.value == Attribute.unchecked.value ||
-              listAttr?.value == Attribute.checked.value;
-
-          return NotesTextLinkControl(
-            isTextContextualActive: isHeaderActive(1),
-            onTextContextualPressed: () => toggleHeader(1),
-            isH2Active: isHeaderActive(2),
-            onH2Pressed: () => toggleHeader(2),
-            isBodyActive: isParagraphActive(),
-            onBodyPressed: clearToParagraph,
-            isBoldActive: isAttrActive(Attribute.bold),
-            onBoldPressed: () => toggleInline(Attribute.bold),
-            isItalicActive: isAttrActive(Attribute.italic),
-            onItalicPressed: () => toggleInline(Attribute.italic),
-            isUnderlineActive: isAttrActive(Attribute.underline),
-            onUnderlinePressed: () => toggleInline(Attribute.underline),
-            isStrikethroughActive: isAttrActive(Attribute.strikeThrough),
-            onStrikethroughPressed: () => toggleInline(Attribute.strikeThrough),
-            isChecklistActive: isChecklistActive,
-            onChecklistPressed: toggleChecklist,
-            isCodeActive: isAttrActive(Attribute.codeBlock),
-            onCodePressed: toggleCodeBlock,
-            onLinkContextualPressed: () => _handleLinkAction(context),
-          );
-        },
+      content = NotesTextLinkControl(
+        isTextContextualActive: (_currentMask & _flagH1) != 0,
+        onTextContextualPressed: () => _toggleHeader(1),
+        isH2Active: (_currentMask & _flagH2) != 0,
+        onH2Pressed: () => _toggleHeader(2),
+        isBodyActive: (_currentMask & _flagBody) != 0,
+        onBodyPressed: _clearToParagraph,
+        isBoldActive: (_currentMask & _flagBold) != 0,
+        onBoldPressed: () => _toggleInline('**', MarkdownCommand.bold),
+        isItalicActive: (_currentMask & _flagItalic) != 0,
+        onItalicPressed: () => _toggleInline('*', MarkdownCommand.italic),
+        isUnderlineActive: false,
+        onUnderlinePressed: null,
+        isStrikethroughActive: (_currentMask & _flagStrikethrough) != 0,
+        onStrikethroughPressed: () =>
+            _toggleInline('~~', MarkdownCommand.strikethrough),
+        isChecklistActive: (_currentMask & _flagChecklist) != 0,
+        onChecklistPressed: _toggleChecklist,
+        isCodeActive: (_currentMask & _flagCode) != 0,
+        onCodePressed: _toggleCodeBlock,
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color: context.colorScheme.surfaceContainer,
-        border: Border.all(
-          color: context.colorScheme.outlineVariant.withValues(alpha: 0.4),
-          width: 0.5,
+    return RepaintBoundary(
+      child: Container(
+        height: 56,
+        width: 488,
+        padding: EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: context.colorScheme.surfaceContainer,
+
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.2),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        child: content,
       ),
-      child: content,
     );
   }
 }
