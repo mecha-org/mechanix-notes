@@ -55,6 +55,8 @@ String markdownToPlainText(String markdown) {
   if (markdown.isEmpty) return '';
 
   var text = markdown;
+  // Remove HTML comments (including mechanix:id tags)
+  text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
   // Remove fenced code blocks completely or keep inner text
   text = text.replaceAll(RegExp(r'```[^\n]*\n([\s\S]*?)\n```'), r'$1');
   // Remove task list markers `- [ ] ` and `- [x] `

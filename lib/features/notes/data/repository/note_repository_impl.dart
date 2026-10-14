@@ -7,6 +7,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
+import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
 
 class NoteRepositoryImpl extends NoteRepository {
@@ -177,10 +178,36 @@ class NoteRepositoryImpl extends NoteRepository {
         }
       }
 
-      // 3. Fallback: if file exists, use its content; if note.content had legacy text, keep it;
-      // if file was missing, reset note.content to empty string.
+      // 3. Fallback: Auto-heal by searching directory for embedded tag <!-- mechanix:id=id -->
+      if (markdown == null) {
+        final matchingFile = await _findNoteFileByIdTag(note.id);
+        if (matchingFile != null) {
+          markdown = matchingFile.content;
+          note.fileName = matchingFile.fileName;
+          final cleanContent = NoteTagHelper.stripTag(markdown);
+          final lines = cleanContent
+              .split('\n')
+              .map((l) => l.trim())
+              .where((l) => l.isNotEmpty)
+              .toList();
+          if (lines.isNotEmpty) {
+            final firstLineTitle = lines.first
+                .replaceAll(RegExp(r'^#+\s*'), '')
+                .trim();
+            if (firstLineTitle.isNotEmpty) {
+              note.title = firstLineTitle;
+            }
+          }
+          box.put(note);
+          AppLogger.i(
+            'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
+          );
+        }
+      }
+
+      // 4. Return note with clean (stripped) content for editor and UI
       if (markdown != null) {
-        note.content = markdown;
+        note.content = NoteTagHelper.stripTag(markdown);
       } else if (note.fileName != null) {
         note.content = '';
       }
@@ -191,6 +218,35 @@ class NoteRepositoryImpl extends NoteRepository {
       AppLogger.e('NoteRepository: getNoteById failed: $e');
       return null;
     }
+  }
+
+  /// Scans the notes directory for a .md file containing an embedded tag matching [noteId].
+  Future<({String fileName, String content})?> _findNoteFileByIdTag(
+    String noteId,
+  ) async {
+    try {
+      final dir = _fileStorage.directory;
+      if (!await dir.exists()) return null;
+
+      final entities = await dir.list().toList();
+      for (final entity in entities) {
+        if (entity is File && entity.path.endsWith('.md')) {
+          final fileName = entity.uri.pathSegments.last;
+          if (fileName.startsWith('..tmp_')) continue;
+
+          final content = await entity.readAsString();
+          final extractedId = NoteTagHelper.extractId(content);
+          if (extractedId == noteId) {
+            return (fileName: fileName, content: content);
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.e(
+        'NoteRepository: _findNoteFileByIdTag failed for $noteId: $e',
+      );
+    }
+    return null;
   }
 
   @override
@@ -235,10 +291,11 @@ class NoteRepositoryImpl extends NoteRepository {
 
       final currentFileName = existing?.fileName;
 
-      final rawMarkdown = note.content;
+      final cleanMarkdown = NoteTagHelper.stripTag(note.content);
+      final taggedMarkdown = NoteTagHelper.appendTag(cleanMarkdown, note.id);
       final savedFileName = await _fileStorage.writeNoteContent(
         title: note.title,
-        markdown: rawMarkdown,
+        markdown: taggedMarkdown,
         currentFileName: currentFileName,
       );
 
@@ -247,8 +304,8 @@ class NoteRepositoryImpl extends NoteRepository {
       note.content = '';
       box.put(note);
 
-      // Restore full markdown in in-memory note instance
-      note.content = rawMarkdown;
+      // Restore clean markdown in in-memory note instance
+      note.content = cleanMarkdown;
 
       await _indexingService.upsertNote(note.id, note.title, note.plainText);
       AppLogger.i(

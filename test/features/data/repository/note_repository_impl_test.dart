@@ -369,17 +369,20 @@ void main() {
         expect(note.fileName, 'File Test.md');
         expect(await fileStorage.noteFileExists('File Test.md'), isTrue);
         final savedMarkdown = await fileStorage.readNoteContent('File Test.md');
-        expect(savedMarkdown, '# Custom Markdown\n\n- item 1\n- item 2');
+        expect(
+          savedMarkdown,
+          '# Custom Markdown\n\n- item 1\n- item 2\n\n<!-- mechanix:id=save-test -->\n',
+        );
         expect(note.content, '# Custom Markdown\n\n- item 1\n- item 2');
       },
     );
 
     test(
-      'getNoteById reads full markdown from .md file using fileName',
+      'getNoteById reads full markdown from .md file using fileName and strips tag',
       () async {
         await fileStorage.writeNoteContent(
           title: 'Open Test',
-          markdown: '# Loaded from file',
+          markdown: '# Loaded from file\n\n<!-- mechanix:id=open-test -->\n',
         );
 
         final noteInDb = _makeNote(id: 'open-test', title: 'Open Test');
@@ -391,6 +394,31 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.content, '# Loaded from file');
+      },
+    );
+
+    test(
+      'getNoteById auto-heals filename when file was renamed on disk with matching embedded tag',
+      () async {
+        // File renamed externally on disk to 'Renamed File.md'
+        await fileStorage.writeNoteContent(
+          title: 'Renamed File',
+          markdown: '# Renamed Title\n\nContent\n\n<!-- mechanix:id=heal-test -->\n',
+        );
+
+        // ObjectBox still has old fileName 'Old File.md'
+        final noteInDb = _makeNote(id: 'heal-test', title: 'Old Title');
+        noteInDb.fileName = 'Old File.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        final result = await repository.getNoteById('heal-test');
+
+        expect(result, isNotNull);
+        expect(result!.fileName, 'Renamed File.md');
+        expect(result.title, 'Renamed Title');
+        expect(result.content, '# Renamed Title\n\nContent');
       },
     );
 

@@ -121,7 +121,9 @@ class _HomeListViewState extends State<HomeListView> {
                                 Padding(
                                   padding: const EdgeInsets.all(0),
                                   child: HomeNoteCard(
-                                    key: ValueKey(note.id),
+                                    key: ValueKey(
+                                      '${section.group.category.name}_${note.id}',
+                                    ),
                                     note: note,
                                   ),
                                 ),
