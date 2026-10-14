@@ -19,6 +19,7 @@ class _EditorContentState extends State<EditorContent> {
   late final ScrollController _scrollController;
   Timer? _autoSaveTimer;
   MarkdownEditorController? _lastController;
+  String _lastText = '';
   bool _previousTextWasEmpty = false;
 
   @override
@@ -40,6 +41,14 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
+  static bool _isWhitespaceOnly(String s) {
+    if (s.isEmpty) return true;
+    for (var i = 0; i < s.length; i++) {
+      if (s.codeUnitAt(i) > 32) return false;
+    }
+    return true;
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -47,7 +56,8 @@ class _EditorContentState extends State<EditorContent> {
     if (_lastController != controller) {
       _lastController?.removeListener(_onChanged);
       _lastController = controller;
-      _previousTextWasEmpty = controller.text.trim().isEmpty;
+      _lastText = controller.text;
+      _previousTextWasEmpty = _isWhitespaceOnly(controller.text);
       _lastController?.addListener(_onChanged);
     }
   }
@@ -68,16 +78,23 @@ class _EditorContentState extends State<EditorContent> {
         ),
       );
     }
-    _previousTextWasEmpty = text.trim().isEmpty;
+    _previousTextWasEmpty = _isWhitespaceOnly(text);
   }
 
   void _onChanged() {
-    _ensureH1OnEmptyNoteTyping();
-
     final controller = _lastController;
     if (controller == null) return;
 
     final currentText = controller.text;
+
+    // Ignore pure cursor moves / selection changes where text didn't change
+    if (currentText == _lastText) return;
+    _lastText = currentText;
+
+    _ensureH1OnEmptyNoteTyping();
+
+    final textToSave = controller.text;
+    _lastText = textToSave;
 
     final editorState = context.read<EditorBloc>().state;
     final lastSaved = editorState is EditorLoaded
@@ -85,7 +102,7 @@ class _EditorContentState extends State<EditorContent> {
         : '';
 
     // If text is identical to last saved baseline, cancel any running timer and return
-    if (currentText == lastSaved) {
+    if (textToSave == lastSaved) {
       _autoSaveTimer?.cancel();
       return;
     }
@@ -95,7 +112,7 @@ class _EditorContentState extends State<EditorContent> {
       if (!mounted || _lastController == null) return;
 
       context.read<EditorBloc>().add(
-        EditorAutoSaveRequested(content: currentText),
+        EditorAutoSaveRequested(content: textToSave),
       );
     });
   }

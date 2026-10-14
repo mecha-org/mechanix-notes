@@ -110,43 +110,63 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
         currentLine.trimLeft().startsWith('- [X] ');
 
     var isCode = currentLine.trim().startsWith('```');
-    if (!isCode) {
-      for (final block in controller.document.blocks) {
-        if ((block.type == MarkdownBlockType.fencedCode ||
-                block.type == MarkdownBlockType.indentedCode) &&
-            block.range.contains(clampedCaret)) {
-          isCode = true;
-          break;
-        }
+    final doc = controller.document;
+
+    // Find the single containing block for the caret in one pass
+    MarkdownBlockNode? activeBlock;
+    for (final block in doc.blocks) {
+      if (block.range.contains(clampedCaret)) {
+        activeBlock = block;
+        break;
+      }
+    }
+
+    if (!isCode && activeBlock != null) {
+      if (activeBlock.type == MarkdownBlockType.fencedCode ||
+          activeBlock.type == MarkdownBlockType.indentedCode) {
+        isCode = true;
       }
     }
 
     final isBody = !isH1 && !isH2 && !isChecklist && !isCode;
 
-    bool hasInline(MarkdownInlineType type, String delimiter) {
-      if (sel.isValid && !sel.isCollapsed && sel.end <= text.length) {
-        final selectedText = text.substring(sel.start, sel.end);
-        if (selectedText.startsWith(delimiter) &&
-            selectedText.endsWith(delimiter) &&
-            selectedText.length >= delimiter.length * 2) {
-          return true;
-        }
-      }
-      for (final block in controller.document.blocks) {
-        if (block.range.contains(clampedCaret)) {
-          for (final node in block.inlineNodes) {
-            if (node.type == type && node.range.contains(clampedCaret)) {
-              return true;
-            }
+    // Evaluate selection delimiters once if text is selected
+    String? selectedText;
+    if (sel.isValid &&
+        !sel.isCollapsed &&
+        sel.start >= 0 &&
+        sel.end <= text.length) {
+      selectedText = text.substring(sel.start, sel.end);
+    }
+
+    bool hasDelim(String delim) {
+      if (selectedText == null) return false;
+      return selectedText.startsWith(delim) &&
+          selectedText.endsWith(delim) &&
+          selectedText.length >= delim.length * 2;
+    }
+
+    var isBold = hasDelim('**');
+    var isItalic = hasDelim('*');
+    var isStrikethrough = hasDelim('~~');
+
+    // Single-pass inline node inspection on the active block only
+    if (activeBlock != null) {
+      for (final node in activeBlock.inlineNodes) {
+        if (node.range.contains(clampedCaret)) {
+          switch (node.type) {
+            case MarkdownInlineType.bold:
+              isBold = true;
+            case MarkdownInlineType.italic:
+              isItalic = true;
+            case MarkdownInlineType.strikethrough:
+              isStrikethrough = true;
+            default:
+              break;
           }
         }
       }
-      return false;
     }
-
-    final isBold = hasInline(MarkdownInlineType.bold, '**');
-    final isItalic = hasInline(MarkdownInlineType.italic, '*');
-    final isStrikethrough = hasInline(MarkdownInlineType.strikethrough, '~~');
 
     var mask = 0;
     if (isH1) mask |= _flagH1;

@@ -155,6 +155,7 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
             _ContextualButton(
               buttonKey: const Key('notes_text_contextual_button'),
               isSelected: widget.isTextContextualActive,
+              selectedForegroundColor: context.colorScheme.onSecondaryContainer,
               size: widget.size,
               icon: Image.asset(NotesIcon.h1Icon, height: 15, width: 20),
               onPressed: onPressed(widget.onTextContextualPressed),
@@ -162,6 +163,7 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
             _ContextualButton(
               buttonKey: const Key('notes_text_h2_button'),
               isSelected: widget.isH2Active,
+              selectedForegroundColor: context.colorScheme.onSecondaryContainer,
               size: widget.size,
               icon: Image.asset(NotesIcon.h2Icon, height: 13, width: 20),
               onPressed: onPressed(widget.onH2Pressed),
@@ -319,6 +321,7 @@ class _ContextualButton extends StatelessWidget {
     required this.onPressed,
     this.isSelected = false,
     required this.size,
+    this.selectedForegroundColor,
   });
 
   final Key buttonKey;
@@ -326,20 +329,35 @@ class _ContextualButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isSelected;
   final IconButtonSize size;
+  final Color? selectedForegroundColor;
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.colorScheme;
+    final effectiveSelectedFg = selectedForegroundColor ?? scheme.onSurface;
+
+    Widget effectiveIcon = icon;
+    if (icon is Image) {
+      final img = icon as Image;
+      effectiveIcon = Image(
+        image: img.image,
+        width: img.width,
+        height: img.height,
+        color: isSelected ? effectiveSelectedFg : scheme.onSurfaceVariant,
+        fit: img.fit,
+      );
+    }
+
     return MechanixIconButton.standard(
       key: buttonKey,
       isSelected: isSelected,
       type: IconButtonType.square,
       size: IconButtonSize.small,
-      icon: icon,
+      icon: effectiveIcon,
       backgroundColor: Colors.transparent,
       foregroundColor: scheme.onSurfaceVariant,
       selectedBackgroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.08),
-      selectedForegroundColor: scheme.onSurface,
+      selectedForegroundColor: effectiveSelectedFg,
       onPressed: onPressed,
     );
   }

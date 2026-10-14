@@ -49,6 +49,24 @@ String localizeError(BuildContext context, ErrorCategory error) {
   }
 }
 
+final _htmlCommentRegex = RegExp(r'<!--[\s\S]*?-->');
+final _codeBlockRegex = RegExp(r'```[^\n]*\n([\s\S]*?)\n```');
+final _taskListRegex = RegExp(r'^\s*[-+*]\s+\[[ xX]\]\s+', multiLine: true);
+final _unorderedListRegex = RegExp(r'^\s*[-+*]\s+', multiLine: true);
+final _orderedListRegex = RegExp(r'^\s*\d+[.)]\s+', multiLine: true);
+final _blockquoteRegex = RegExp(r'^\s*>\s*', multiLine: true);
+final _headerRegex = RegExp(r'^\s*#{1,6}\s+', multiLine: true);
+final _imageRegex = RegExp(r'!\[([^\]]*)\]\([^)]*\)');
+final _linkRegex = RegExp(r'\[([^\]]+)\]\([^)]*\)');
+final _boldAsteriskRegex = RegExp(r'\*\*(.*?)\*\*');
+final _boldUnderscoreRegex = RegExp(r'(?<!\w)__(.+?)__(?!\w)');
+final _italicAsteriskRegex = RegExp(r'(?<!\*)\*(?!\s)(.*?)(?<!\s)\*(?!\*)');
+final _italicUnderscoreRegex = RegExp(r'(?<!\w)_(?!\s)(.*?)(?<!\s)_(?!\w)');
+final _strikethroughRegex = RegExp(r'~~(.*?)~~');
+final _highlightRegex = RegExp(r'==(.*?)==');
+final _inlineCodeRegex = RegExp(r'`([^`]+)`');
+final _horizontalRuleRegex = RegExp(r'^\s*([-*_]){3,}\s*$', multiLine: true);
+
 /// Strips common Markdown formatting tokens to produce clean plain text
 /// suitable for search indexing (Tantivy) and preview text.
 String markdownToPlainText(String markdown) {
@@ -56,38 +74,37 @@ String markdownToPlainText(String markdown) {
 
   var text = markdown;
   // Remove HTML comments (including mechanix:id tags)
-  text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+  text = text.replaceAll(_htmlCommentRegex, '');
   // Remove fenced code blocks completely or keep inner text
-  text = text.replaceAll(RegExp(r'```[^\n]*\n([\s\S]*?)\n```'), r'$1');
+  text = text.replaceAllMapped(_codeBlockRegex, (m) => m[1] ?? '');
   // Remove task list markers `- [ ] ` and `- [x] `
-  text = text.replaceAll(
-    RegExp(r'^\s*[-+*]\s+\[[ xX]\]\s+', multiLine: true),
-    '',
-  );
+  text = text.replaceAll(_taskListRegex, '');
   // Remove unordered list markers `* `, `- `, `+ `
-  text = text.replaceAll(RegExp(r'^\s*[-+*]\s+', multiLine: true), '');
+  text = text.replaceAll(_unorderedListRegex, '');
   // Remove ordered list markers `1. `
-  text = text.replaceAll(RegExp(r'^\s*\d+[.)]\s+', multiLine: true), '');
+  text = text.replaceAll(_orderedListRegex, '');
   // Remove blockquote markers `> `
-  text = text.replaceAll(RegExp(r'^\s*>\s*', multiLine: true), '');
+  text = text.replaceAll(_blockquoteRegex, '');
   // Remove headers `# `, `## `, etc.
-  text = text.replaceAll(RegExp(r'^\s*#{1,6}\s+', multiLine: true), '');
+  text = text.replaceAll(_headerRegex, '');
   // Remove images `![alt](url)` -> `alt`
-  text = text.replaceAll(RegExp(r'!\[([^\]]*)\]\([^)]*\)'), r'$1');
+  text = text.replaceAllMapped(_imageRegex, (m) => m[1] ?? '');
   // Remove links `[text](url)` -> `text`
-  text = text.replaceAll(RegExp(r'\[([^\]]+)\]\([^)]*\)'), r'$1');
-  // Remove bold/italic `**text**` or `__text__`
-  text = text.replaceAll(RegExp(r'(\*\*|__)(.*?)\1'), r'$2');
-  // Remove single `*text*` or `_text_`
-  text = text.replaceAll(RegExp(r'(\*|_)(.*?)\1'), r'$2');
+  text = text.replaceAllMapped(_linkRegex, (m) => m[1] ?? '');
+  // Remove bold `**text**` and `__text__`
+  text = text.replaceAllMapped(_boldAsteriskRegex, (m) => m[1] ?? '');
+  text = text.replaceAllMapped(_boldUnderscoreRegex, (m) => m[1] ?? '');
+  // Remove italic `*text*` and `_text_` (preserving snake_case identifiers)
+  text = text.replaceAllMapped(_italicAsteriskRegex, (m) => m[1] ?? '');
+  text = text.replaceAllMapped(_italicUnderscoreRegex, (m) => m[1] ?? '');
   // Remove strikethrough `~~text~~`
-  text = text.replaceAll(RegExp(r'~~(.*?)~~'), r'$1');
+  text = text.replaceAllMapped(_strikethroughRegex, (m) => m[1] ?? '');
   // Remove highlight `==text==`
-  text = text.replaceAll(RegExp(r'==(.*?)=='), r'$1');
+  text = text.replaceAllMapped(_highlightRegex, (m) => m[1] ?? '');
   // Remove inline code
-  text = text.replaceAll(RegExp(r'`([^`]+)`'), r'$1');
+  text = text.replaceAllMapped(_inlineCodeRegex, (m) => m[1] ?? '');
   // Remove horizontal rules
-  text = text.replaceAll(RegExp(r'^\s*([-*_]){3,}\s*$', multiLine: true), '');
+  text = text.replaceAll(_horizontalRuleRegex, '');
 
   return text;
 }
