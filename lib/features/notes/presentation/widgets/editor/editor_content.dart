@@ -73,14 +73,29 @@ class _EditorContentState extends State<EditorContent> {
 
   void _onChanged() {
     _ensureH1OnEmptyNoteTyping();
+
+    final controller = _lastController;
+    if (controller == null) return;
+
+    final currentText = controller.text;
+
+    final editorState = context.read<EditorBloc>().state;
+    final lastSaved = editorState is EditorLoaded
+        ? editorState.lastSavedContent
+        : '';
+
+    // If text is identical to last saved baseline, cancel any running timer and return
+    if (currentText == lastSaved) {
+      _autoSaveTimer?.cancel();
+      return;
+    }
+
     _autoSaveTimer?.cancel();
     _autoSaveTimer = Timer(const Duration(seconds: 2), () {
       if (!mounted || _lastController == null) return;
 
-      final markdown = _lastController!.text;
-
       context.read<EditorBloc>().add(
-        EditorAutoSaveRequested(content: markdown),
+        EditorAutoSaveRequested(content: currentText),
       );
     });
   }
@@ -97,28 +112,21 @@ class _EditorContentState extends State<EditorContent> {
   Widget build(BuildContext context) {
     final provider = MarkdownControllerProvider.of(context);
 
-    return BlocListener<EditorBloc, EditorState>(
-      listenWhen: (prev, curr) =>
-          prev is EditorLoaded &&
-          curr is EditorLoaded &&
-          prev.title != curr.title,
-      listener: (context, state) => _onChanged(),
-      child: RepaintBoundary(
-        child: LiveMarkdownEditor(
-          controller: provider.controller,
-          focusNode: provider.focusNode,
-          scrollController: _scrollController,
-          theme: markdownEditorTheme(context),
-          behavior: const MarkdownEditingBehavior(
-            autoPair: true,
-            wrapSelection: true,
-            smartLists: true,
-            autoCloseFences: true,
-          ),
-          componentBuilders: MarkdownEditorComponentBuilders(
-            taskToggleBuilder: (context, taskContext) =>
-                _MechanixTaskToggle(taskContext: taskContext),
-          ),
+    return RepaintBoundary(
+      child: LiveMarkdownEditor(
+        controller: provider.controller,
+        focusNode: provider.focusNode,
+        scrollController: _scrollController,
+        theme: markdownEditorTheme(context),
+        behavior: const MarkdownEditingBehavior(
+          autoPair: true,
+          wrapSelection: true,
+          smartLists: true,
+          autoCloseFences: true,
+        ),
+        componentBuilders: MarkdownEditorComponentBuilders(
+          taskToggleBuilder: (context, taskContext) =>
+              _MechanixTaskToggle(taskContext: taskContext),
         ),
       ),
     );

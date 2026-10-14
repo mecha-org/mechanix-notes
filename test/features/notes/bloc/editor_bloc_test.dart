@@ -1348,6 +1348,58 @@ void main() {
         expect(s.isDirty, true);
       },
     );
+
+    blocTest<EditorBloc, EditorState>(
+      'never calls getNoteById during auto-save when lastSavedContent baseline is present in memory',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: kTestTitle,
+        markdownContent: '# Initial',
+        lastSavedContent: '# Initial',
+        lastSavedTitle: kTestTitle,
+        createdAt: DateTime(2025, 5, 20),
+        isNewNote: false,
+      ),
+      act: (bloc) => bloc.add(
+        EditorAutoSaveRequested(
+          content: '# Initial\nNew line added',
+          plainText: 'Initial\nNew line added',
+        ),
+      ),
+      verify: (_) {
+        verifyNever(() => repository.getNoteById(any()));
+        verify(() => repository.upsertNote(any())).called(1);
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'skips auto-save entirely with zero repository calls when content matches lastSavedContent',
+      build: buildBloc,
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: kTestTitle,
+        markdownContent: '# Initial',
+        lastSavedContent: '# Initial',
+        lastSavedTitle: kTestTitle,
+        createdAt: DateTime(2025, 5, 20),
+        isNewNote: false,
+      ),
+      act: (bloc) => bloc.add(
+        EditorAutoSaveRequested(
+          content: '# Initial',
+          plainText: 'Initial',
+        ),
+      ),
+      expect: () => [],
+      verify: (_) {
+        verifyNever(() => repository.getNoteById(any()));
+        verifyNever(() => repository.upsertNote(any()));
+      },
+    );
   });
 
   // ════════════════════════════════════════════════════════════════════════════

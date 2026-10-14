@@ -138,7 +138,7 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
     VoidCallback? onPressed(VoidCallback? callback) =>
         widget.enabled ? callback : null;
 
-    return Container(
+    return SizedBox(
       height: 48,
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -60,6 +60,10 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
             noteId: note.id,
             title: event.noteTitle ?? note.title,
             markdownContent: initialContent,
+            lastSavedContent: initialContent,
+            lastSavedTitle: event.noteTitle ?? note.title,
+            lastSavedIsPinned: note.isPinned,
+            createdAt: note.createdAt,
             isContentLoading: false,
             isNewNote: false,
             isPinned: note.isPinned,
@@ -74,6 +78,10 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
             noteId: newId,
             title: '',
             markdownContent: '# ',
+            lastSavedContent: '# ',
+            lastSavedTitle: '',
+            lastSavedIsPinned: false,
+            createdAt: DateTime.now(),
             isContentLoading: false,
             isNewNote: true,
           ),
@@ -93,7 +101,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     if (current is! EditorLoaded) return;
 
     try {
-      final existing = await _repository.getNoteById(current.noteId);
       final markdown = event.content;
       final plainText = (event.plainText ?? markdownToPlainText(markdown))
           .trim();
@@ -111,6 +118,11 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         return;
       }
 
+      NoteModel? existing;
+      if (current.lastSavedContent.isEmpty) {
+        existing = await _repository.getNoteById(current.noteId);
+      }
+
       final note = buildNote(
         current: current,
         content: markdown,
@@ -118,11 +130,20 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         existing: existing,
       );
 
-      // Check if content is unchanged
-      if (existing != null) {
-        if (existing.title == note.title &&
-            existing.content == markdown &&
-            existing.isPinned == note.isPinned) {
+      // Check if content is unchanged using in-memory baseline
+      if (!current.isNewNote) {
+        final lastSavedContent =
+            existing != null ? existing.content : current.lastSavedContent;
+        final lastSavedTitle =
+            existing != null ? existing.title : current.lastSavedTitle;
+        final lastSavedIsPinned =
+            existing != null ? existing.isPinned : current.lastSavedIsPinned;
+
+        final isContentUnchanged = lastSavedContent == markdown;
+        final isTitleUnchanged = lastSavedTitle == note.title;
+        final isPinUnchanged = lastSavedIsPinned == note.isPinned;
+
+        if (isContentUnchanged && isTitleUnchanged && isPinUnchanged) {
           AppLogger.i('EditorBloc: Discarding unchanged edit');
           emit(
             EditorDiscarded(noteId: current.isDirty ? current.noteId : null),
@@ -205,7 +226,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       plainText: plainText,
       previewText: previewText,
       height: _estimateHeight(plainText),
-      createdAt: existing?.createdAt ?? now,
+      createdAt: existing?.createdAt ?? current.createdAt ?? now,
       updatedAt: now,
       isPinned: current.isPinned,
     );
@@ -219,10 +240,14 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     if (current is! EditorLoaded) return;
 
     try {
-      final existing = await _repository.getNoteById(current.noteId);
       final markdown = event.content;
       final plainText = (event.plainText ?? markdownToPlainText(markdown))
           .trim();
+
+      NoteModel? existing;
+      if (current.lastSavedContent.isEmpty) {
+        existing = await _repository.getNoteById(current.noteId);
+      }
 
       final note = buildNote(
         current: current,
@@ -232,11 +257,21 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       );
 
       // Don't auto-save if nothing changed
-      if (existing != null &&
-          existing.title == note.title &&
-          existing.content == markdown &&
-          existing.isPinned == note.isPinned) {
-        return;
+      if (!current.isNewNote) {
+        final lastSavedContent =
+            existing != null ? existing.content : current.lastSavedContent;
+        final lastSavedTitle =
+            existing != null ? existing.title : current.lastSavedTitle;
+        final lastSavedIsPinned =
+            existing != null ? existing.isPinned : current.lastSavedIsPinned;
+
+        final isContentUnchanged = lastSavedContent == markdown;
+        final isTitleUnchanged = lastSavedTitle == note.title;
+        final isPinUnchanged = lastSavedIsPinned == note.isPinned;
+
+        if (isContentUnchanged && isTitleUnchanged && isPinUnchanged) {
+          return;
+        }
       }
 
       // Don't auto-save if new and empty
@@ -250,8 +285,12 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       emit(
         current.copyWith(
           title: note.title,
+          lastSavedContent: markdown,
+          lastSavedTitle: note.title,
+          lastSavedIsPinned: note.isPinned,
+          createdAt: note.createdAt,
           isDirty: true,
-          isNewNote: current.isNewNote ? false : current.isNewNote,
+          isNewNote: false,
         ),
       );
     } on DbFullException catch (e) {
