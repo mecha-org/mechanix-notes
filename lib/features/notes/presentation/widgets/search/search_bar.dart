@@ -75,7 +75,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (!isSearchActive) {
       final searchAction = MechanixIconButton.standard(
-        icon: const ImageIcon(AssetImage(NotesIcon.searchIcon)),
+        icon: Image.asset(NotesIcon.searchIcon, width: 20, height: 20),
         onPressed: () {
           focusNode.requestFocus();
           onSearchIconTap?.call();
