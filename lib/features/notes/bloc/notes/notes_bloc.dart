@@ -90,12 +90,33 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
         return;
       }
 
-      final allNotes = [...state.notes, ...newBatch];
-      final newFlattened = _buildFlattenedNotes(allNotes);
+      final hasPinnedInNewBatch = newBatch.any((n) => n.isPinned);
+
+      List<Object> newFlattened;
+      if (hasPinnedInNewBatch) {
+        // Safe fallback for rare case where pinned notes span across page boundaries
+        newFlattened = _buildFlattenedNotes([...state.notes, ...newBatch]);
+      } else {
+        // O(1) incremental path: find the last active chronological group
+        TimeGroup? lastGroup;
+        for (var i = state.groupedNotes.length - 1; i >= 0; i--) {
+          final item = state.groupedNotes[i];
+          if (item is TimeGroup && item.category != TimeCategory.pinned) {
+            lastGroup = item;
+            break;
+          }
+        }
+
+        final appended = _buildFlattenedNotes(
+          newBatch,
+          existingGroup: lastGroup,
+        );
+        newFlattened = [...state.groupedNotes, ...appended];
+      }
 
       emit(
         state.copyWith(
-          notes: allNotes,
+          notes: [...state.notes, ...newBatch],
           groupedNotes: newFlattened,
           isLoadingMore: false,
           hasMore: newBatch.length == Constants.pageSize,
@@ -153,8 +174,9 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       if (updatedNote == null) return;
       final group = _getTimeGroupForNote(updatedNote);
 
-      if (!updatedNote.isPinned && group.category != TimeCategory.recent)
+      if (!updatedNote.isPinned && group.category != TimeCategory.recent) {
         return;
+      }
       emit(state.copyWith(isRefreshed: false));
 
       // Remove old entry and insert updated note

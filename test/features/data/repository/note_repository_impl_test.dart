@@ -422,6 +422,31 @@ void main() {
       },
     );
 
+    test(
+      'getNoteById auto-heals filename when file is larger than 1KB and tag is at the tail',
+      () async {
+        // Large content > 2KB
+        final largeBody = 'A' * 2500;
+        await fileStorage.writeNoteContent(
+          title: 'Large File',
+          markdown: '# Large Note\n\n$largeBody\n\n<!-- mechanix:id=large-heal -->\n',
+        );
+
+        final noteInDb = _makeNote(id: 'large-heal', title: 'Large Note');
+        noteInDb.fileName = 'Missing File.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        final result = await repository.getNoteById('large-heal');
+
+        expect(result, isNotNull);
+        expect(result!.fileName, 'Large File.md');
+        expect(result.title, 'Large Note');
+        expect(result.content, '# Large Note\n\n$largeBody');
+      },
+    );
+
     test('deleteNotes deletes corresponding .md file using fileName', () async {
       final fileName = await fileStorage.writeNoteContent(
         title: 'To Be Deleted',

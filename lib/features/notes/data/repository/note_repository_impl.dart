@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:mechanix_notes/core/utils/app_logger.dart';
@@ -220,6 +221,24 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
+  /// Reads at most [maxBytes] from the end of [file] and decodes as UTF-8. without reading entire file contents into memory.
+  Future<String?> _readTailString(File file, [int maxBytes = 1024]) async {
+    RandomAccessFile? raf;
+    try {
+      final length = await file.length();
+      if (length == 0) return '';
+      raf = await file.open(mode: FileMode.read);
+      final readLength = length < maxBytes ? length : maxBytes;
+      await raf.setPosition(length - readLength);
+      final bytes = await raf.read(readLength);
+      return utf8.decode(bytes, allowMalformed: true);
+    } catch (e) {
+      return null;
+    } finally {
+      await raf?.close();
+    }
+  }
+
   /// Scans the notes directory for a .md file containing an embedded tag matching [noteId].
   Future<({String fileName, String content})?> _findNoteFileByIdTag(
     String noteId,
@@ -234,10 +253,13 @@ class NoteRepositoryImpl extends NoteRepository {
           final fileName = entity.uri.pathSegments.last;
           if (fileName.startsWith('..tmp_')) continue;
 
-          final content = await entity.readAsString();
-          final extractedId = NoteTagHelper.extractId(content);
-          if (extractedId == noteId) {
-            return (fileName: fileName, content: content);
+          final tail = await _readTailString(entity);
+          if (tail != null && tail.contains('mechanix:id')) {
+            final extractedId = NoteTagHelper.extractId(tail);
+            if (extractedId == noteId) {
+              final content = await entity.readAsString();
+              return (fileName: fileName, content: content);
+            }
           }
         }
       }
