@@ -342,7 +342,7 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
       child: Container(
         height: 56,
         width: 488,
-        padding: EdgeInsets.all(4),
+        padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: context.colorScheme.surfaceContainer,
 

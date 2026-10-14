@@ -1,6 +1,8 @@
 part of 'editor_bloc.dart';
 
-sealed class EditorEvent {}
+sealed class EditorEvent {
+  const EditorEvent();
+}
 
 final class EditorInitialised extends EditorEvent {
   final String? noteId;
@@ -21,3 +23,12 @@ final class EditorAutoSaveRequested extends EditorEvent {
 }
 
 final class EditorPinToggled extends EditorEvent {}
+
+final class EditorCheckExternalModification extends EditorEvent {
+  const EditorCheckExternalModification();
+}
+
+final class EditorReloadContentAccepted extends EditorEvent {
+  final String content;
+  EditorReloadContentAccepted({required this.content});
+}

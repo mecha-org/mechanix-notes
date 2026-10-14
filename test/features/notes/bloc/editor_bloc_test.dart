@@ -59,6 +59,8 @@ void main() {
 
   setUp(() {
     repository = MockNoteRepository();
+    when(() => repository.getNoteFileLastModified(any()))
+        .thenAnswer((_) async => null);
   });
 
   EditorBloc buildBloc() => EditorBloc(repository);
@@ -1615,6 +1617,192 @@ void main() {
         isA<EditorLoaded>()
             .having((s) => s.isPinned, 'isPinned', true)
             .having((s) => s.isContentLoading, 'loading', false),
+      ],
+    );
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // Missing File Handling (Step 1)
+  // ════════════════════════════════════════════════════════════════════════════
+  group('Missing File Handling (Step 1)', () {
+    blocTest<EditorBloc, EditorState>(
+      'opens missing note as clean new note with empty title and "# " content',
+      build: buildBloc,
+      setUp: () {
+        final missingNote = makeNote(id: kTestNoteId, title: 'Old Ghost Title')
+          ..isFileMissing = true
+          ..content = '';
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => missingNote);
+      },
+      act: (bloc) => bloc.add(EditorInitialised(noteId: kTestNoteId)),
+      wait: const Duration(milliseconds: 300),
+      expect: () => [
+        isA<EditorLoaded>().having((s) => s.isContentLoading, 'loading', true),
+        isA<EditorLoaded>()
+            .having((s) => s.title, 'title', '')
+            .having((s) => s.markdownContent, 'markdownContent', '# ')
+            .having((s) => s.isNewNote, 'isNewNote', true)
+            .having((s) => s.isFileMissing, 'isFileMissing', true),
+      ],
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'deletes existing note when missing note is left empty on save',
+      build: buildBloc,
+      setUp: () {
+        final missingNote = makeNote(id: kTestNoteId, title: 'Old Ghost Title')
+          ..isFileMissing = true
+          ..content = '';
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => missingNote);
+      },
+      seed: () => const EditorLoaded(
+        noteId: kTestNoteId,
+        title: '',
+        markdownContent: '# ',
+        isNewNote: true,
+        isFileMissing: true,
+      ),
+      act: (bloc) => bloc.add(EditorSaveRequested(content: '# ')),
+      expect: () => [
+        isA<EditorDeleteRequest>()
+            .having((s) => s.noteId, 'noteId', kTestNoteId),
+      ],
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'updates title and preview and saves note when user writes into missing note',
+      build: buildBloc,
+      setUp: () {
+        final missingNote = makeNote(id: kTestNoteId, title: 'Old Ghost Title')
+          ..isFileMissing = true
+          ..content = '';
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => missingNote);
+        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+      },
+      seed: () => const EditorLoaded(
+        noteId: kTestNoteId,
+        title: '',
+        markdownContent: '# ',
+        isNewNote: true,
+        isFileMissing: true,
+      ),
+      act: (bloc) => bloc.add(
+        EditorSaveRequested(
+          content: '# Brand New Title\nHere is some new note body',
+        ),
+      ),
+      expect: () => [
+        isA<EditorLoaded>()
+            .having((s) => s.title, 'title', 'Brand New Title')
+            .having((s) => s.isSaving, 'isSaving', true),
+        isA<EditorSaveSuccess>()
+            .having((s) => s.noteId, 'noteId', kTestNoteId),
+      ],
+      verify: (_) {
+        verify(
+          () => repository.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.id, 'id', kTestNoteId)
+                  .having((n) => n.title, 'title', 'Brand New Title')
+                  .having((n) => n.previewText, 'previewText', 'Here is some new note body'),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // External Modification Detection (Step 2)
+  // ════════════════════════════════════════════════════════════════════════════
+  group('External Modification Detection (Step 2)', () {
+    final initialTime = DateTime(2024, 1, 1, 10, 0);
+    final modifiedTime = DateTime(2024, 1, 1, 11, 0);
+
+    blocTest<EditorBloc, EditorState>(
+      'emits EditorExternalModificationDetected when disk timestamp is newer and content differs',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteFileLastModified(kTestNoteId))
+            .thenAnswer((_) async => modifiedTime);
+        final diskNote = makeNote(
+          id: kTestNoteId,
+          title: 'Externally Modified Title',
+          content: 'Externally modified content',
+        );
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => diskNote);
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: 'Original Title',
+        markdownContent: 'Original content',
+        fileLastModified: initialTime,
+      ),
+      act: (bloc) => bloc.add(const EditorCheckExternalModification()),
+      expect: () => [
+        isA<EditorExternalModificationDetected>()
+            .having((s) => s.noteId, 'noteId', kTestNoteId)
+            .having((s) => s.externalContent, 'externalContent', 'Externally modified content'),
+      ],
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'does not emit when disk content matches editor content despite newer timestamp',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteFileLastModified(kTestNoteId))
+            .thenAnswer((_) async => modifiedTime);
+        final diskNote = makeNote(
+          id: kTestNoteId,
+          title: 'Original Title',
+          content: 'Original content',
+        );
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => diskNote);
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: 'Original Title',
+        markdownContent: 'Original content',
+        fileLastModified: initialTime,
+      ),
+      act: (bloc) => bloc.add(const EditorCheckExternalModification()),
+      expect: () => [],
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'reloads content into state when EditorReloadContentAccepted is received',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.getNoteFileLastModified(kTestNoteId))
+            .thenAnswer((_) async => modifiedTime);
+        final diskNote = makeNote(
+          id: kTestNoteId,
+          title: 'Externally Modified Title',
+          content: 'New reloaded content',
+        );
+        when(() => repository.getNoteById(kTestNoteId))
+            .thenAnswer((_) async => diskNote);
+      },
+      seed: () => EditorLoaded(
+        noteId: kTestNoteId,
+        title: 'Original Title',
+        markdownContent: 'Old content',
+        fileLastModified: initialTime,
+      ),
+      act: (bloc) => bloc.add(
+        EditorReloadContentAccepted(content: 'New reloaded content'),
+      ),
+      expect: () => [
+        isA<EditorLoaded>()
+            .having((s) => s.markdownContent, 'markdownContent', 'New reloaded content')
+            .having((s) => s.isDirty, 'isDirty', false)
+            .having((s) => s.fileLastModified, 'fileLastModified', modifiedTime),
       ],
     );
   });

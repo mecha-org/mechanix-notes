@@ -7,6 +7,7 @@ import 'package:mechanix_notes/features/notes/data/services/indexing_service.dar
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:path/path.dart' as p;
 
 // ---------------------------------------------------------------------------
 // Mocks & Fakes
@@ -369,17 +370,20 @@ void main() {
         expect(note.fileName, 'File Test.md');
         expect(await fileStorage.noteFileExists('File Test.md'), isTrue);
         final savedMarkdown = await fileStorage.readNoteContent('File Test.md');
-        expect(savedMarkdown, '# Custom Markdown\n\n- item 1\n- item 2');
+        expect(
+          savedMarkdown,
+          '# Custom Markdown\n\n- item 1\n- item 2\n\n<!-- mechanix:id=save-test -->\n',
+        );
         expect(note.content, '# Custom Markdown\n\n- item 1\n- item 2');
       },
     );
 
     test(
-      'getNoteById reads full markdown from .md file using fileName',
+      'getNoteById reads full markdown from .md file and strips embedded tag',
       () async {
         await fileStorage.writeNoteContent(
           title: 'Open Test',
-          markdown: '# Loaded from file',
+          markdown: '# Loaded from file\n\n<!-- mechanix:id=open-test -->\n',
         );
 
         final noteInDb = _makeNote(id: 'open-test', title: 'Open Test');
@@ -391,6 +395,31 @@ void main() {
 
         expect(result, isNotNull);
         expect(result!.content, '# Loaded from file');
+      },
+    );
+
+    test(
+      'getNoteById auto-heals filename and title when file was renamed externally on disk',
+      () async {
+        await fileStorage.writeNoteContent(
+          title: 'Renamed_File_Externally',
+          markdown:
+              '# Client Discussion\nNotes from client\n\n<!-- mechanix:id=healed-1 -->\n',
+        );
+
+        final noteInDb = _makeNote(id: 'healed-1', title: 'Old Title');
+        noteInDb.fileName = 'Old Title.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        final result = await repository.getNoteById('healed-1');
+
+        expect(result, isNotNull);
+        expect(result!.fileName, 'Renamed_File_Externally.md');
+        expect(result.title, 'Client Discussion');
+        expect(result.content, '# Client Discussion\nNotes from client');
+        verify(() => mockBox.put(noteInDb)).called(1);
       },
     );
 
@@ -411,6 +440,43 @@ void main() {
       await repository.deleteNotes(['del-1']);
 
       expect(await fileStorage.noteFileExists(fileName), isFalse);
+    });
+
+    test(
+      'getNoteById sets isFileMissing = true and empty content when file does not exist on disk',
+      () async {
+        final noteInDb = _makeNote(id: 'missing-note', title: 'Ghost Note');
+        noteInDb.fileName = 'NonExistent.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+
+        final result = await repository.getNoteById('missing-note');
+
+        expect(result, isNotNull);
+        expect(result!.isFileMissing, isTrue);
+        expect(result.content, isEmpty);
+      },
+    );
+
+    test('getNoteFileLastModified returns timestamp when file exists and null when missing', () async {
+      final fileName = await fileStorage.writeNoteContent(
+        title: 'Modified Note',
+        markdown: 'Some content\n<!-- mechanix:id=mod-note -->\n',
+      );
+
+      final noteInDb = _makeNote(id: 'mod-note', title: 'Modified Note');
+      noteInDb.fileName = fileName;
+
+      when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+
+      final modified = await repository.getNoteFileLastModified('mod-note');
+      expect(modified, isNotNull);
+      expect(modified!.isBefore(DateTime.now().add(const Duration(seconds: 1))), isTrue);
+
+      // Missing note
+      when(() => mockQuery.findFirst()).thenReturn(null);
+      final nullModified = await repository.getNoteFileLastModified('nonexistent');
+      expect(nullModified, isNull);
     });
   });
 
@@ -475,6 +541,124 @@ void main() {
 
       expect(result, isFalse);
       verifyNever(() => mockBox.put(any()));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // reconcileWithDisk
+  // -------------------------------------------------------------------------
+
+  group('reconcileWithDisk', () {
+    test('adopts new untagged file, appends tag, and indexes note', () async {
+      when(() => mockBox.getAll()).thenReturn([]);
+      when(() => mockBox.put(any())).thenReturn(1);
+
+      // Create an untagged external file
+      final file = File(p.join(tempDir.path, 'Meeting Notes.md'));
+      await file.writeAsString('# Meeting Notes\nDiscussed architecture and next steps');
+
+      await repository.reconcileWithDisk();
+
+      // Verify that tag was appended to the file on disk
+      final diskContent = await file.readAsString();
+      expect(diskContent, contains('<!-- mechanix:id='));
+      expect(diskContent, contains('# Meeting Notes'));
+
+      // Verify note was inserted into Box
+      final captured = verify(() => mockBox.put(captureAny())).captured;
+      expect(captured, isNotEmpty);
+      final adoptedNote = captured.first as NoteModel;
+      expect(adoptedNote.title, 'Meeting Notes');
+      expect(adoptedNote.previewText, contains('Discussed architecture and next steps'));
+      expect(adoptedNote.fileName, 'Meeting Notes.md');
+
+      // Verify note was indexed in Tantivy
+      verify(
+        () => mockIndexingService.upsertNote(
+          adoptedNote.id,
+          'Meeting Notes',
+          any(),
+        ),
+      ).called(1);
+    });
+
+    test('adopts new tagged file when note is not in box', () async {
+      when(() => mockBox.getAll()).thenReturn([]);
+      when(() => mockBox.put(any())).thenReturn(1);
+      when(() => mockQuery.findFirst()).thenReturn(null);
+
+      final file = File(p.join(tempDir.path, 'External Tagged.md'));
+      await file.writeAsString(
+        '# External Tagged\nBody content\n<!-- mechanix:id=ext-tagged-123 -->',
+      );
+
+      await repository.reconcileWithDisk();
+
+      final captured = verify(() => mockBox.put(captureAny())).captured;
+      expect(captured, isNotEmpty);
+      final adoptedNote = captured.first as NoteModel;
+      expect(adoptedNote.id, 'ext-tagged-123');
+      expect(adoptedNote.title, 'External Tagged');
+      expect(adoptedNote.previewText, contains('Body content'));
+
+      verify(
+        () => mockIndexingService.upsertNote(
+          'ext-tagged-123',
+          'External Tagged',
+          any(),
+        ),
+      ).called(1);
+    });
+
+    test('updates existing note if disk content has changed', () async {
+      final existingNote = _makeNote(
+        id: 'existing-id',
+        title: 'Old Title',
+      )..fileName = 'My Note.md'
+       ..content = '# Old Title\nOld content';
+
+      when(() => mockBox.getAll()).thenReturn([existingNote]);
+      when(() => mockQuery.findFirst()).thenReturn(existingNote);
+      when(() => mockBox.put(any())).thenReturn(1);
+
+      // File has been edited externally
+      final file = File(p.join(tempDir.path, 'My Note.md'));
+      await file.writeAsString(
+        '# New Title\nUpdated content from outside\n<!-- mechanix:id=existing-id -->',
+      );
+
+      await repository.reconcileWithDisk();
+
+      expect(existingNote.title, 'New Title');
+      expect(existingNote.content, contains('# New Title\nUpdated content from outside'));
+      verify(() => mockBox.put(existingNote)).called(1);
+      verify(
+        () => mockIndexingService.upsertNote(
+          'existing-id',
+          'New Title',
+          any(),
+        ),
+      ).called(1);
+    });
+
+    test('deletes note from box and index when file is removed from disk', () async {
+      final staleNote = _makeNote(
+        id: 'stale-id',
+        title: 'Deleted Note',
+      )..fileName = 'deleted_file.md'
+       ..obxId = 42;
+
+      when(() => mockBox.getAll()).thenReturn([staleNote]);
+      when(() => mockBox.remove(42)).thenReturn(true);
+
+      // No file created on disk
+
+      await repository.reconcileWithDisk();
+
+      verify(() => mockBox.remove(42)).called(1);
+      verify(
+        () => mockIndexingService.deleteNotesBatch(['stale-id']),
+      ).called(1);
     });
   });
 }

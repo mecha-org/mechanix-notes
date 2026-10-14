@@ -345,6 +345,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed to perform search'**
   String get failedToPerformSearch;
+
+  /// No description provided for @noteModifiedExternally.
+  ///
+  /// In en, this message translates to:
+  /// **'Note modified externally'**
+  String get noteModifiedExternally;
+
+  /// No description provided for @reload.
+  ///
+  /// In en, this message translates to:
+  /// **'Reload'**
+  String get reload;
 }
 
 class _AppLocalizationsDelegate

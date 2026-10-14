@@ -22,6 +22,8 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     on<EditorSaveRequested>(_onSaveRequested);
     on<EditorAutoSaveRequested>(_onAutoSaveRequested);
     on<EditorPinToggled>(_onPinToggled);
+    on<EditorCheckExternalModification>(_onCheckExternalModification);
+    on<EditorReloadContentAccepted>(_onReloadContentAccepted);
   }
 
   // Event Handlers
@@ -50,18 +52,32 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
           return;
         }
 
-        final initialContent = note.content.trim().isEmpty
+        final isFileMissing = note.isFileMissing;
+        final initialContent = isFileMissing || note.content.trim().isEmpty
             ? '# '
             : note.content;
 
-        AppLogger.i('EditorBloc: Content ready for ${event.noteId}');
+        DateTime? lastModified;
+        if (!isFileMissing) {
+          try {
+            lastModified = await _repository.getNoteFileLastModified(note.id);
+          } catch (_) {
+            lastModified = null;
+          }
+        }
+
+        AppLogger.i(
+          'EditorBloc: Content ready for ${event.noteId} (missing on disk: $isFileMissing)',
+        );
         emit(
           EditorLoaded(
             noteId: note.id,
-            title: event.noteTitle ?? note.title,
+            title: isFileMissing ? '' : (event.noteTitle ?? note.title),
             markdownContent: initialContent,
             isContentLoading: false,
-            isNewNote: false,
+            isNewNote: isFileMissing,
+            isFileMissing: isFileMissing,
+            fileLastModified: lastModified,
             isPinned: note.isPinned,
           ),
         );
@@ -101,7 +117,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       final isEmpty = current.title.trim().isEmpty && plainText.isEmpty;
 
       if (isEmpty) {
-        if (current.isNewNote) {
+        if (current.isNewNote && !current.isFileMissing) {
           AppLogger.i('EditorBloc: Discarding empty new note');
           emit(const EditorDiscarded());
         } else {
@@ -119,7 +135,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       );
 
       // Check if content is unchanged
-      if (existing != null) {
+      if (existing != null && !current.isFileMissing) {
         if (existing.title == note.title &&
             existing.content == markdown &&
             existing.isPinned == note.isPinned) {
@@ -239,19 +255,29 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         return;
       }
 
-      // Don't auto-save if new and empty
-      if (current.isNewNote && note.title.trim().isEmpty && plainText.isEmpty) {
+      // Don't auto-save if new/missing and empty
+      if ((current.isNewNote || current.isFileMissing) &&
+          note.title.trim().isEmpty &&
+          plainText.isEmpty) {
         return;
       }
 
       await _repository.upsertNote(note);
+      DateTime? newModified;
+      try {
+        newModified = await _repository.getNoteFileLastModified(current.noteId);
+      } catch (_) {
+        newModified = null;
+      }
 
       AppLogger.i('EditorBloc: Auto-save success for ${current.noteId}');
       emit(
         current.copyWith(
           title: note.title,
           isDirty: true,
-          isNewNote: current.isNewNote ? false : current.isNewNote,
+          isNewNote: false,
+          isFileMissing: false,
+          fileLastModified: newModified,
         ),
       );
     } on DbFullException catch (e) {
@@ -260,6 +286,80 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     } catch (e) {
       AppLogger.e('EditorBloc: Auto-save failed: $e');
     }
+  }
+
+  Future<void> _onCheckExternalModification(
+    EditorCheckExternalModification event,
+    Emitter<EditorState> emit,
+  ) async {
+    final current = state;
+    if (current is! EditorLoaded) return;
+    if (current.isNewNote || current.isFileMissing) return;
+
+    try {
+      final diskModified = await _repository.getNoteFileLastModified(
+        current.noteId,
+      );
+      if (diskModified == null) return;
+
+      if (current.fileLastModified != null &&
+          diskModified.isAfter(current.fileLastModified!)) {
+        final diskNote = await _repository.getNoteById(current.noteId);
+        if (diskNote != null &&
+            !diskNote.isFileMissing &&
+            diskNote.content != current.markdownContent) {
+          AppLogger.i(
+            'EditorBloc: External modification detected on disk for ${current.noteId}',
+          );
+          emit(
+            EditorExternalModificationDetected(
+              noteId: current.noteId,
+              title: diskNote.title.isNotEmpty ? diskNote.title : current.title,
+              markdownContent: current.markdownContent,
+              isContentLoading: current.isContentLoading,
+              isSaving: current.isSaving,
+              isNewNote: current.isNewNote,
+              isDirty: current.isDirty,
+              isPinned: current.isPinned,
+              isFileMissing: current.isFileMissing,
+              fileLastModified: diskModified,
+              externalContent: diskNote.content,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      AppLogger.e('EditorBloc: Failed to check external modification: $e');
+    }
+  }
+
+  Future<void> _onReloadContentAccepted(
+    EditorReloadContentAccepted event,
+    Emitter<EditorState> emit,
+  ) async {
+    final current = state;
+    if (current is! EditorLoaded) return;
+
+    final diskModified = await _repository.getNoteFileLastModified(
+      current.noteId,
+    );
+    final diskNote = await _repository.getNoteById(current.noteId);
+
+    AppLogger.i('EditorBloc: Reloaded external content for ${current.noteId}');
+    emit(
+      EditorLoaded(
+        noteId: current.noteId,
+        title: diskNote?.title ?? current.title,
+        markdownContent: event.content,
+        isContentLoading: false,
+        isSaving: false,
+        isNewNote: false,
+        isDirty: false,
+        isPinned: diskNote?.isPinned ?? current.isPinned,
+        isFileMissing: false,
+        fileLastModified: diskModified ?? current.fileLastModified,
+      ),
+    );
   }
 
   Future<void> _onPinToggled(
@@ -279,9 +379,6 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
   // Helper
 
   double _estimateHeight(String plainText) {
-    const lineHeight = 24.0;
-    const charsPerLine = 60;
-    final lines = (plainText.length / charsPerLine).ceil().clamp(1, 20);
-    return lines * lineHeight + 80;
+    return estimateNoteHeight(plainText);
   }
 }

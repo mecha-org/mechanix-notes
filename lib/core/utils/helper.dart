@@ -55,6 +55,8 @@ String markdownToPlainText(String markdown) {
   if (markdown.isEmpty) return '';
 
   var text = markdown;
+  // Remove HTML comments (including mechanix:id tags)
+  text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
   // Remove fenced code blocks completely or keep inner text
   text = text.replaceAll(RegExp(r'```[^\n]*\n([\s\S]*?)\n```'), r'$1');
   // Remove task list markers `- [ ] ` and `- [x] `
@@ -88,4 +90,12 @@ String markdownToPlainText(String markdown) {
   text = text.replaceAll(RegExp(r'^\s*([-*_]){3,}\s*$', multiLine: true), '');
 
   return text;
+}
+
+/// Estimates card height for the staggered grid layout based on text length.
+double estimateNoteHeight(String plainText) {
+  const lineHeight = 24.0;
+  const charsPerLine = 60;
+  final lines = (plainText.length / charsPerLine).ceil().clamp(1, 20);
+  return lines * lineHeight + 80;
 }

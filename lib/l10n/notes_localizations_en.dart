@@ -165,4 +165,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get failedToPerformSearch => 'Failed to perform search';
+
+  @override
+  String get noteModifiedExternally => 'Note modified externally';
+
+  @override
+  String get reload => 'Reload';
 }

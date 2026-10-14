@@ -9,4 +9,7 @@ abstract class NoteRepository {
   Future<void> upsertNote(NoteModel note);
   Future<List<NoteMetaData>> searchNotes(String query);
   Future<bool> togglePinNote(String id);
+  Future<DateTime?> getNoteFileLastModified(String id);
+  Stream<void> get onDirectoryChanged;
+  Future<void> reconcileWithDisk();
 }

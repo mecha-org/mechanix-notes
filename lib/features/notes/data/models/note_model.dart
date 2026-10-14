@@ -28,6 +28,9 @@ class NoteModel {
 
   String? fileName;
 
+  @Transient()
+  bool isFileMissing;
+
   NoteModel({
     this.obxId = 0,
     required this.id,
@@ -40,5 +43,6 @@ class NoteModel {
     required this.height,
     this.isPinned = false,
     this.fileName,
+    this.isFileMissing = false,
   });
 }

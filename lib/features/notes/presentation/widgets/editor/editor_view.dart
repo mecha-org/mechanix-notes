@@ -19,15 +19,17 @@ class EditorView extends StatefulWidget {
   State<EditorView> createState() => _EditorViewState();
 }
 
-class _EditorViewState extends State<EditorView> {
+class _EditorViewState extends State<EditorView> with WidgetsBindingObserver {
   MarkdownEditorController? _controller;
   late final FocusNode _focusNode;
   bool _canPop = false;
   bool _isSavingAndExiting = false;
+  bool _isShowingExternalModSnackbar = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _focusNode = FocusNode();
     final currentState = context.read<EditorBloc>().state;
     if (currentState is EditorLoaded && !currentState.isContentLoading) {
@@ -39,9 +41,17 @@ class _EditorViewState extends State<EditorView> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _controller?.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      context.read<EditorBloc>().add(const EditorCheckExternalModification());
+    }
   }
 
   void _initController(String markdown) {
@@ -49,6 +59,44 @@ class _EditorViewState extends State<EditorView> {
       _controller?.dispose();
       _controller = MarkdownEditorController(text: markdown);
     });
+  }
+
+  void _showExternalModificationSnackbar(
+    BuildContext context,
+    String externalContent,
+  ) {
+    if (_isShowingExternalModSnackbar) return;
+    _isShowingExternalModSnackbar = true;
+
+    final l10n = AppLocalizations.of(context);
+    final snackbar = MechanixSnackbar.text(
+      text: l10n?.noteModifiedExternally ?? 'Note modified externally',
+      position: MechanixSnackbarPosition.top,
+      action: MechanixSnackbarAction(
+        label: l10n?.reload ?? 'Reload',
+        onPressed: () {
+          _isShowingExternalModSnackbar = false;
+          _reloadContent(externalContent);
+        },
+      ),
+      onClose: () {
+        _isShowingExternalModSnackbar = false;
+      },
+    );
+
+    final controller = snackbar.show(context);
+    controller.closed.then((_) {
+      _isShowingExternalModSnackbar = false;
+    });
+  }
+
+  void _reloadContent(String newContent) {
+    setState(() {
+      _controller?.text = newContent;
+    });
+    context.read<EditorBloc>().add(
+      EditorReloadContentAccepted(content: newContent),
+    );
   }
 
   void _saveAndExit() {
@@ -72,6 +120,9 @@ class _EditorViewState extends State<EditorView> {
             !state.isContentLoading &&
             _controller == null) {
           _initController(state.markdownContent);
+        }
+        if (state is EditorExternalModificationDetected) {
+          _showExternalModificationSnackbar(context, state.externalContent);
         }
         if (state is EditorDiscarded) {
           if (state.noteId != null) {

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
@@ -13,6 +15,7 @@ import 'package:mechanix_notes/core/utils/enums.dart';
 class NotesBloc extends Bloc<NotesEvent, NotesState> {
   final NoteRepository noteRepository;
   final DateTime Function() clock;
+  StreamSubscription<void>? _directorySubscription;
 
   NotesBloc({
     required this.noteRepository,
@@ -29,7 +32,19 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     on<ClearSelection>(_clearSelection);
     on<TogglePinNote>(_togglePinNote);
 
+    try {
+      _directorySubscription = noteRepository.onDirectoryChanged.listen((_) {
+        add(LoadNotes());
+      });
+    } catch (_) {}
+
     add(LoadNotes());
+  }
+
+  @override
+  Future<void> close() {
+    _directorySubscription?.cancel();
+    return super.close();
   }
 
   Future<void> _loadNotes(LoadNotes event, Emitter<NotesState> emit) async {

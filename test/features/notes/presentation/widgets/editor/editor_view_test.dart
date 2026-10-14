@@ -197,6 +197,93 @@ void main() {
         ).called(1);
       },
     );
+
+    testWidgets(
+      'EditorDeleteRequest emits DeleteNotes to NotesBloc and pops route',
+      (tester) async {
+        final mockObserver = MockNavigatorObserver();
+        await tester.pumpWidget(buildTestWidget(observer: mockObserver));
+
+        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+        unawaited(navigator.pushNamed('/editor'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Emit EditorDeleteRequest
+        editorStateController.add(const EditorDeleteRequest('test-note-1'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        verify(
+          () => mockNotesBloc.add(
+            any(
+              that: isA<DeleteNotes>().having(
+                (e) => e.noteIds,
+                'noteIds',
+                ['test-note-1'],
+              ),
+            ),
+          ),
+        ).called(1);
+
+        expect(find.byType(EditorView), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'EditorExternalModificationDetected displays top snackbar and tapping Reload dispatches EditorReloadContentAccepted',
+      (tester) async {
+        final mockObserver = MockNavigatorObserver();
+        await tester.pumpWidget(buildTestWidget(observer: mockObserver));
+
+        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+        unawaited(navigator.pushNamed('/editor'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        // Emit EditorExternalModificationDetected
+        editorStateController.add(
+          const EditorExternalModificationDetected(
+            noteId: 'test-note-1',
+            title: 'Hello',
+            markdownContent: 'Hello world\n',
+            externalContent: 'Updated from external editor\n',
+          ),
+        );
+        // Step 1: Process stream event and insert overlay entry
+        await tester.pump();
+        // Step 2: Build overlay host and initialize AnimationController
+        await tester.pump();
+        // Step 3: Advance AnimationController by 350ms to complete slide-in
+        await tester.pump(const Duration(milliseconds: 350));
+
+        // Verify snackbar is visible
+        expect(find.byType(MechanixSnackbar), findsOneWidget);
+        expect(find.text('Note modified externally'), findsOneWidget);
+        expect(find.text('Reload'), findsOneWidget);
+
+        // Tap Reload
+        await tester.tap(find.text('Reload'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        // Verify EditorReloadContentAccepted was dispatched
+        verify(
+          () => mockEditorBloc.add(
+            any(
+              that: isA<EditorReloadContentAccepted>().having(
+                (e) => e.content,
+                'content',
+                'Updated from external editor\n',
+              ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
   });
 }
 

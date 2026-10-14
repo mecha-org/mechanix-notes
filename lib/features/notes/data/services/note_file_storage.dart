@@ -6,11 +6,28 @@ import 'package:path/path.dart' as p;
 
 class NoteFileStorage {
   final Directory _directory;
+  final Set<String> _pendingInternalWrites = {};
 
   NoteFileStorage({Directory? notesDirectory})
     : _directory = notesDirectory ?? _resolveDefaultDirectory();
 
   Directory get directory => _directory;
+
+  bool isInternalWrite(String pathOrName) {
+    final base = p.basename(pathOrName);
+    return _pendingInternalWrites.contains(pathOrName) ||
+        _pendingInternalWrites.contains(base);
+  }
+
+  void markInternalWrite(String fileName) {
+    _pendingInternalWrites.add(fileName);
+    final base = p.basename(fileName);
+    _pendingInternalWrites.add(base);
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      _pendingInternalWrites.remove(fileName);
+      _pendingInternalWrites.remove(base);
+    });
+  }
 
   static Directory _resolveDefaultDirectory() {
     final customDocs = Platform.environment['DOCUMENTS_DIR'];
@@ -142,6 +159,8 @@ class NoteFileStorage {
 
     final tempFile = File(tempPath);
     try {
+      markInternalWrite(targetFileName);
+      markInternalWrite('..tmp_$targetFileName');
       // 1. Atomic write: write to temp file and flush
       await tempFile.writeAsString(markdown, flush: true);
 
@@ -154,6 +173,7 @@ class NoteFileStorage {
       if (currentFileName != null &&
           currentFileName.isNotEmpty &&
           currentFileName != targetFileName) {
+        markInternalWrite(currentFileName);
         await deleteNoteFile(currentFileName);
         AppLogger.i(
           '[NoteFileStorage] Renamed note: removed old file $currentFileName',
@@ -193,6 +213,8 @@ class NoteFileStorage {
   /// Safely deletes the given [fileName] and any leftover temporary file.
   Future<void> deleteNoteFile(String fileName) async {
     try {
+      markInternalWrite(fileName);
+      markInternalWrite('..tmp_$fileName');
       final file = File(p.join(_directory.path, fileName));
       if (await file.exists()) {
         await file.delete();
@@ -212,5 +234,19 @@ class NoteFileStorage {
   Future<bool> noteFileExists(String fileName) async {
     final file = File(p.join(_directory.path, fileName));
     return await file.exists();
+  }
+
+  /// Returns the last modified timestamp for the given [fileName], or null if not found.
+  Future<DateTime?> getFileLastModified(String fileName) async {
+    try {
+      final file = File(p.join(_directory.path, fileName));
+      if (!await file.exists()) return null;
+      return await file.lastModified();
+    } catch (e) {
+      AppLogger.e(
+        '[NoteFileStorage] Failed to get last modified for $fileName: $e',
+      );
+      return null;
+    }
   }
 }

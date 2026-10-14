@@ -1,25 +1,36 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
+import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
+import 'package:mechanix_notes/features/notes/data/services/note_directory_watcher.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
+import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 
 class NoteRepositoryImpl extends NoteRepository {
   Store? _store;
   Box<NoteModel>? _box;
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
+  NoteDirectoryWatcher? _directoryWatcher;
+  final StreamController<void> _directoryChangedController =
+      StreamController<void>.broadcast();
 
   NoteRepositoryImpl({
     IndexingService? indexingService,
     NoteFileStorage? fileStorage,
+    NoteDirectoryWatcher? directoryWatcher,
   }) : _indexingService = indexingService ?? IndexingService(),
-       _fileStorage = fileStorage ?? NoteFileStorage();
+       _fileStorage = fileStorage ?? NoteFileStorage(),
+       _directoryWatcher = directoryWatcher;
 
   Box<NoteModel> get box {
     if (_box == null) {
@@ -53,6 +64,20 @@ class NoteRepositoryImpl extends NoteRepository {
       await _fileStorage.ensureDirectoryExists();
     } catch (e) {
       AppLogger.e('Failed to initialize note file directory: $e');
+    }
+
+    if (_directoryWatcher == null) {
+      _directoryWatcher = NoteDirectoryWatcher(
+        directory: _fileStorage.directory,
+        isInternalWrite: _fileStorage.isInternalWrite,
+        onDirectoryChanged: () async {
+          await reconcileWithDisk();
+          _directoryChangedController.add(null);
+        },
+      );
+      _directoryWatcher!.start();
+    } else if (!_directoryWatcher!.isWatching) {
+      _directoryWatcher!.start();
     }
   }
 
@@ -177,12 +202,40 @@ class NoteRepositoryImpl extends NoteRepository {
         }
       }
 
-      // 3. Fallback: if file exists, use its content; if note.content had legacy text, keep it;
-      // if file was missing, reset note.content to empty string.
+      // 3. Fallback: Auto-heal by searching directory for embedded tag <!-- mechanix:id=id -->
+      if (markdown == null) {
+        final matchingFile = await _findNoteFileByIdTag(note.id);
+        if (matchingFile != null) {
+          markdown = matchingFile.content;
+          note.fileName = matchingFile.fileName;
+          // Update title from the file if available
+          final cleanContent = NoteTagHelper.stripTag(markdown);
+          final lines = cleanContent
+              .split('\n')
+              .map((l) => l.trim())
+              .where((l) => l.isNotEmpty)
+              .toList();
+          if (lines.isNotEmpty) {
+            final firstLineTitle = lines.first
+                .replaceAll(RegExp(r'^#+\s*'), '')
+                .trim();
+            if (firstLineTitle.isNotEmpty) {
+              note.title = firstLineTitle;
+            }
+          }
+          box.put(note);
+          AppLogger.i(
+            'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
+          );
+        }
+      }
+
+      // 4. Return note with clean (stripped) content for editor and UI
       if (markdown != null) {
-        note.content = markdown;
-      } else if (note.fileName != null) {
+        note.content = NoteTagHelper.stripTag(markdown);
+      } else {
         note.content = '';
+        note.isFileMissing = true;
       }
 
       AppLogger.i('NoteRepository: getNoteById($id) → found');
@@ -191,6 +244,35 @@ class NoteRepositoryImpl extends NoteRepository {
       AppLogger.e('NoteRepository: getNoteById failed: $e');
       return null;
     }
+  }
+
+  /// Scans the notes directory for a .md file containing an embedded tag matching [noteId].
+  Future<({String fileName, String content})?> _findNoteFileByIdTag(
+    String noteId,
+  ) async {
+    try {
+      final dir = _fileStorage.directory;
+      if (!await dir.exists()) return null;
+
+      final entities = await dir.list().toList();
+      for (final entity in entities) {
+        if (entity is File && entity.path.endsWith('.md')) {
+          final fileName = entity.uri.pathSegments.last;
+          if (fileName.startsWith('..tmp_')) continue;
+
+          final content = await entity.readAsString();
+          final extractedId = NoteTagHelper.extractId(content);
+          if (extractedId == noteId) {
+            return (fileName: fileName, content: content);
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.e(
+        'NoteRepository: _findNoteFileByIdTag failed for $noteId: $e',
+      );
+    }
+    return null;
   }
 
   @override
@@ -235,10 +317,11 @@ class NoteRepositoryImpl extends NoteRepository {
 
       final currentFileName = existing?.fileName;
 
-      final rawMarkdown = note.content;
+      final cleanMarkdown = NoteTagHelper.stripTag(note.content);
+      final taggedMarkdown = NoteTagHelper.appendTag(cleanMarkdown, note.id);
       final savedFileName = await _fileStorage.writeNoteContent(
         title: note.title,
-        markdown: rawMarkdown,
+        markdown: taggedMarkdown,
         currentFileName: currentFileName,
       );
 
@@ -247,8 +330,8 @@ class NoteRepositoryImpl extends NoteRepository {
       note.content = '';
       box.put(note);
 
-      // Restore full markdown in in-memory note instance
-      note.content = rawMarkdown;
+      // Restore clean markdown in in-memory note instance
+      note.content = cleanMarkdown;
 
       await _indexingService.upsertNote(note.id, note.title, note.plainText);
       AppLogger.i(
@@ -324,5 +407,185 @@ class NoteRepositoryImpl extends NoteRepository {
       AppLogger.e('NoteRepository: togglePinNote failed: $e');
       return false;
     }
+  }
+
+  @override
+  Future<DateTime?> getNoteFileLastModified(String id) async {
+    try {
+      await ensureStoreConnected();
+      final query = box.query(NoteModel_.id.equals(id)).build();
+      final note = query.findFirst();
+      query.close();
+      if (note == null) return null;
+
+      final fileToRead = note.fileName;
+      if (fileToRead != null && fileToRead.isNotEmpty) {
+        final lastModified = await _fileStorage.getFileLastModified(fileToRead);
+        if (lastModified != null) return lastModified;
+      }
+
+      // Fallback: check by title
+      final titleFileName =
+          '${NoteFileStorage.sanitizeFileName(note.title)}.md';
+      return await _fileStorage.getFileLastModified(titleFileName);
+    } catch (e) {
+      AppLogger.e('NoteRepository: getNoteFileLastModified failed for $id: $e');
+      return null;
+    }
+  }
+
+  @override
+  Stream<void> get onDirectoryChanged => _directoryChangedController.stream;
+
+  @override
+  Future<void> reconcileWithDisk() async {
+    try {
+      await ensureStoreConnected();
+      final dir = _fileStorage.directory;
+      if (!await dir.exists()) return;
+
+      final entities = await dir.list().toList();
+      final diskMdFiles = <File>[];
+      for (final entity in entities) {
+        if (entity is File && entity.path.endsWith('.md')) {
+          final baseName = p.basename(entity.path);
+          if (!baseName.startsWith('..tmp_')) {
+            diskMdFiles.add(entity);
+          }
+        }
+      }
+
+      final existingNotes = box.getAll();
+      final matchedNoteIds = <String>{};
+
+      for (final file in diskMdFiles) {
+        final fileName = p.basename(file.path);
+        final content = await file.readAsString();
+        final tagId = NoteTagHelper.extractId(content);
+
+        final cleanContent = NoteTagHelper.stripTag(content);
+        final lines = cleanContent
+            .split('\n')
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .toList();
+        final firstLineTitle = lines.isNotEmpty
+            ? lines.first.replaceAll(RegExp(r'^#+\s*'), '').trim()
+            : p.withoutExtension(fileName);
+        final plainText = markdownToPlainText(cleanContent).trim();
+        final previewText = lines.length > 1
+            ? lines.skip(1).join(' ')
+            : plainText;
+        final truncatedPreview =
+            previewText.length > Constants.notePreviewTextMaxLength
+                ? previewText.substring(0, Constants.notePreviewTextMaxLength)
+                : previewText;
+        final lastModified = await file.lastModified();
+
+        if (tagId != null) {
+          matchedNoteIds.add(tagId);
+          final query = box.query(NoteModel_.id.equals(tagId)).build();
+          final note = query.findFirst();
+          query.close();
+
+          if (note != null) {
+            // Check if anything changed on disk compared to ObjectBox
+            if (note.fileName != fileName ||
+                note.content != cleanContent ||
+                note.title != firstLineTitle) {
+              note.fileName = fileName;
+              note.title = firstLineTitle;
+              note.content = cleanContent;
+              note.plainText = plainText;
+              note.previewText = truncatedPreview;
+              note.updatedAt = lastModified;
+              box.put(note);
+              await _indexingService.upsertNote(
+                note.id,
+                note.title,
+                note.plainText,
+              );
+              AppLogger.i(
+                'NoteRepository: Updated note from disk $tagId ($fileName)',
+              );
+            }
+          } else {
+            // Tag exists on file, but note not in DB -> adopt it!
+            final newNote = NoteModel(
+              id: tagId,
+              title: firstLineTitle,
+              content: cleanContent,
+              plainText: plainText,
+              previewText: truncatedPreview,
+              height: estimateNoteHeight(plainText),
+              createdAt: lastModified,
+              updatedAt: lastModified,
+              fileName: fileName,
+            );
+            box.put(newNote);
+            await _indexingService.upsertNote(
+              newNote.id,
+              newNote.title,
+              newNote.plainText,
+            );
+            AppLogger.i(
+              'NoteRepository: Adopted external tagged note $tagId ($fileName)',
+            );
+          }
+        } else {
+          // File has no mechanix tag: adopt it and append tag!
+          final newId = const Uuid().v4();
+          matchedNoteIds.add(newId);
+
+          // Append tag to the file
+          final taggedContent = NoteTagHelper.appendTag(cleanContent, newId);
+          _fileStorage.markInternalWrite(fileName);
+          await file.writeAsString(taggedContent, flush: true);
+
+          final newNote = NoteModel(
+            id: newId,
+            title: firstLineTitle,
+            content: cleanContent,
+            plainText: plainText,
+            previewText: truncatedPreview,
+            height: estimateNoteHeight(plainText),
+            createdAt: lastModified,
+            updatedAt: lastModified,
+            fileName: fileName,
+          );
+          box.put(newNote);
+          await _indexingService.upsertNote(
+            newNote.id,
+            newNote.title,
+            newNote.plainText,
+          );
+          AppLogger.i(
+            'NoteRepository: Adopted new external note $newId ($fileName)',
+          );
+        }
+      }
+
+      // Check for deleted notes in ObjectBox whose files are no longer on disk
+      for (final note in existingNotes) {
+        if (!matchedNoteIds.contains(note.id)) {
+          final fileExists = note.fileName != null &&
+              await _fileStorage.noteFileExists(note.fileName!);
+          if (!fileExists) {
+            box.remove(note.obxId);
+            await _indexingService.deleteNotesBatch([note.id]);
+            AppLogger.i(
+              'NoteRepository: Removed deleted external note ${note.id} (${note.title})',
+            );
+          }
+        }
+      }
+    } catch (e) {
+      AppLogger.e('NoteRepository: reconcileWithDisk failed: $e');
+    }
+  }
+
+  void dispose() {
+    _directoryWatcher?.dispose();
+    _directoryChangedController.close();
   }
 }

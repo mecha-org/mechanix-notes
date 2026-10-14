@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -1492,5 +1493,23 @@ void main() {
         verify(() => mockRepo.togglePinNote('p1')).called(1);
       },
     );
+  });
+
+  group('Directory Watcher / onDirectoryChanged', () {
+    test('reloads notes when onDirectoryChanged fires', () async {
+      final controller = StreamController<void>.broadcast();
+      when(() => mockRepo.onDirectoryChanged).thenAnswer((_) => controller.stream);
+      when(() => mockRepo.getNotes(any(), any())).thenAnswer((_) async => []);
+
+      final bloc = NotesBloc(noteRepository: mockRepo);
+      await pumpEventQueue();
+
+      controller.add(null);
+      await pumpEventQueue();
+
+      verify(() => mockRepo.getNotes(0, any())).called(greaterThanOrEqualTo(1));
+      await controller.close();
+      await bloc.close();
+    });
   });
 }

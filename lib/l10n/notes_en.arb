@@ -82,5 +82,7 @@
   "moveToTrashPrompt": "Do you want to move this note to trash?",
   "trash": "Trash",
   "searchNote": "Search note",
-  "failedToPerformSearch": "Failed to perform search"
+  "failedToPerformSearch": "Failed to perform search",
+  "noteModifiedExternally": "Note modified externally",
+  "reload": "Reload"
 }

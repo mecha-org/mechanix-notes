@@ -11,7 +11,7 @@ final class EditorInitial extends EditorState {
   const EditorInitial();
 }
 
-final class EditorLoaded extends EditorState {
+base class EditorLoaded extends EditorState {
   final String noteId;
   final String title;
   final String markdownContent;
@@ -20,6 +20,8 @@ final class EditorLoaded extends EditorState {
   final bool isNewNote;
   final bool isDirty;
   final bool isPinned;
+  final bool isFileMissing;
+  final DateTime? fileLastModified;
 
   const EditorLoaded({
     required this.noteId,
@@ -30,6 +32,8 @@ final class EditorLoaded extends EditorState {
     this.isNewNote = false,
     this.isDirty = false,
     this.isPinned = false,
+    this.isFileMissing = false,
+    this.fileLastModified,
   });
 
   EditorLoaded copyWith({
@@ -41,6 +45,8 @@ final class EditorLoaded extends EditorState {
     bool? isNewNote,
     bool? isDirty,
     bool? isPinned,
+    bool? isFileMissing,
+    DateTime? fileLastModified,
   }) {
     return EditorLoaded(
       noteId: noteId ?? this.noteId,
@@ -51,6 +57,8 @@ final class EditorLoaded extends EditorState {
       isNewNote: isNewNote ?? this.isNewNote,
       isDirty: isDirty ?? this.isDirty,
       isPinned: isPinned ?? this.isPinned,
+      isFileMissing: isFileMissing ?? this.isFileMissing,
+      fileLastModified: fileLastModified ?? this.fileLastModified,
     );
   }
 
@@ -64,7 +72,30 @@ final class EditorLoaded extends EditorState {
     isNewNote,
     isDirty,
     isPinned,
+    isFileMissing,
+    fileLastModified,
   ];
+}
+
+final class EditorExternalModificationDetected extends EditorLoaded {
+  final String externalContent;
+
+  const EditorExternalModificationDetected({
+    required super.noteId,
+    required super.title,
+    super.markdownContent,
+    super.isContentLoading,
+    super.isSaving,
+    super.isNewNote,
+    super.isDirty,
+    super.isPinned,
+    super.isFileMissing,
+    super.fileLastModified,
+    required this.externalContent,
+  });
+
+  @override
+  List<Object?> get props => [...super.props, externalContent];
 }
 
 final class EditorFailure extends EditorState {
