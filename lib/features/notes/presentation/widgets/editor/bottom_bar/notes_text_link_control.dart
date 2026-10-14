@@ -202,7 +202,6 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
               size: widget.size,
-              // icon: const ImageIcon(AssetImage(NotesIcon.strikethroughIcon)),
               icon: Image.asset(
                 NotesIcon.strikethroughIcon,
                 height: 16.5,
@@ -302,11 +301,6 @@ class _ModeToggleGroup extends StatelessWidget {
             foregroundColor: context.colorScheme.onSurface,
             backgroundColor: context.colorScheme.surfaceContainerHigh,
             icon: const Icon(Icons.attach_file_rounded, size: 15),
-            // icon: Image.asset(
-            //   NotesIcon.linkModeIcon,
-            //   height: 12.5,
-            //   width: 12.5,
-            // ),
             borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)

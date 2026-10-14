@@ -1,6 +1,6 @@
 class NoteTagHelper {
   static final RegExp _tagRegex = RegExp(
-    r'\n*<!--\s*mechanix:id=([^\s>]+)\s*-->\s*$',
+    r'(?:\r?\n)*<!--\s*mechanix:id=([^\s>]+)\s*-->',
   );
 
   /// Appends the hidden identity tag to the end of the markdown content.
@@ -21,7 +21,7 @@ class NoteTagHelper {
 
   /// Extracts the embedded note ID from the markdown content if present.
   static String? extractId(String markdown) {
-    final match = _tagRegex.firstMatch(markdown.trimRight());
+    final match = _tagRegex.firstMatch(markdown);
     return match?.group(1);
   }
 }

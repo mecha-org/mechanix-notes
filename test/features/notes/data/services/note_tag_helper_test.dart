@@ -55,5 +55,69 @@ void main() {
       expect(plain.contains('<!--'), isFalse);
       expect(plain.trim(), equals('Title\nBody text'));
     });
+
+    group('Tag Resiliency Tests', () {
+      test(
+        'extractId and stripTag succeed when external markdown editors append trailing text',
+        () {
+          const content =
+              '# Project Overview\n- Requirements\n\n<!-- mechanix:id=$testId -->\n\nAppended by external editor\n';
+          expect(NoteTagHelper.extractId(content), equals(testId));
+
+          final stripped = NoteTagHelper.stripTag(content);
+          expect(
+            stripped,
+            equals('# Project Overview\n- Requirements\n\nAppended by external editor'),
+          );
+        },
+      );
+
+      test(
+        'extractId and stripTag succeed when file contains YAML frontmatter',
+        () {
+          const content =
+              '---\ntitle: Project\ncreated_by: Obsidian\ntags: [review, notes]\n---\n# Project Overview\nSome body\n\n<!-- mechanix:id=$testId -->\n';
+          expect(NoteTagHelper.extractId(content), equals(testId));
+
+          final stripped = NoteTagHelper.stripTag(content);
+          expect(
+            stripped,
+            equals(
+              '---\ntitle: Project\ncreated_by: Obsidian\ntags: [review, notes]\n---\n# Project Overview\nSome body',
+            ),
+          );
+        },
+      );
+
+      test(
+        'extractId and stripTag succeed with both frontmatter and trailing content',
+        () {
+          const content =
+              '---\ntitle: Note\n---\n# Body\n\n<!-- mechanix:id=$testId -->\n\nTrailing notes from external tool';
+          expect(NoteTagHelper.extractId(content), equals(testId));
+
+          final stripped = NoteTagHelper.stripTag(content);
+          expect(
+            stripped,
+            equals('---\ntitle: Note\n---\n# Body\n\nTrailing notes from external tool'),
+          );
+        },
+      );
+
+      test(
+        'appendTag replaces tag idempotently even if old tag is in the middle with trailing text',
+        () {
+          const content =
+              '# Heading\n\n<!-- mechanix:id=old-id-123 -->\n\nExtra paragraph';
+          final tagged = NoteTagHelper.appendTag(content, testId);
+
+          expect(
+            tagged,
+            equals('# Heading\n\nExtra paragraph\n\n<!-- mechanix:id=$testId -->\n'),
+          );
+          expect(NoteTagHelper.extractId(tagged), equals(testId));
+        },
+      );
+    });
   });
 }
