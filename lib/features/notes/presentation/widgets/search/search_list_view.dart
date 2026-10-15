@@ -64,7 +64,7 @@ class _SearchListViewState extends State<SearchListView> {
             child: ListView.builder(
               controller: _scrollController,
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(top: 8.0, bottom: 24.0),
+              padding: const EdgeInsets.only(top: 24),
               itemCount: results.length,
               itemBuilder: (context, index) {
                 final note = results[index];
@@ -135,7 +135,7 @@ class SearchResultTile extends StatelessWidget {
       trailingText: formattedDate,
       trailingTextColor: context.colorScheme.onSurfaceVariant,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: 24.0,
+        horizontal: 32.0,
         vertical: 8.0,
       ),
       onTap: onResultSelected != null ? () => onResultSelected!(note) : null,

@@ -11,11 +11,14 @@ final class EditorInitial extends EditorState {
   const EditorInitial();
 }
 
-
 final class EditorLoaded extends EditorState {
   final String noteId;
   final String title;
-  final Document? quillDocument;
+  final String markdownContent;
+  final String lastSavedContent;
+  final String lastSavedTitle;
+  final bool lastSavedIsPinned;
+  final DateTime? createdAt;
   final bool isContentLoading;
   final bool isSaving;
   final bool isNewNote;
@@ -25,7 +28,11 @@ final class EditorLoaded extends EditorState {
   const EditorLoaded({
     required this.noteId,
     required this.title,
-    this.quillDocument,
+    this.markdownContent = '',
+    this.lastSavedContent = '',
+    this.lastSavedTitle = '',
+    this.lastSavedIsPinned = false,
+    this.createdAt,
     this.isContentLoading = false,
     this.isSaving = false,
     this.isNewNote = false,
@@ -36,7 +43,11 @@ final class EditorLoaded extends EditorState {
   EditorLoaded copyWith({
     String? noteId,
     String? title,
-    Document? quillDocument,
+    String? markdownContent,
+    String? lastSavedContent,
+    String? lastSavedTitle,
+    bool? lastSavedIsPinned,
+    DateTime? createdAt,
     bool? isContentLoading,
     bool? isSaving,
     bool? isNewNote,
@@ -46,7 +57,11 @@ final class EditorLoaded extends EditorState {
     return EditorLoaded(
       noteId: noteId ?? this.noteId,
       title: title ?? this.title,
-      quillDocument: quillDocument ?? this.quillDocument,
+      markdownContent: markdownContent ?? this.markdownContent,
+      lastSavedContent: lastSavedContent ?? this.lastSavedContent,
+      lastSavedTitle: lastSavedTitle ?? this.lastSavedTitle,
+      lastSavedIsPinned: lastSavedIsPinned ?? this.lastSavedIsPinned,
+      createdAt: createdAt ?? this.createdAt,
       isContentLoading: isContentLoading ?? this.isContentLoading,
       isSaving: isSaving ?? this.isSaving,
       isNewNote: isNewNote ?? this.isNewNote,
@@ -59,7 +74,11 @@ final class EditorLoaded extends EditorState {
   List<Object?> get props => [
     noteId,
     title,
-    quillDocument,
+    markdownContent,
+    lastSavedContent,
+    lastSavedTitle,
+    lastSavedIsPinned,
+    createdAt,
     isContentLoading,
     isSaving,
     isNewNote,

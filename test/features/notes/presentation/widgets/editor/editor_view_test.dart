@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_quill/flutter_quill.dart' hide EditorState;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
@@ -20,9 +19,7 @@ void main() {
   setUpAll(() {
     registerFallbackValue(RefreshNote(noteId: 'fallback'));
     registerFallbackValue(DeleteNotes(noteIds: const []));
-    registerFallbackValue(
-      EditorSaveRequested(content: const [], plainText: ''),
-    );
+    registerFallbackValue(EditorSaveRequested(content: '', plainText: ''));
   });
 
   group('EditorView Back Navigation & PopScope Tests', () {
@@ -46,14 +43,12 @@ void main() {
     });
 
     Widget buildTestWidget({required NavigatorObserver observer}) {
-      final doc = Document()..insert(0, 'Hello world\n');
-
       when(() => mockEditorBloc.state).thenReturn(
-        EditorLoaded(
+        const EditorLoaded(
           noteId: 'test-note-1',
           title: 'Hello',
+          markdownContent: 'Hello world\n',
           isNewNote: false,
-          quillDocument: doc,
           isContentLoading: false,
         ),
       );
@@ -193,9 +188,9 @@ void main() {
           () => mockEditorBloc.add(
             any(
               that: isA<EditorSaveRequested>().having(
-                (e) => e.plainText,
-                'plainText',
-                'Hello world',
+                (e) => e.content,
+                'content',
+                'Hello world\n',
               ),
             ),
           ),

@@ -1492,5 +1492,33 @@ void main() {
         verify(() => mockRepo.togglePinNote('p1')).called(1);
       },
     );
+
+    blocTest<NotesBloc, NotesState>(
+      'pinned note appears in both Pinned section and its chronological time section',
+      build: () {
+        when(
+          () => mockRepo.getNotes(any(), any()),
+        ).thenAnswer((_) async => [pinnedNote('p1'), recentNote('r1')]);
+        return NotesBloc(noteRepository: mockRepo);
+      },
+      skip: 1,
+      act: (bloc) => bloc.add(LoadNotes()),
+      verify: (bloc) {
+        final grouped = bloc.state.groupedNotes;
+        expect(extractCategories(grouped).first, TimeCategory.pinned);
+
+        final p1Instances = grouped
+            .whereType<NoteMetaData>()
+            .where((n) => n.id == 'p1')
+            .toList();
+        expect(p1Instances.length, equals(2));
+
+        final r1Instances = grouped
+            .whereType<NoteMetaData>()
+            .where((n) => n.id == 'r1')
+            .toList();
+        expect(r1Instances.length, equals(1));
+      },
+    );
   });
 }

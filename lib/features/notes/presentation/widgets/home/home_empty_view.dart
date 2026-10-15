@@ -7,8 +7,8 @@ class HomeEmptyView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 24),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 11),
       child: Text(
         AppLocalizations.of(context)!.writeANote,
         style: context.textTheme.titleLarge?.copyWith(

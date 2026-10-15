@@ -138,12 +138,11 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
     VoidCallback? onPressed(VoidCallback? callback) =>
         widget.enabled ? callback : null;
 
-    return Container(
-      height: 56,
-      padding: const EdgeInsets.all(4),
+    return SizedBox(
+      height: 48,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 6,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _ModeToggleGroup(
             key: const Key('notes_mode_toggle_group'),
@@ -156,48 +155,48 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
             _ContextualButton(
               buttonKey: const Key('notes_text_contextual_button'),
               isSelected: widget.isTextContextualActive,
+              selectedForegroundColor: context.colorScheme.onSecondaryContainer,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h1Icon), size: 16),
+              icon: Image.asset(NotesIcon.h1Icon, height: 15, width: 20),
               onPressed: onPressed(widget.onTextContextualPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_h2_button'),
               isSelected: widget.isH2Active,
+              selectedForegroundColor: context.colorScheme.onSecondaryContainer,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.h2Icon), size: 16),
+              icon: Image.asset(NotesIcon.h2Icon, height: 13, width: 20),
               onPressed: onPressed(widget.onH2Pressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_body_button'),
               isSelected: widget.isBodyActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.textstyleIcon),
-                size: 16,
-              ),
+              icon: Image.asset(NotesIcon.textstyleIcon, height: 11, width: 13),
               onPressed: onPressed(widget.onBodyPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_bold_button'),
               isSelected: widget.isBoldActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.boldIcon), size: 16),
+              icon: Image.asset(NotesIcon.boldIcon, height: 16, width: 13),
               onPressed: onPressed(widget.onBoldPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_italic_button'),
               isSelected: widget.isItalicActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.italicIcon), size: 16),
+              icon: Image.asset(NotesIcon.italicIcon, height: 15, width: 13.5),
               onPressed: onPressed(widget.onItalicPressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_text_underline_button'),
               isSelected: widget.isUnderlineActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.underlineIcon),
-                size: 16,
+              icon: Image.asset(
+                NotesIcon.underlineIcon,
+                height: 17.25,
+                width: 13.5,
               ),
               onPressed: onPressed(widget.onUnderlinePressed),
             ),
@@ -205,9 +204,10 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.strikethroughIcon),
-                size: 16,
+              icon: Image.asset(
+                NotesIcon.strikethroughIcon,
+                height: 16.5,
+                width: 18,
               ),
               onPressed: onPressed(widget.onStrikethroughPressed),
             ),
@@ -229,17 +229,14 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               buttonKey: const Key('notes_link_code_button'),
               isSelected: widget.isCodeActive,
               size: widget.size,
-              icon: const ImageIcon(
-                AssetImage(NotesIcon.codeBlockIcon),
-                size: 16,
-              ),
+              icon: const ImageIcon(AssetImage(NotesIcon.codeBlockIcon)),
               onPressed: onPressed(widget.onCodePressed),
             ),
             _ContextualButton(
               buttonKey: const Key('notes_link_checklist_button'),
               isSelected: widget.isChecklistActive,
               size: widget.size,
-              icon: const ImageIcon(AssetImage(NotesIcon.todoIcon), size: 16),
+              icon: const ImageIcon(AssetImage(NotesIcon.todoIcon)),
               onPressed: onPressed(widget.onChecklistPressed),
             ),
             // TODO: This feature is not implemented
@@ -273,25 +270,26 @@ class _ModeToggleGroup extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      decoration: BoxDecoration(
-        color: context.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.5,
-        ),
-      ),
-      padding: EdgeInsets.zero,
+      color: context.colorScheme.surfaceContainerHigh,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        spacing: 6,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        spacing: 0,
         children: [
           // Text mode toggle button
           MechanixIconButton.filled(
             key: const Key('notes_text_toggle'),
             isSelected: isTextMode,
             type: IconButtonType.square,
-            size: size,
-            icon: const ImageIcon(AssetImage(NotesIcon.textModeIcon), size: 13),
+            size: IconButtonSize.xSmall,
+            icon: Image.asset(
+              NotesIcon.textModeIcon,
+              height: 12.5,
+              width: 12.5,
+            ),
             foregroundColor: context.colorScheme.onSurface,
+            backgroundColor: context.colorScheme.surfaceContainerHigh,
+            borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.text)
                 : null,
@@ -301,9 +299,11 @@ class _ModeToggleGroup extends StatelessWidget {
             key: const Key('notes_link_toggle'),
             isSelected: !isTextMode,
             type: IconButtonType.square,
-            size: size,
+            size: IconButtonSize.xSmall,
             foregroundColor: context.colorScheme.onSurface,
-            icon: const Icon(Icons.attach_file_rounded, size: 18),
+            backgroundColor: context.colorScheme.surfaceContainerHigh,
+            icon: const Icon(Icons.attach_file_rounded, size: 15),
+            borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)
                 : null,
@@ -321,6 +321,7 @@ class _ContextualButton extends StatelessWidget {
     required this.onPressed,
     this.isSelected = false,
     required this.size,
+    this.selectedForegroundColor,
   });
 
   final Key buttonKey;
@@ -328,20 +329,35 @@ class _ContextualButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool isSelected;
   final IconButtonSize size;
+  final Color? selectedForegroundColor;
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.colorScheme;
+    final effectiveSelectedFg = selectedForegroundColor ?? scheme.onSurface;
+
+    Widget effectiveIcon = icon;
+    if (icon is Image) {
+      final img = icon as Image;
+      effectiveIcon = Image(
+        image: img.image,
+        width: img.width,
+        height: img.height,
+        color: isSelected ? effectiveSelectedFg : scheme.onSurfaceVariant,
+        fit: img.fit,
+      );
+    }
+
     return MechanixIconButton.standard(
       key: buttonKey,
       isSelected: isSelected,
       type: IconButtonType.square,
-      size: size,
-      icon: icon,
+      size: IconButtonSize.small,
+      icon: effectiveIcon,
       backgroundColor: Colors.transparent,
       foregroundColor: scheme.onSurfaceVariant,
       selectedBackgroundColor: scheme.onSurfaceVariant.withValues(alpha: 0.08),
-      selectedForegroundColor: scheme.onSurface,
+      selectedForegroundColor: effectiveSelectedFg,
       onPressed: onPressed,
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_notes/core/utils/app_routes.dart';
+import 'package:mechanix_notes/core/utils/icons.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_notes_view.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
@@ -16,7 +17,7 @@ class HomeScreen extends StatelessWidget {
         backgroundColor: context.colorScheme.surfaceContainerLowest,
         actions: [
           MechanixIconButton.standard(
-            icon: const Icon(Icons.search, size: 24),
+            icon: const ImageIcon(AssetImage(NotesIcon.searchIcon), size: 24),
             onPressed: () {
               Navigator.pushNamed(context, AppRoutes.search);
             },

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_quill/flutter_quill.dart'
-    show QuillController, Document;
+import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
@@ -9,7 +8,7 @@ import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_bottom_bar.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_content.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_top_bar.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/quill_controller_provider.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/markdown_controller_provider.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
@@ -21,7 +20,7 @@ class EditorView extends StatefulWidget {
 }
 
 class _EditorViewState extends State<EditorView> {
-  QuillController? _quillController;
+  MarkdownEditorController? _controller;
   late final FocusNode _focusNode;
   bool _canPop = false;
   bool _isSavingAndExiting = false;
@@ -31,42 +30,33 @@ class _EditorViewState extends State<EditorView> {
     super.initState();
     _focusNode = FocusNode();
     final currentState = context.read<EditorBloc>().state;
-    if (currentState is EditorLoaded &&
-        !currentState.isContentLoading &&
-        currentState.quillDocument != null) {
-      _quillController = QuillController(
-        document: currentState.quillDocument!,
-        selection: const TextSelection.collapsed(offset: 0),
+    if (currentState is EditorLoaded && !currentState.isContentLoading) {
+      _controller = MarkdownEditorController(
+        text: currentState.markdownContent,
       );
     }
   }
 
   @override
   void dispose() {
-    _quillController?.dispose();
+    _controller?.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
-  void _initQuillController(Document document) {
+  void _initController(String markdown) {
     setState(() {
-      _quillController?.dispose();
-      _quillController = QuillController(
-        document: document,
-        selection: const TextSelection.collapsed(offset: 0),
-      );
+      _controller?.dispose();
+      _controller = MarkdownEditorController(text: markdown);
     });
   }
 
   void _saveAndExit() {
     if (_isSavingAndExiting) return;
     _isSavingAndExiting = true;
-    if (_quillController != null) {
-      final delta = _quillController!.document.toDelta().toJson();
-      final plainText = _quillController!.document.toPlainText().trim();
-      context.read<EditorBloc>().add(
-        EditorSaveRequested(content: delta, plainText: plainText),
-      );
+    if (_controller != null) {
+      final markdown = _controller!.text;
+      context.read<EditorBloc>().add(EditorSaveRequested(content: markdown));
     } else {
       _canPop = true;
       Navigator.of(context).pop();
@@ -80,8 +70,8 @@ class _EditorViewState extends State<EditorView> {
       listener: (context, state) {
         if (state is EditorLoaded &&
             !state.isContentLoading &&
-            _quillController == null) {
-          _initQuillController(state.quillDocument!);
+            _controller == null) {
+          _initController(state.markdownContent);
         }
         if (state is EditorDiscarded) {
           if (state.noteId != null) {
@@ -129,7 +119,7 @@ class _EditorViewState extends State<EditorView> {
             ).colorScheme.surfaceContainerLowest,
 
             appBar: const EditorTopBar(),
-            body: _quillController == null
+            body: _controller == null
                 ? const Center(child: CircularProgressIndicator())
                 : const Stack(
                     children: [
@@ -159,9 +149,9 @@ class _EditorViewState extends State<EditorView> {
             child: shell,
           );
 
-          if (_quillController != null) {
-            return QuillControllerProvider(
-              controller: _quillController!,
+          if (_controller != null) {
+            return MarkdownControllerProvider(
+              controller: _controller!,
               focusNode: _focusNode,
               child: wrappedShell,
             );

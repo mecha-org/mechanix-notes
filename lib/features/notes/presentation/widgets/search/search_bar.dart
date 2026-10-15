@@ -60,8 +60,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Whether the search field should autofocus when entering active mode.
   final bool autofocus;
 
-  static final Size _preferredSize =
-      const MechanixAppBar.small().preferredSize;
+  static final Size _preferredSize = const MechanixAppBar.small().preferredSize;
 
   @override
   Size get preferredSize => _preferredSize;
@@ -76,7 +75,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     if (!isSearchActive) {
       final searchAction = MechanixIconButton.standard(
-        icon: const ImageIcon(AssetImage(NotesIcon.searchIcon)),
+        icon: Image.asset(NotesIcon.searchIcon, width: 20, height: 20),
         onPressed: () {
           focusNode.requestFocus();
           onSearchIconTap?.call();
@@ -105,10 +104,11 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
-                Icon(
-                  Icons.search,
-                  size: 20,
+                Image.asset(
+                  NotesIcon.searchIcon,
                   color: colorScheme.onSurfaceVariant,
+                  width: 19.5,
+                  height: 19.5,
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -121,7 +121,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     onChanged: onQueryChanged,
                     onSubmitted: onSubmitted,
                     cursorColor: colorScheme.primary,
-                    style: textTheme.bodyLarge?.copyWith(
+                    style: textTheme.headlineSmall?.copyWith(
                       color: colorScheme.onSurface,
                     ),
                     decoration: InputDecoration(
@@ -134,14 +134,19 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                       contentPadding: EdgeInsets.zero,
                       fillColor: Colors.transparent,
                       hintText: effectiveSearchHint,
-                      hintStyle: textTheme.bodyLarge?.copyWith(
+                      hintStyle: textTheme.headlineSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
                 ),
                 MechanixIconButton.standard(
-                  icon: const ImageIcon(AssetImage(NotesIcon.closeIcon)),
+                  icon: Image.asset(
+                    NotesIcon.closeIcon,
+                    color: colorScheme.onSurface,
+                    width: 15,
+                    height: 15,
+                  ),
                   onPressed: () {
                     if (controller.text.isNotEmpty) {
                       controller.clear();

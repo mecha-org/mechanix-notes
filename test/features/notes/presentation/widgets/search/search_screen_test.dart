@@ -15,7 +15,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:widgets/widgets.dart';
 
 class MockNoteRepository extends Mock implements NoteRepository {}
-class MockSearchBloc extends MockBloc<SearchEvent, SearchState> implements SearchBloc {}
+
+class MockSearchBloc extends MockBloc<SearchEvent, SearchState>
+    implements SearchBloc {}
 
 void main() {
   late MockNoteRepository mockRepository;
@@ -67,62 +69,75 @@ void main() {
   }
 
   group('SearchScreen & SearchView Widget Tests', () {
-    testWidgets('renders search text field initially focused and in clean state', (tester) async {
-      when(() => mockRepository.searchNotes(any())).thenAnswer((_) async => []);
+    testWidgets(
+      'renders search text field initially focused and in clean state',
+      (tester) async {
+        when(
+          () => mockRepository.searchNotes(any()),
+        ).thenAnswer((_) async => []);
 
-      await tester.pumpWidget(buildAppWithRepository());
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(buildAppWithRepository());
+        await tester.pumpAndSettle();
 
-      expect(find.byType(TextField), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
-      expect(find.byType(SearchMessageView), findsNothing);
-    });
+        expect(find.byType(TextField), findsOneWidget);
+        expect(find.byType(CircularProgressIndicator), findsNothing);
+        expect(find.byType(SearchMessageView), findsNothing);
+      },
+    );
 
-    testWidgets('typing search query dispatches search and shows loading and results', (tester) async {
-      final note = createNote(id: '1', title: 'Buy Groceries', preview: 'Milk, Eggs');
-      when(() => mockRepository.searchNotes('Groceries')).thenAnswer((_) async => [note]);
+    testWidgets(
+      'typing search query dispatches search and shows loading and results',
+      (tester) async {
+        final note = createNote(
+          id: '1',
+          title: 'Buy Groceries',
+          preview: 'Milk, Eggs',
+        );
+        when(
+          () => mockRepository.searchNotes('Groceries'),
+        ).thenAnswer((_) async => [note]);
 
-      await tester.pumpWidget(buildAppWithRepository());
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(buildAppWithRepository());
+        await tester.pumpAndSettle();
 
-      final textField = find.byType(TextField);
-      await tester.enterText(textField, 'Groceries');
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'Groceries');
 
-      // Wait for debounce (250ms)
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.pumpAndSettle();
+        // Wait for debounce (250ms)
+        await tester.pump(const Duration(milliseconds: 300));
+        await tester.pumpAndSettle();
 
-      verify(() => mockRepository.searchNotes('Groceries')).called(1);
-      expect(find.text('Buy Groceries'), findsOneWidget);
-    });
+        verify(() => mockRepository.searchNotes('Groceries')).called(1);
+        expect(find.text('Buy Groceries'), findsOneWidget);
+      },
+    );
 
-    testWidgets('shows loading spinner when status is loading with empty results', (tester) async {
-      when(() => mockSearchBloc.state).thenReturn(
-        const SearchState(status: SearchStatus.loading, results: []),
-      );
+    testWidgets(
+      'shows loading spinner when status is loading with empty results',
+      (tester) async {
+        when(() => mockSearchBloc.state).thenReturn(
+          const SearchState(status: SearchStatus.loading, results: []),
+        );
 
-      await tester.pumpWidget(
-        buildAppWithBloc(child: const SearchView()),
-      );
-      // Don't pumpAndSettle as circular progress indicator animates continuously
-      await tester.pump();
+        await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
+        // Don't pumpAndSettle as circular progress indicator animates continuously
+        await tester.pump();
 
-      // Enter a query so that SearchList does not show SizedBox.shrink
-      final textField = find.byType(TextField);
-      await tester.enterText(textField, 'test');
-      await tester.pump();
+        // Enter a query so that SearchList does not show SizedBox.shrink
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'test');
+        await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    });
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      },
+    );
 
     testWidgets('shows error message when status is failure', (tester) async {
       when(() => mockSearchBloc.state).thenReturn(
         const SearchState(status: SearchStatus.failure, results: []),
       );
 
-      await tester.pumpWidget(
-        buildAppWithBloc(child: const SearchView()),
-      );
+      await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
       await tester.pump();
 
       final textField = find.byType(TextField);
@@ -133,14 +148,14 @@ void main() {
       expect(find.text('Failed to perform search'), findsOneWidget);
     });
 
-    testWidgets('shows empty results view when query has no matches', (tester) async {
+    testWidgets('shows empty results view when query has no matches', (
+      tester,
+    ) async {
       when(() => mockSearchBloc.state).thenReturn(
         const SearchState(status: SearchStatus.success, results: []),
       );
 
-      await tester.pumpWidget(
-        buildAppWithBloc(child: const SearchView()),
-      );
+      await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
       await tester.pump();
 
       final textField = find.byType(TextField);
@@ -148,18 +163,22 @@ void main() {
       await tester.pump();
 
       expect(find.byType(SearchMessageView), findsOneWidget);
-      expect(find.text('No notes found'), findsOneWidget);
+      expect(find.text('No note found'), findsOneWidget);
     });
 
-    testWidgets('renders results with TextSpan highlighting on matching text', (tester) async {
-      final note = createNote(id: '1', title: 'Flutter Testing', preview: 'Widget and unit');
-      when(() => mockSearchBloc.state).thenReturn(
-        SearchState(status: SearchStatus.success, results: [note]),
+    testWidgets('renders results with TextSpan highlighting on matching text', (
+      tester,
+    ) async {
+      final note = createNote(
+        id: '1',
+        title: 'Flutter Testing',
+        preview: 'Widget and unit',
       );
+      when(
+        () => mockSearchBloc.state,
+      ).thenReturn(SearchState(status: SearchStatus.success, results: [note]));
 
-      await tester.pumpWidget(
-        buildAppWithBloc(child: const SearchView()),
-      );
+      await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
       await tester.pump();
 
       // Set the query in the search bar so SearchView passes it to SearchList
@@ -171,7 +190,9 @@ void main() {
 
       // Verify Text.rich with TextSpan styling
       bool foundHighlightedSpan = false;
-      final richTextWidgets = tester.widgetList<RichText>(find.byType(RichText));
+      final richTextWidgets = tester.widgetList<RichText>(
+        find.byType(RichText),
+      );
 
       for (final richText in richTextWidgets) {
         richText.text.visitChildren((InlineSpan span) {
@@ -185,22 +206,30 @@ void main() {
         if (foundHighlightedSpan) break;
       }
 
-      expect(foundHighlightedSpan, isTrue, reason: 'Highlighted TextSpan for "Testing" not found');
+      expect(
+        foundHighlightedSpan,
+        isTrue,
+        reason: 'Highlighted TextSpan for "Testing" not found',
+      );
     });
 
-    testWidgets('tapping search result invokes onResultSelected callback', (tester) async {
-      final note = createNote(id: '1', title: 'Selectable Note', preview: 'Tap me');
-      when(() => mockSearchBloc.state).thenReturn(
-        SearchState(status: SearchStatus.success, results: [note]),
+    testWidgets('tapping search result invokes onResultSelected callback', (
+      tester,
+    ) async {
+      final note = createNote(
+        id: '1',
+        title: 'Selectable Note',
+        preview: 'Tap me',
       );
+      when(
+        () => mockSearchBloc.state,
+      ).thenReturn(SearchState(status: SearchStatus.success, results: [note]));
 
       NoteMetaData? selectedNote;
 
       await tester.pumpWidget(
         buildAppWithBloc(
-          child: SearchView(
-            onResultSelected: (n) => selectedNote = n,
-          ),
+          child: SearchView(onResultSelected: (n) => selectedNote = n),
         ),
       );
       await tester.pump();

@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
+import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/objectbox.g.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -42,8 +45,11 @@ class TestableNoteRepositoryImpl extends NoteRepositoryImpl {
   final Box<NoteModel> fakeBox;
   bool ensureStoreCalled = false;
 
-  TestableNoteRepositoryImpl(this.fakeBox, IndexingService indexingService)
-    : super(indexingService: indexingService);
+  TestableNoteRepositoryImpl(
+    this.fakeBox,
+    IndexingService indexingService, {
+    super.fileStorage,
+  }) : super(indexingService: indexingService);
 
   /// Override the getter so the implementation uses our fake box.
   @override
@@ -92,6 +98,8 @@ void main() {
   late MockQueryBuilder mockQueryBuilder;
   late MockQuery mockQuery;
   late MockIndexingService mockIndexingService;
+  late NoteFileStorage fileStorage;
+  late Directory tempDir;
   late TestableNoteRepositoryImpl repository;
 
   setUpAll(() {
@@ -117,11 +125,17 @@ void main() {
   });
 
   setUp(() {
+    tempDir = Directory.systemTemp.createTempSync('note_repo_impl_test_');
+    fileStorage = NoteFileStorage(notesDirectory: tempDir);
     mockBox = MockBox();
     mockQueryBuilder = MockQueryBuilder();
     mockQuery = MockQuery();
     mockIndexingService = MockIndexingService();
-    repository = TestableNoteRepositoryImpl(mockBox, mockIndexingService);
+    repository = TestableNoteRepositoryImpl(
+      mockBox,
+      mockIndexingService,
+      fileStorage: fileStorage,
+    );
 
     // Setup default indexing stubs
     when(() => mockIndexingService.initialize()).thenAnswer((_) async {});
@@ -156,6 +170,12 @@ void main() {
 
     when(() => mockQueryBuilder.build()).thenReturn(mockQuery);
     when(() => mockQuery.close()).thenAnswer((_) {});
+  });
+
+  tearDown(() {
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -334,6 +354,117 @@ void main() {
         );
       },
     );
+
+    test(
+      'upsertNote writes full markdown to .md file and stores filename in Box',
+      () async {
+        final note = _makeNote(id: 'save-test', title: 'File Test');
+        note.content = '# Custom Markdown\n\n- item 1\n- item 2';
+
+        when(() => mockQuery.findFirst()).thenReturn(null);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        await repository.upsertNote(note);
+
+        expect(note.fileName, 'File Test.md');
+        expect(await fileStorage.noteFileExists('File Test.md'), isTrue);
+        final savedMarkdown = await fileStorage.readNoteContent('File Test.md');
+        expect(
+          savedMarkdown,
+          '# Custom Markdown\n\n- item 1\n- item 2\n\n<!-- mechanix:id=save-test -->\n',
+        );
+        expect(note.content, '# Custom Markdown\n\n- item 1\n- item 2');
+      },
+    );
+
+    test(
+      'getNoteById reads full markdown from .md file using fileName and strips tag',
+      () async {
+        await fileStorage.writeNoteContent(
+          title: 'Open Test',
+          markdown: '# Loaded from file\n\n<!-- mechanix:id=open-test -->\n',
+        );
+
+        final noteInDb = _makeNote(id: 'open-test', title: 'Open Test');
+        noteInDb.fileName = 'Open Test.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+
+        final result = await repository.getNoteById('open-test');
+
+        expect(result, isNotNull);
+        expect(result!.content, '# Loaded from file');
+      },
+    );
+
+    test(
+      'getNoteById auto-heals filename when file was renamed on disk with matching embedded tag',
+      () async {
+        // File renamed externally on disk to 'Renamed File.md'
+        await fileStorage.writeNoteContent(
+          title: 'Renamed File',
+          markdown: '# Renamed Title\n\nContent\n\n<!-- mechanix:id=heal-test -->\n',
+        );
+
+        // ObjectBox still has old fileName 'Old File.md'
+        final noteInDb = _makeNote(id: 'heal-test', title: 'Old Title');
+        noteInDb.fileName = 'Old File.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        final result = await repository.getNoteById('heal-test');
+
+        expect(result, isNotNull);
+        expect(result!.fileName, 'Renamed File.md');
+        expect(result.title, 'Renamed Title');
+        expect(result.content, '# Renamed Title\n\nContent');
+      },
+    );
+
+    test(
+      'getNoteById auto-heals filename when file is larger than 1KB and tag is at the tail',
+      () async {
+        // Large content > 2KB
+        final largeBody = 'A' * 2500;
+        await fileStorage.writeNoteContent(
+          title: 'Large File',
+          markdown: '# Large Note\n\n$largeBody\n\n<!-- mechanix:id=large-heal -->\n',
+        );
+
+        final noteInDb = _makeNote(id: 'large-heal', title: 'Large Note');
+        noteInDb.fileName = 'Missing File.md';
+
+        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
+        when(() => mockBox.put(any())).thenReturn(1);
+
+        final result = await repository.getNoteById('large-heal');
+
+        expect(result, isNotNull);
+        expect(result!.fileName, 'Large File.md');
+        expect(result.title, 'Large Note');
+        expect(result.content, '# Large Note\n\n$largeBody');
+      },
+    );
+
+    test('deleteNotes deletes corresponding .md file using fileName', () async {
+      final fileName = await fileStorage.writeNoteContent(
+        title: 'To Be Deleted',
+        markdown: 'bye',
+      );
+      expect(await fileStorage.noteFileExists(fileName), isTrue);
+
+      final note = _makeNote(id: 'del-1', title: 'To Be Deleted');
+      note.fileName = fileName;
+      note.obxId = 99;
+
+      when(() => mockQuery.find()).thenReturn([note]);
+      when(() => mockBox.removeMany(any())).thenReturn(1);
+
+      await repository.deleteNotes(['del-1']);
+
+      expect(await fileStorage.noteFileExists(fileName), isFalse);
+    });
   });
 
   // -------------------------------------------------------------------------
@@ -379,11 +510,7 @@ void main() {
     });
 
     test('toggles note from true to false', () async {
-      final note = _makeNote(
-        id: '2',
-        title: 'Note 2',
-        isPinned: true,
-      );
+      final note = _makeNote(id: '2', title: 'Note 2', isPinned: true);
       when(() => mockQuery.findFirst()).thenReturn(note);
       when(() => mockBox.put(any())).thenReturn(1);
 
