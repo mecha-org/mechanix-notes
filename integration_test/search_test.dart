@@ -25,7 +25,7 @@ void main() {
     testWidgets('search FAB is disabled when there are no notes', (
       tester,
     ) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       expect(IntegrationTestHelper.searchFab, findsOneWidget);
@@ -43,7 +43,7 @@ void main() {
     });
 
     testWidgets('opens search and shows initial prompt', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -60,7 +60,7 @@ void main() {
     });
 
     testWidgets('finds a note by title', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -80,7 +80,7 @@ void main() {
     });
 
     testWidgets('finds a note by body preview text', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -100,7 +100,7 @@ void main() {
     });
 
     testWidgets('search is case insensitive', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -117,7 +117,7 @@ void main() {
     testWidgets('shows no results message when nothing matches', (
       tester,
     ) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -138,7 +138,7 @@ void main() {
     testWidgets('clearing query returns to initial search prompt', (
       tester,
     ) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -158,7 +158,7 @@ void main() {
     });
 
     testWidgets('closes search screen and returns to home', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -179,7 +179,7 @@ void main() {
     testWidgets('opens a note from search results and returns to search', (
       tester,
     ) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;
@@ -207,7 +207,7 @@ void main() {
     });
 
     testWidgets('shows multiple matching notes', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final suffix = DateTime.now().millisecondsSinceEpoch;

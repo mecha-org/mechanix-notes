@@ -23,7 +23,7 @@ void main() {
     });
 
     testWidgets('Create Empty Note', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -43,7 +43,7 @@ void main() {
     });
 
     testWidgets('Create Note With Title Only', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -71,7 +71,7 @@ void main() {
     });
 
     testWidgets('Create Note With Content Only', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       await tester.tap(
@@ -98,7 +98,7 @@ void main() {
     });
 
     testWidgets('Create Note With Title + Content', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       await tester.tap(

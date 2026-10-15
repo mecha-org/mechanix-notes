@@ -64,7 +64,7 @@ void main() {
       final uniqueTitle =
           'Lifecycle Test Note ${DateTime.now().millisecondsSinceEpoch}';
 
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       // 1. Create

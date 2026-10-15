@@ -42,7 +42,7 @@ void main() {
     }
 
     testWidgets('Enter Selection Mode and Select Multiple', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final now = DateTime.now().millisecondsSinceEpoch;
@@ -89,7 +89,7 @@ void main() {
     });
 
     testWidgets('Delete Multiple Notes', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final now = DateTime.now().millisecondsSinceEpoch;

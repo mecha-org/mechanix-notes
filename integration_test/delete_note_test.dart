@@ -21,7 +21,7 @@ void main() {
     });
 
     testWidgets('Delete Single Note from Home', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final uniqueTitle =
@@ -73,7 +73,7 @@ void main() {
     });
 
     testWidgets('Delete Cancel Flow', (tester) async {
-      app.main();
+      app.main([]);
       await tester.pumpAndSettle();
 
       final uniqueTitle =
