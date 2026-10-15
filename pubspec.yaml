@@ -58,7 +58,7 @@ dependencies:
     git:
       url: https://github.com/mecha-org/mechanix.dart.git
       path: widgets
-      ref: pre-release
+      ref: d99e0b8cebeffdbe34a97fd70b66a3cd804affb6
   live_markdown_editor: ^0.11.0
 
 dependency_overrides:
