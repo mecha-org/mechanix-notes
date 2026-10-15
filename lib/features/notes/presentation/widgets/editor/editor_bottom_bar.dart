@@ -361,7 +361,6 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
     return RepaintBoundary(
       child: Container(
         height: 56,
-        width: 488,
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
           color: context.colorScheme.surfaceContainer,
