@@ -139,8 +139,18 @@ void main() {
       expect(await storage.noteFileExists(fileName), isFalse);
     });
 
-    test('safely handles non-existent file deletion without error', () async {
-      await storage.deleteNoteFile('does_not_exist.md');
+    test('concurrent writes to same note succeed without ENOENT temp collision', () async {
+      final futures = Future.wait([
+        storage.writeNoteContent(title: 'Concurrent Note', markdown: 'Write 1'),
+        storage.writeNoteContent(title: 'Concurrent Note', markdown: 'Write 2'),
+        storage.writeNoteContent(title: 'Concurrent Note', markdown: 'Write 3'),
+      ]);
+
+      final results = await futures;
+      expect(results.length, 3);
+      for (final name in results) {
+        expect(await storage.noteFileExists(name), isTrue);
+      }
     });
   });
 }

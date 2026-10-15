@@ -1669,5 +1669,40 @@ void main() {
             .having((s) => s.isContentLoading, 'loading', false),
       ],
     );
+
+    blocTest<EditorBloc, EditorState>(
+      'toggling pin sets lastSavedIsPinned so subsequent autosave skips upsertNote when content is unchanged',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.togglePinNote(kTestNoteId))
+            .thenAnswer((_) async => true);
+      },
+      seed: () => const EditorLoaded(
+        noteId: kTestNoteId,
+        title: kTestTitle,
+        markdownContent: '# Initial',
+        lastSavedContent: '# Initial',
+        lastSavedTitle: kTestTitle,
+        isNewNote: false,
+        isPinned: false,
+        lastSavedIsPinned: false,
+      ),
+      act: (bloc) async {
+        bloc.add(EditorPinToggled());
+        bloc.add(EditorAutoSaveRequested(
+          content: '# Initial',
+          plainText: 'Initial',
+        ));
+      },
+      expect: () => [
+        isA<EditorLoaded>()
+            .having((s) => s.isPinned, 'isPinned', true)
+            .having((s) => s.lastSavedIsPinned, 'lastSavedIsPinned', true),
+      ],
+      verify: (_) {
+        verify(() => repository.togglePinNote(kTestNoteId)).called(1);
+        verifyNever(() => repository.upsertNote(any()));
+      },
+    );
   });
 }

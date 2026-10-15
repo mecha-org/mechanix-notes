@@ -5,6 +5,7 @@ import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:path/path.dart' as p;
 
 class NoteFileStorage {
+  static int _tempCounter = 0;
   final Directory _directory;
 
   NoteFileStorage({Directory? notesDirectory})
@@ -138,7 +139,12 @@ class NoteFileStorage {
     );
 
     final targetPath = p.join(_directory.path, targetFileName);
-    final tempPath = p.join(_directory.path, '..tmp_$targetFileName');
+    final uniqueSuffix =
+        '${DateTime.now().microsecondsSinceEpoch}_${++_tempCounter}';
+    final tempPath = p.join(
+      _directory.path,
+      '..tmp_${p.withoutExtension(targetFileName)}_$uniqueSuffix.md',
+    );
 
     final tempFile = File(tempPath);
     try {

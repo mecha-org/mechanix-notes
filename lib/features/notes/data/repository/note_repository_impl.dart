@@ -336,8 +336,13 @@ class NoteRepositoryImpl extends NoteRepository {
     } on DbFullException {
       rethrow;
     } on FileSystemException catch (e) {
-      AppLogger.e('NoteRepository: upsertNote failed due to storage error: $e');
-      throw DbFullException('Storage is full: $e', 1018);
+      AppLogger.e(
+        'NoteRepository: upsertNote failed due to filesystem error: $e',
+      );
+      if (e.osError?.errorCode == 28) {
+        throw DbFullException('Storage is full: $e', 1018);
+      }
+      rethrow;
     } catch (e) {
       AppLogger.e('NoteRepository: upsertNote failed: $e');
       rethrow;

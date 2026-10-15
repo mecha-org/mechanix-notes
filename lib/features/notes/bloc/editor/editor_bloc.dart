@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
@@ -19,9 +20,12 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
   EditorBloc(this._repository) : super(const EditorInitial()) {
     on<EditorInitialised>(_onInitialised);
-    on<EditorSaveRequested>(_onSaveRequested);
-    on<EditorAutoSaveRequested>(_onAutoSaveRequested);
-    on<EditorPinToggled>(_onPinToggled);
+    on<EditorSaveRequested>(_onSaveRequested, transformer: sequential());
+    on<EditorAutoSaveRequested>(
+      _onAutoSaveRequested,
+      transformer: sequential(),
+    );
+    on<EditorPinToggled>(_onPinToggled, transformer: sequential());
   }
 
   // Event Handlers
@@ -132,12 +136,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
       // Check if content is unchanged using in-memory baseline
       if (!current.isNewNote) {
-        final lastSavedContent =
-            existing != null ? existing.content : current.lastSavedContent;
-        final lastSavedTitle =
-            existing != null ? existing.title : current.lastSavedTitle;
-        final lastSavedIsPinned =
-            existing != null ? existing.isPinned : current.lastSavedIsPinned;
+        final lastSavedContent = existing != null
+            ? existing.content
+            : current.lastSavedContent;
+        final lastSavedTitle = existing != null
+            ? existing.title
+            : current.lastSavedTitle;
+        final lastSavedIsPinned = existing != null
+            ? existing.isPinned
+            : current.lastSavedIsPinned;
 
         final isContentUnchanged = lastSavedContent == markdown;
         final isTitleUnchanged = lastSavedTitle == note.title;
@@ -258,12 +265,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
       // Don't auto-save if nothing changed
       if (!current.isNewNote) {
-        final lastSavedContent =
-            existing != null ? existing.content : current.lastSavedContent;
-        final lastSavedTitle =
-            existing != null ? existing.title : current.lastSavedTitle;
-        final lastSavedIsPinned =
-            existing != null ? existing.isPinned : current.lastSavedIsPinned;
+        final lastSavedContent = existing != null
+            ? existing.content
+            : current.lastSavedContent;
+        final lastSavedTitle = existing != null
+            ? existing.title
+            : current.lastSavedTitle;
+        final lastSavedIsPinned = existing != null
+            ? existing.isPinned
+            : current.lastSavedIsPinned;
 
         final isContentUnchanged = lastSavedContent == markdown;
         final isTitleUnchanged = lastSavedTitle == note.title;
@@ -282,12 +292,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       await _repository.upsertNote(note);
 
       AppLogger.i('EditorBloc: Auto-save success for ${current.noteId}');
+      final latestState = state;
+      if (latestState is! EditorLoaded) return;
+
       emit(
-        current.copyWith(
+        latestState.copyWith(
           title: note.title,
           lastSavedContent: markdown,
           lastSavedTitle: note.title,
-          lastSavedIsPinned: note.isPinned,
+          lastSavedIsPinned: latestState.isPinned,
           createdAt: note.createdAt,
           isDirty: true,
           isNewNote: false,
@@ -308,7 +321,14 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     final current = state;
     if (current is! EditorLoaded) return;
     final nextPinned = !current.isPinned;
-    emit(current.copyWith(isPinned: nextPinned, isDirty: true));
+
+    emit(
+      current.copyWith(
+        isPinned: nextPinned,
+        lastSavedIsPinned: nextPinned,
+        isDirty: true,
+      ),
+    );
 
     if (!current.isNewNote) {
       await _repository.togglePinNote(current.noteId);
