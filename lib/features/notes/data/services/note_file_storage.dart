@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
-import 'package:path/path.dart' as p;
 
 class NoteFileStorage {
   static int _tempCounter = 0;
@@ -16,21 +15,21 @@ class NoteFileStorage {
   static Directory _resolveDefaultDirectory() {
     final customDocs = Platform.environment['DOCUMENTS_DIR'];
     if (customDocs != null && customDocs.isNotEmpty) {
-      return Directory(p.join(customDocs, Constants.notesSubDir));
+      return Directory('$customDocs/${Constants.notesSubDir}');
     }
 
     final xdgDocs = Platform.environment['XDG_DOCUMENTS_DIR'];
     if (xdgDocs != null && xdgDocs.isNotEmpty) {
-      return Directory(p.join(xdgDocs, Constants.notesSubDir));
+      return Directory('$xdgDocs/${Constants.notesSubDir}');
     }
 
     final home = Platform.environment['HOME'];
     if (home != null && home.isNotEmpty) {
-      return Directory(p.join(home, 'Documents', Constants.notesSubDir));
+      return Directory('$home/Documents/${Constants.notesSubDir}');
     }
 
     return Directory(
-      p.join(Directory.current.path, 'Documents', Constants.notesSubDir),
+      '${Directory.current.path}/Documents/${Constants.notesSubDir}',
     );
   }
 
@@ -64,19 +63,19 @@ class NoteFileStorage {
     // Remove leading and trailing dots, spaces, underscores
     sanitized = sanitized.replaceAll(RegExp(r'^[._\s]+|[._\s]+$'), '');
 
-    // Limit length to 100 characters to prevent filesystem limits
-    if (sanitized.length > 100) {
-      sanitized = sanitized.substring(0, 100).trim();
-    }
-
     if (sanitized.isEmpty) {
       return Constants.defaultNoteFileName;
+    }
+
+    // Limit filename length to 100 characters to remain safely below Linux NAME_MAX (255 bytes)
+    if (sanitized.length > 100) {
+      sanitized = sanitized.substring(0, 100).trim();
     }
 
     return sanitized;
   }
 
-  /// Resolves a unique filename for a note.
+  /// Resolves the final filename for a note, handling collisions atomically.
   /// If [currentFileName] matches the base title, it is retained.
   /// If a collision exists, increments with `(1)`, `(2)`, etc.
   Future<String> resolveFileName({
@@ -87,7 +86,9 @@ class NoteFileStorage {
 
     // If currentFileName already belongs to this note and starts with baseName
     if (currentFileName != null && currentFileName.isNotEmpty) {
-      final currentBase = p.withoutExtension(currentFileName);
+      final currentBase = currentFileName.endsWith('.md')
+          ? currentFileName.substring(0, currentFileName.length - 3)
+          : currentFileName;
       // Exactly matches baseName or is a numbered variant of baseName (e.g. "Title (1)")
       final isExactMatch = currentBase == baseName;
       final isNumberedMatch = RegExp(
@@ -138,13 +139,13 @@ class NoteFileStorage {
       currentFileName: currentFileName,
     );
 
-    final targetPath = p.join(_directory.path, targetFileName);
+    final targetPath = '${_directory.path}/$targetFileName';
     final uniqueSuffix =
         '${DateTime.now().microsecondsSinceEpoch}_${++_tempCounter}';
-    final tempPath = p.join(
-      _directory.path,
-      '..tmp_${p.withoutExtension(targetFileName)}_$uniqueSuffix.md',
-    );
+    final baseName = targetFileName.endsWith('.md')
+        ? targetFileName.substring(0, targetFileName.length - 3)
+        : targetFileName;
+    final tempPath = '${_directory.path}/..tmp_${baseName}_$uniqueSuffix.md';
 
     final tempFile = File(tempPath);
     try {
@@ -184,7 +185,7 @@ class NoteFileStorage {
   /// Returns null if the file does not exist.
   Future<String?> readNoteContent(String fileName) async {
     try {
-      final file = File(p.join(_directory.path, fileName));
+      final file = File('${_directory.path}/$fileName');
       if (!await file.exists()) {
         AppLogger.d('[NoteFileStorage] File not found: $fileName');
         return null;
@@ -199,13 +200,13 @@ class NoteFileStorage {
   /// Safely deletes the given [fileName] and any leftover temporary file.
   Future<void> deleteNoteFile(String fileName) async {
     try {
-      final file = File(p.join(_directory.path, fileName));
+      final file = File('${_directory.path}/$fileName');
       if (await file.exists()) {
         await file.delete();
         AppLogger.i('[NoteFileStorage] Deleted file: $fileName');
       }
 
-      final tempFile = File(p.join(_directory.path, '..tmp_$fileName'));
+      final tempFile = File('${_directory.path}/..tmp_$fileName');
       if (await tempFile.exists()) {
         await tempFile.delete();
       }
@@ -216,7 +217,7 @@ class NoteFileStorage {
 
   /// Checks if a note file with [fileName] exists.
   Future<bool> noteFileExists(String fileName) async {
-    final file = File(p.join(_directory.path, fileName));
+    final file = File('${_directory.path}/$fileName');
     return await file.exists();
   }
 }

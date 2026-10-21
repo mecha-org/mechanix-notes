@@ -1,7 +1,7 @@
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';

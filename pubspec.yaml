@@ -41,11 +41,9 @@ dependencies:
   intl: ^0.19.0
   flutter_localizations:
     sdk: flutter
-  objectbox: ^5.3.2
   bloc_test: ^10.0.0
   mocktail: ^1.0.5
   test: ^1.28.0
-  objectbox_flutter_libs: ^5.3.2
   mechanix_common:
     git:
       url: https://github.com/mineshp-mecha/mechanix-commons.git
@@ -79,7 +77,6 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
   build_runner: ^2.4.6
-  objectbox_generator: ^5.3.2
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -18,7 +18,6 @@ add_executable(${BINARY_NAME}
 )
 apply_standard_settings(${BINARY_NAME})
 target_link_libraries(${BINARY_NAME} PRIVATE mechanix_common_plugin)
-target_link_libraries(${BINARY_NAME} PRIVATE objectbox)
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")

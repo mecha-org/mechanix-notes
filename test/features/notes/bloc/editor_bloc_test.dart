@@ -1,11 +1,11 @@
 import 'package:bloc_test/bloc_test.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:objectbox/objectbox.dart';
 import 'package:test/test.dart';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
@@ -39,9 +39,7 @@ NoteModel makeNote({
     id: id,
     title: title,
     content: content,
-    plainText: plainText,
     previewText: previewText,
-    height: 104.0,
     createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
@@ -562,91 +560,6 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'height is correct for short single-line text (1 line → 104.0)',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        isNewNote: true,
-      ),
-      act: (bloc) {
-        // 5 chars → ceil(5/60) = 1 line → 1*24 + 80 = 104
-        bloc.add(
-          EditorSaveRequested(content: kSomeMarkdown, plainText: 'Short'),
-        );
-      },
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final note = captured.first as NoteModel;
-        expect(note.height, 104.0);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'height clamp lower bound: empty plainText → 1 line → 104.0',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle, // non-empty title so note is not discarded
-        isNewNote: true,
-      ),
-      act: (bloc) {
-        // 0 chars → ceil(0/60)=0 → clamp(1,20)=1 → 1*24+80=104
-        bloc.add(EditorSaveRequested(content: kEmptyMarkdown, plainText: ''));
-      },
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final note = captured.first as NoteModel;
-        expect(note.height, 104.0);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'height steps at 60/61 char boundary (1 line → 104.0, 2 lines → 128.0)',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        isNewNote: true,
-      ),
-      act: (bloc) {
-        // 60 chars → ceil(60/60)=1 → 104; then 61 chars → ceil(61/60)=2 → 128
-        bloc.add(
-          EditorSaveRequested(content: kSomeMarkdown, plainText: 'A' * 60),
-        );
-      },
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final note = captured.first as NoteModel;
-        expect(note.height, 104.0); // exactly 1 line
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
       'NoteModel.id in saved note matches current.noteId',
       build: buildBloc,
       setUp: () {
@@ -669,65 +582,6 @@ void main() {
         ).captured;
         final note = captured.first as NoteModel;
         expect(note.id, kTestNoteId);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'height steps to 2 lines at 61 chars (128.0)',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        isNewNote: true,
-      ),
-      act: (bloc) {
-        // 61 chars → ceil(61/60)=2 → 2*24+80=128
-        bloc.add(
-          EditorSaveRequested(content: kSomeMarkdown, plainText: 'A' * 61),
-        );
-      },
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final note = captured.first as NoteModel;
-        expect(note.height, 128.0);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'height is clamped at 20 lines for very long text (560.0)',
-      build: buildBloc,
-      setUp: () {
-        when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: kTestTitle,
-        isNewNote: true,
-      ),
-      act: (bloc) {
-        // 60*21 = 1260 chars → ceil(1260/60) = 21 → clamped to 20 → 20*24+80=560
-        final longText = 'A' * (60 * 21);
-        bloc.add(
-          EditorSaveRequested(content: kSomeMarkdown, plainText: longText),
-        );
-      },
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final note = captured.first as NoteModel;
-        expect(note.height, 560.0);
       },
     );
 
@@ -1389,10 +1243,7 @@ void main() {
         isNewNote: false,
       ),
       act: (bloc) => bloc.add(
-        EditorAutoSaveRequested(
-          content: '# Initial',
-          plainText: 'Initial',
-        ),
+        EditorAutoSaveRequested(content: '# Initial', plainText: 'Initial'),
       ),
       expect: () => [],
       verify: (_) {
@@ -1735,8 +1586,9 @@ void main() {
       'toggling pin sets lastSavedIsPinned so subsequent autosave skips upsertNote when content is unchanged',
       build: buildBloc,
       setUp: () {
-        when(() => repository.togglePinNote(kTestNoteId))
-            .thenAnswer((_) async => true);
+        when(
+          () => repository.togglePinNote(kTestNoteId),
+        ).thenAnswer((_) async => true);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1750,10 +1602,9 @@ void main() {
       ),
       act: (bloc) async {
         bloc.add(EditorPinToggled());
-        bloc.add(EditorAutoSaveRequested(
-          content: '# Initial',
-          plainText: 'Initial',
-        ));
+        bloc.add(
+          EditorAutoSaveRequested(content: '# Initial', plainText: 'Initial'),
+        );
       },
       expect: () => [
         isA<EditorLoaded>()

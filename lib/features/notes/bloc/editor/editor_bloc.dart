@@ -1,15 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
-import 'package:objectbox/objectbox.dart';
 import 'package:uuid/uuid.dart';
 
 part 'editor_event.dart';
@@ -169,6 +170,13 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     } on DbFullException catch (e) {
       AppLogger.e('EditorBloc: Manual save failed due to full database: $e');
       emit(const EditorFailure(ErrorCategory.storageFull));
+    } on FileSystemException catch (e) {
+      if (e.osError?.errorCode == 28 || e.message.contains('No space left')) {
+        emit(const EditorFailure(ErrorCategory.storageFull));
+      } else {
+        AppLogger.e('EditorBloc: Manual save failed: $e');
+        emit(const EditorFailure(ErrorCategory.failedToSaveNote));
+      }
     } catch (e) {
       AppLogger.e('EditorBloc: Manual save failed: $e');
       emit(const EditorFailure(ErrorCategory.failedToSaveNote));
@@ -266,9 +274,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       id: current.noteId,
       title: title,
       content: content,
-      plainText: plainText,
       previewText: previewText,
-      height: _estimateHeight(plainText),
       createdAt: existing?.createdAt ?? current.createdAt ?? now,
       updatedAt: now,
       isPinned: current.isPinned,
@@ -346,6 +352,12 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     } on DbFullException catch (e) {
       AppLogger.e('EditorBloc: Auto-save failed due to full database: $e');
       emit(const EditorFailure(ErrorCategory.storageFull));
+    } on FileSystemException catch (e) {
+      if (e.osError?.errorCode == 28 || e.message.contains('No space left')) {
+        emit(const EditorFailure(ErrorCategory.storageFull));
+      } else {
+        AppLogger.e('EditorBloc: Auto-save failed: $e');
+      }
     } catch (e) {
       AppLogger.e('EditorBloc: Auto-save failed: $e');
     }
@@ -370,14 +382,5 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     if (!current.isNewNote) {
       await _repository.togglePinNote(current.noteId);
     }
-  }
-
-  // Helper
-
-  double _estimateHeight(String plainText) {
-    const lineHeight = 24.0;
-    const charsPerLine = 60;
-    final lines = (plainText.length / charsPerLine).ceil().clamp(1, 20);
-    return lines * lineHeight + 80;
   }
 }

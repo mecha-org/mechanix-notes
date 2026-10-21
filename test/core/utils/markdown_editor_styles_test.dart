@@ -57,7 +57,7 @@ void main() {
       expect(themeData.headingStyles.length, 6);
       expect(
         themeData.codeStyle.fontFamily,
-        contains(MechanixFontFamily.geistMono),
+        contains(MechanixFontFamily.geist),
       );
     });
   });

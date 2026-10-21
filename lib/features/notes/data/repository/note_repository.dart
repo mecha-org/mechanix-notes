@@ -11,5 +11,5 @@ abstract class NoteRepository {
   Future<List<String>> searchNoteIds(String query);
   Future<List<NoteMetaData>> getNotesMetaData(List<String> ids);
   Future<bool> togglePinNote(String id);
-  Future<void> close();
+  Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45});
 }

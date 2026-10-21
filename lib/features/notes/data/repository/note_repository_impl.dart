@@ -3,20 +3,14 @@ import 'dart:io';
 
 import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
-import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
-import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
 
 class NoteRepositoryImpl extends NoteRepository {
-  static Store? _sharedStore;
-
-  Store? _store;
-  Box<NoteModel>? _box;
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
 
@@ -28,38 +22,11 @@ class NoteRepositoryImpl extends NoteRepository {
        _indexingService = indexingService ?? IndexingService(),
        _fileStorage = fileStorage ?? NoteFileStorage();
 
-  Box<NoteModel> get box {
-    if (_box == null) {
-      throw StateError(
-        "Box is not initialized. Call ensureStoreConnected() first.",
-      );
-    }
-    return _box!;
-  }
-
   Future<void> ensureStoreConnected() async {
-    if (_store != null && !_store!.isClosed()) return;
-
-    if (_sharedStore != null && !_sharedStore!.isClosed()) {
-      _store = _sharedStore;
-      _box = _store!.box<NoteModel>();
-      return;
-    }
-
-    try {
-      await _initializeStore();
-    } catch (e) {
-      AppLogger.e('Failed to open ObjectBox store: $e');
-      if (e is FileSystemException && e.message.contains('lock failed')) {
-        throw ObjectBoxException("Failed to open ObjectBox store: $e");
-      }
-      rethrow;
-    }
-
     try {
       await _indexingService.initialize();
     } catch (e) {
-      AppLogger.e('Failed to initialize Tantivy: $e');
+      AppLogger.e('Failed to initialize Tantivy store: $e');
     }
 
     try {
@@ -69,70 +36,58 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  Future<void> _initializeStore() async {
+  @override
+  Future<List<NoteMetaData>> getNotes(int skip, int take) async {
     try {
-      final home = Platform.environment['HOME'];
-      final appDir = Directory('$home${Constants.notesDbPath}');
-      final exists = await appDir.exists();
+      await ensureStoreConnected();
+      final notes = await _indexingService.getNotes(skip: skip, take: take);
 
-      if (!exists) {
-        await appDir.create(recursive: true);
+      if (notes.isEmpty) {
+        AppLogger.i("No notes found");
+        return [];
       }
 
-      if (_sharedStore != null && !_sharedStore!.isClosed()) {
-        _store = _sharedStore;
-      } else {
-        _sharedStore = await openStore(
-          maxDBSizeInKB: Constants.maxDBSizeInKB,
-          directory: appDir.path,
-        );
-        _store = _sharedStore;
-      }
-
-      _box = _store!.box<NoteModel>();
-
-      AppLogger.i('[NoteRepository] ObjectBox store opened at ${appDir.path}');
+      AppLogger.i(
+        "Fetched notes page (skip: $skip, take: $take) → page size: ${notes.length}",
+      );
+      return notes;
     } catch (e) {
-      AppLogger.e('Failed to initialize ObjectBox store: $e');
-      rethrow;
+      AppLogger.e('Failed to fetch notes: $e');
+      return [];
     }
   }
 
-  static NoteMetaData _toMetaData(NoteModel note) => NoteMetaData(
-    id: note.id,
-    height: note.height,
-    title: note.title,
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
-    previewText: note.previewText,
-    isPinned: note.isPinned,
-  );
-
   @override
-  Stream<List<NoteMetaData>> watchNotes() async* {
-    await ensureStoreConnected();
-    final queryBuilder = box.query()
-      ..order(NoteModel_.isPinned, flags: Order.descending)
-      ..order(NoteModel_.updatedAt, flags: Order.descending);
-    yield* queryBuilder
-        .watch(triggerImmediately: true)
-        .asyncMap((query) async {
-          final notes = await query.findAsync();
-          return notes.map(_toMetaData).toList();
-        });
+  Future<NoteMetaData?> getNoteMetaData(String id) async {
+    try {
+      await ensureStoreConnected();
+      return _indexingService.getNoteMetaData(id);
+    } catch (e) {
+      AppLogger.e('Failed to fetch note metadata by id: $e');
+      return null;
+    }
   }
 
   @override
   Future<NoteModel?> getNoteById(String id) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(id)).build();
-      final note = query.findFirst();
-      query.close();
-      if (note == null) {
+      final doc = _indexingService.getDocument(id);
+      if (doc == null) {
         AppLogger.i('NoteRepository: getNoteById($id) → not found');
         return null;
       }
+
+      final note = NoteModel(
+        id: doc.id,
+        title: doc.title,
+        content: '',
+        previewText: doc.previewText,
+        fileName: doc.fileName,
+        isPinned: doc.isPinned,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(doc.createdAt.toInt()),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(doc.updatedAt.toInt()),
+      );
 
       // 1. Try reading using fileName
       String? markdown;
@@ -149,7 +104,7 @@ class NoteRepositoryImpl extends NoteRepository {
           markdown = await _fileStorage.readNoteContent(titleFileName);
           if (markdown != null) {
             note.fileName = titleFileName;
-            box.put(note);
+            await _indexingService.upsertNote(note);
           }
         }
       }
@@ -174,7 +129,7 @@ class NoteRepositoryImpl extends NoteRepository {
               note.title = firstLineTitle;
             }
           }
-          box.put(note);
+          await _indexingService.upsertNote(note);
           AppLogger.i(
             'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
           );
@@ -196,7 +151,7 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  /// Reads at most [maxBytes] from the end of [file] and decodes as UTF-8. without reading entire file contents into memory.
+  /// Reads at most [maxBytes] from the end of [file] and decodes as UTF-8 without reading entire file contents into memory.
   Future<String?> _readTailString(File file, [int maxBytes = 1024]) async {
     RandomAccessFile? raf;
     try {
@@ -250,24 +205,21 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<void> deleteNotes(List<String> ids) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.oneOf(ids)).build();
-      final notesToDelete = query.find();
-      query.close();
 
-      for (final note in notesToDelete) {
-        final fileToDelete = note.fileName;
-        if (fileToDelete != null && fileToDelete.isNotEmpty) {
-          await _fileStorage.deleteNoteFile(fileToDelete);
-        } else {
-          final titleFileName =
-              '${NoteFileStorage.sanitizeFileName(note.title)}.md';
-          await _fileStorage.deleteNoteFile(titleFileName);
+      for (final id in ids) {
+        final doc = _indexingService.getDocument(id);
+        if (doc != null) {
+          final fileToDelete = doc.fileName;
+          if (fileToDelete != null && fileToDelete.isNotEmpty) {
+            await _fileStorage.deleteNoteFile(fileToDelete);
+          } else {
+            final titleFileName =
+                '${NoteFileStorage.sanitizeFileName(doc.title)}.md';
+            await _fileStorage.deleteNoteFile(titleFileName);
+          }
         }
       }
 
-      if (notesToDelete.isNotEmpty) {
-        box.removeMany(notesToDelete.map((n) => n.obxId).toList());
-      }
       await _indexingService.deleteNotesBatch(ids);
       AppLogger.i('NoteRepository: deleteNotes(${ids.length})');
     } catch (e) {
@@ -279,14 +231,9 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<void> upsertNote(NoteModel note) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(note.id)).build();
-      final existing = query.findFirst();
-      query.close();
-      if (existing != null) {
-        note.obxId = existing.obxId;
-      }
 
-      final currentFileName = existing?.fileName;
+      final existingDoc = _indexingService.getDocument(note.id);
+      final currentFileName = existingDoc?.fileName ?? note.fileName;
 
       final cleanMarkdown = NoteTagHelper.stripTag(note.content);
       final taggedMarkdown = NoteTagHelper.appendTag(cleanMarkdown, note.id);
@@ -296,31 +243,18 @@ class NoteRepositoryImpl extends NoteRepository {
         currentFileName: currentFileName,
       );
 
-      // Store fileName in ObjectBox; content and plain text live only in the
-      // .md file and the search index, so keep them out of the database
-      final plainText = note.plainText;
       note.fileName = savedFileName;
-      note.content = '';
-      note.plainText = '';
-      box.put(note);
-
-      // Restore clean markdown and plain text in in-memory note instance
       note.content = cleanMarkdown;
       note.plainText = plainText;
 
-      await _indexingService.upsertNote(note.id, note.title, note.plainText);
+      await _indexingService.upsertNote(note);
       AppLogger.i(
         'NoteRepository: upsertNote(${note.id}) ${note.updatedAt} ${note.title} saved to $savedFileName ✓',
       );
-    } on DbFullException {
-      rethrow;
     } on FileSystemException catch (e) {
       AppLogger.e(
         'NoteRepository: upsertNote failed due to filesystem error: $e',
       );
-      if (e.osError?.errorCode == 28) {
-        throw DbFullException('Storage is full: $e', 1018);
-      }
       rethrow;
     } catch (e) {
       AppLogger.e('NoteRepository: upsertNote failed: $e');
@@ -332,9 +266,7 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<List<String>> searchNoteIds(String query) async {
     try {
       await ensureStoreConnected();
-      final ids = await _indexingService.search(query);
-      AppLogger.i("Found ${ids.length} matching note ids via IndexingService");
-      return ids;
+      return await _indexingService.search(query);
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
       return [];
@@ -366,17 +298,9 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<bool> togglePinNote(String id) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(id)).build();
-      final note = query.findFirst();
-      query.close();
-
-      if (note != null) {
-        note.isPinned = !note.isPinned;
-        box.put(note);
-        AppLogger.i('NoteRepository: togglePinNote($id) → ${note.isPinned}');
-        return note.isPinned;
-      }
-      return false;
+      final result = await _indexingService.togglePin(id);
+      AppLogger.i('NoteRepository: togglePinNote($id) → $result');
+      return result;
     } catch (e) {
       AppLogger.e('NoteRepository: togglePinNote failed: $e');
       return false;
@@ -384,12 +308,7 @@ class NoteRepositoryImpl extends NoteRepository {
   }
 
   @override
-  Future<void> close() async {
-    if (_sharedStore != null && !_sharedStore!.isClosed()) {
-      _sharedStore!.close();
-      _sharedStore = null;
-    }
-    _store = null;
-    _box = null;
+  Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45}) async {
+    return getNotes(0, limit);
   }
 }
