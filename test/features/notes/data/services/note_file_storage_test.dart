@@ -178,4 +178,22 @@ void main() {
       },
     );
   });
+
+  group('getFileLastModified', () {
+    test('returns null when file does not exist', () async {
+      expect(await storage.getFileLastModified('non_existent.md'), isNull);
+    });
+
+    test('returns modified timestamp for existing file', () async {
+      final before = DateTime.now().subtract(const Duration(seconds: 1));
+      final fileName = await storage.writeNoteContent(
+        title: 'Timestamp Note',
+        markdown: 'Check timestamp',
+      );
+      final modified = await storage.getFileLastModified(fileName);
+
+      expect(modified, isNotNull);
+      expect(modified!.isAfter(before), isTrue);
+    });
+  });
 }

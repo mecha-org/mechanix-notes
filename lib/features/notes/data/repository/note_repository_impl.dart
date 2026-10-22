@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
+import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
@@ -104,7 +106,13 @@ class NoteRepositoryImpl extends NoteRepository {
           markdown = await _fileStorage.readNoteContent(titleFileName);
           if (markdown != null) {
             note.fileName = titleFileName;
-            await _indexingService.upsertNote(note);
+            unawaited(
+              _indexingService.upsertNote(note).catchError((e) {
+                AppLogger.e(
+                  'NoteRepository: Healing index update failed for ${note.id}: $e',
+                );
+              }),
+            );
           }
         }
       }
@@ -129,7 +137,13 @@ class NoteRepositoryImpl extends NoteRepository {
               note.title = firstLineTitle;
             }
           }
-          await _indexingService.upsertNote(note);
+          unawaited(
+            _indexingService.upsertNote(note).catchError((e) {
+              AppLogger.e(
+                'NoteRepository: Auto-heal index update failed for ${note.id}: $e',
+              );
+            }),
+          );
           AppLogger.i(
             'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
           );
@@ -138,7 +152,17 @@ class NoteRepositoryImpl extends NoteRepository {
 
       // 4. Return note with clean (stripped) content for editor and UI
       if (markdown != null) {
-        note.content = NoteTagHelper.stripTag(markdown);
+        final cleanContent = NoteTagHelper.stripTag(markdown);
+        note.content = cleanContent;
+
+        // Auto-reindex asynchronously in background if file was modified externally
+        unawaited(
+          _autoReindexIfModified(
+            note: note,
+            cleanContent: cleanContent,
+            indexedUpdatedAtMillis: doc.updatedAt.toInt(),
+          ),
+        );
       } else if (note.fileName != null) {
         note.content = '';
       }
@@ -148,6 +172,75 @@ class NoteRepositoryImpl extends NoteRepository {
     } catch (e) {
       AppLogger.e('NoteRepository: getNoteById failed: $e');
       return null;
+    }
+  }
+
+  Future<void> _autoReindexIfModified({
+    required NoteModel note,
+    required String cleanContent,
+    required int indexedUpdatedAtMillis,
+  }) async {
+    try {
+      final fileToCheck = note.fileName;
+      if (fileToCheck == null || fileToCheck.isEmpty) return;
+
+      final fileModified = await _fileStorage.getFileLastModified(fileToCheck);
+      final indexedUpdatedAt = DateTime.fromMillisecondsSinceEpoch(
+        indexedUpdatedAtMillis,
+      );
+
+      if (fileModified != null &&
+          fileModified.isAfter(
+            indexedUpdatedAt.add(const Duration(seconds: 1)),
+          )) {
+        AppLogger.i(
+          'NoteRepository: External edit detected on $fileToCheck ($fileModified > $indexedUpdatedAt). Auto-updating index in background...',
+        );
+
+        String title = note.title;
+        String previewText = note.previewText;
+
+        final lines = cleanContent
+            .split('\n')
+            .map((l) => l.trim())
+            .where((l) => l.isNotEmpty)
+            .toList();
+        if (lines.isNotEmpty) {
+          final firstLine = lines.first
+              .replaceAll(RegExp(r'^#+\s*'), '')
+              .trim();
+          if (firstLine.isNotEmpty) {
+            title = firstLine;
+          }
+          if (lines.length > 1) {
+            final bodyText = lines.skip(1).join(' ');
+            previewText = bodyText.length > Constants.notePreviewTextMaxLength
+                ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
+                : bodyText;
+          } else {
+            previewText = firstLine.length > Constants.notePreviewTextMaxLength
+                ? firstLine.substring(0, Constants.notePreviewTextMaxLength)
+                : firstLine;
+          }
+        } else {
+          previewText = '';
+        }
+
+        final updatedNote = NoteModel(
+          id: note.id,
+          title: title,
+          content: cleanContent,
+          previewText: previewText,
+          fileName: note.fileName,
+          isPinned: note.isPinned,
+          createdAt: note.createdAt,
+          updatedAt: fileModified,
+        );
+
+        await _indexingService.upsertNote(updatedNote);
+      }
+    } catch (e) {
+      AppLogger.e('NoteRepository: Background auto-reindex failed: $e');
     }
   }
 

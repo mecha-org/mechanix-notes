@@ -220,4 +220,18 @@ class NoteFileStorage {
     final file = File('${_directory.path}/$fileName');
     return await file.exists();
   }
+
+  /// Returns the last modified timestamp of the given [fileName], or null if the file does not exist.
+  Future<DateTime?> getFileLastModified(String fileName) async {
+    try {
+      final file = File('${_directory.path}/$fileName');
+      if (await file.exists()) {
+        final stat = await file.stat();
+        return stat.modified;
+      }
+    } catch (e) {
+      AppLogger.e('[NoteFileStorage] Failed to get modified time for $fileName: $e');
+    }
+    return null;
+  }
 }
