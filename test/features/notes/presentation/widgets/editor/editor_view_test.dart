@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
@@ -174,6 +175,39 @@ void main() {
             ),
           ),
         ).called(1);
+      },
+    );
+
+    testWidgets(
+      'EditorFailure noteNotFound dispatches DeleteNotes to NotesBloc and pops route',
+      (tester) async {
+        final mockObserver = MockNavigatorObserver();
+        await tester.pumpWidget(buildTestWidget(observer: mockObserver));
+
+        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+        unawaited(
+          navigator.pushNamed('/editor', arguments: {'noteId': 'ghost-1'}),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 300));
+
+        editorStateController.add(
+          const EditorFailure(ErrorCategory.noteNotFound),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        await tester.pump(const Duration(milliseconds: 500));
+
+        verify(
+          () => mockNotesBloc.add(
+            any(
+              that: isA<DeleteNotes>().having((e) => e.noteIds, 'noteIds', [
+                'ghost-1',
+              ]),
+            ),
+          ),
+        ).called(1);
+        expect(find.byType(EditorView), findsNothing);
       },
     );
   });

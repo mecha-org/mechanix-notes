@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:live_markdown_editor/live_markdown_editor.dart';
+import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
@@ -91,6 +92,17 @@ class _EditorViewState extends State<EditorView> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(localizeError(context, state.error))),
           );
+          if (state.error == ErrorCategory.noteNotFound) {
+            final args =
+                ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
+            final noteId = args?['noteId'] as String?;
+            if (noteId != null) {
+              context.read<NotesBloc>().add(DeleteNotes(noteIds: [noteId]));
+            }
+            _canPop = true;
+            Navigator.of(context).pop();
+          }
         }
       },
       // builder

@@ -24,3 +24,6 @@ class TogglePinNote extends NotesEvent {
   final String noteId;
   TogglePinNote({required this.noteId});
 }
+
+class SyncNotesFromDisk extends NotesEvent {}
+

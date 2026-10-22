@@ -24,21 +24,32 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     on<SelectAllNotes>(_selectAllNotes);
     on<ClearSelection>(_clearSelection);
     on<TogglePinNote>(_togglePinNote);
+    on<SyncNotesFromDisk>(_onSyncNotesFromDisk);
 
     add(LoadNotes());
   }
 
   Future<void> _loadNotes(LoadNotes event, Emitter<NotesState> emit) async {
-    emit(state.copyWith(isLoading: true));
+    emit(state.copyWith(isLoading: true, error: null));
+    AppLogger.i("Loading notes");
 
-    await emit.forEach<List<NoteMetaData>>(
-      noteRepository.watchNotes(),
-      onData: (notes) {
-        final (groupedNotes, groupCounts) = _buildFlattenedNotes(notes);
-        return state.copyWith(
-          notes: notes,
-          groupedNotes: groupedNotes,
-          groupCounts: groupCounts,
+    try {
+      try {
+        await noteRepository.syncNotesFromDisk();
+      } catch (e) {
+        AppLogger.d("NotesBloc: Disk sync error ignored: $e");
+      }
+
+      final firstPage = await noteRepository.getNotes(0, Constants.pageSize);
+      final flattened = _buildFlattenedNotes(firstPage);
+      final hasMore = firstPage.length == Constants.pageSize;
+      AppLogger.i(
+        "Notes loaded — showing ${firstPage.length}, hasMore: $hasMore",
+      );
+      emit(
+        state.copyWith(
+          notes: firstPage,
+          groupedNotes: flattened,
           isLoading: false,
           selectedNotes: _existingSelection(notes),
         );
@@ -179,5 +190,17 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       _ when daysAgo <= 30 => const TimeGroup(TimeCategory.lastMonth),
       _ => TimeGroup(TimeCategory.custom, monthYear.format(updated)),
     };
+
+    AppLogger.i(
+      "Time group for note ${note.id}: ${group.category} ${group.customLabel} $updated",
+    );
+    return group;
+  }
+
+  Future<void> _onSyncNotesFromDisk(
+    SyncNotesFromDisk event,
+    Emitter<NotesState> emit,
+  ) async {
+    add(LoadNotes());
   }
 }

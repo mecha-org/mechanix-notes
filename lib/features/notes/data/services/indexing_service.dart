@@ -21,7 +21,18 @@ class IndexingService {
       if (!await indexDir.exists()) {
         await indexDir.create(recursive: true);
       }
-      tantivy.initTantivy(dirPath: indexDir.path);
+      try {
+        tantivy.initTantivy(dirPath: indexDir.path);
+      } catch (e) {
+        AppLogger.e(
+          '[IndexingService] Tantivy init failed (corrupted index or missing meta.json): $e. Recreating fresh index...',
+        );
+        if (await indexDir.exists()) {
+          await indexDir.delete(recursive: true);
+          await indexDir.create(recursive: true);
+        }
+        tantivy.initTantivy(dirPath: indexDir.path);
+      }
       _initialized = true;
       AppLogger.d('[IndexingService] Ready');
     } catch (e) {

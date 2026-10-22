@@ -5,12 +5,14 @@ import 'dart:io';
 import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
+import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
+import 'package:uuid/uuid.dart';
 
 class NoteRepositoryImpl extends NoteRepository {
   final IndexingService _indexingService;
@@ -164,7 +166,16 @@ class NoteRepositoryImpl extends NoteRepository {
           ),
         );
       } else if (note.fileName != null) {
-        note.content = '';
+        // Alternative 2: File confirmed missing from disk, purge ghost note from Tantivy on access
+        AppLogger.i(
+          'NoteRepository: Note $id (${note.fileName}) missing on disk. Purging ghost note from Tantivy...',
+        );
+        unawaited(
+          _indexingService.deleteNotesBatch([id]).catchError((e) {
+            AppLogger.e('NoteRepository: Failed to purge ghost note $id: $e');
+          }),
+        );
+        return null;
       }
 
       AppLogger.i('NoteRepository: getNoteById($id) → found');
@@ -197,34 +208,10 @@ class NoteRepositoryImpl extends NoteRepository {
           'NoteRepository: External edit detected on $fileToCheck ($fileModified > $indexedUpdatedAt). Auto-updating index in background...',
         );
 
-        String title = note.title;
-        String previewText = note.previewText;
-
-        final lines = cleanContent
-            .split('\n')
-            .map((l) => l.trim())
-            .where((l) => l.isNotEmpty)
-            .toList();
-        if (lines.isNotEmpty) {
-          final firstLine = lines.first
-              .replaceAll(RegExp(r'^#+\s*'), '')
-              .trim();
-          if (firstLine.isNotEmpty) {
-            title = firstLine;
-          }
-          if (lines.length > 1) {
-            final bodyText = lines.skip(1).join(' ');
-            previewText = bodyText.length > Constants.notePreviewTextMaxLength
-                ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
-                : bodyText;
-          } else {
-            previewText = firstLine.length > Constants.notePreviewTextMaxLength
-                ? firstLine.substring(0, Constants.notePreviewTextMaxLength)
-                : firstLine;
-          }
-        } else {
-          previewText = '';
-        }
+        final (title, previewText) = _extractTitleAndPreview(
+          cleanContent,
+          note.title,
+        );
 
         final updatedNote = NoteModel(
           id: note.id,
@@ -403,5 +390,152 @@ class NoteRepositoryImpl extends NoteRepository {
   @override
   Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45}) async {
     return getNotes(0, limit);
+  }
+
+  (String title, String previewText) _extractTitleAndPreview(
+    String cleanContent, [
+    String? fallbackTitle,
+  ]) {
+    String title = fallbackTitle ?? '';
+    String previewText = '';
+
+    final plainText = markdownToPlainText(cleanContent);
+    final lines = plainText
+        .split('\n')
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    if (lines.isNotEmpty) {
+      final firstLine = lines.first.replaceAll(RegExp(r'^#+\s*'), '').trim();
+      if (firstLine.isNotEmpty) {
+        title = firstLine;
+      }
+      if (lines.length > 1) {
+        final bodyText = lines.skip(1).join(' ');
+        previewText = bodyText.length > Constants.notePreviewTextMaxLength
+            ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
+            : bodyText;
+      } else {
+        previewText = firstLine.length > Constants.notePreviewTextMaxLength
+            ? firstLine.substring(0, Constants.notePreviewTextMaxLength)
+            : firstLine;
+      }
+    }
+    return (title, previewText);
+  }
+
+  @override
+  Future<int> syncNotesFromDisk() async {
+    try {
+      await ensureStoreConnected();
+      final dir = _fileStorage.directory;
+      if (!await dir.exists()) return 0;
+
+      int updatedCount = 0;
+      final entities = await dir.list().toList();
+      final discoveredNoteIds = <String>{};
+
+      for (final entity in entities) {
+        if (entity is! File || !entity.path.endsWith('.md')) continue;
+        final fileName = entity.uri.pathSegments.last;
+        if (fileName.startsWith('..tmp_')) continue;
+
+        try {
+          final tail = await _readTailString(entity);
+          String? noteId = tail != null ? NoteTagHelper.extractId(tail) : null;
+          final fileStat = await entity.stat();
+          final rawContent = await entity.readAsString();
+
+          // Auto-tag untagged external files
+          if (noteId == null) {
+            noteId = const Uuid().v4();
+            final tagged = NoteTagHelper.appendTag(rawContent, noteId);
+            await entity.writeAsString(tagged);
+          }
+          discoveredNoteIds.add(noteId);
+
+          final existingDoc = _indexingService.getDocument(noteId);
+          final indexedUpdatedAt = existingDoc != null
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  existingDoc.updatedAt.toInt(),
+                )
+              : null;
+
+          // Re-index if missing from Tantivy, renamed, or externally modified
+          if (existingDoc == null ||
+              existingDoc.fileName != fileName ||
+              fileStat.modified.isAfter(
+                indexedUpdatedAt!.add(const Duration(seconds: 1)),
+              )) {
+            final cleanContent = NoteTagHelper.stripTag(rawContent);
+            final fallbackTitle = fileName.endsWith('.md')
+                ? fileName.substring(0, fileName.length - 3)
+                : fileName;
+            final (title, previewText) = _extractTitleAndPreview(
+              cleanContent,
+              existingDoc?.title ?? fallbackTitle,
+            );
+
+            final note = NoteModel(
+              id: noteId,
+              title: title,
+              content: cleanContent,
+              previewText: previewText,
+              fileName: fileName,
+              createdAt: existingDoc != null
+                  ? DateTime.fromMillisecondsSinceEpoch(
+                      existingDoc.createdAt.toInt(),
+                    )
+                  : fileStat.modified,
+              updatedAt: fileStat.modified,
+              isPinned: existingDoc?.isPinned ?? false,
+            );
+
+            await _indexingService.upsertNote(note);
+            updatedCount++;
+            AppLogger.i(
+              'NoteRepository: Reconciled $fileName (id: $noteId) into Tantivy',
+            );
+          }
+        } catch (e) {
+          AppLogger.e('NoteRepository: Failed to sync $fileName: $e');
+        }
+      }
+
+      // Clean up ghost notes in Tantivy whose files were deleted on disk
+      try {
+        // Check if Tantivy has more notes than discovered files on disk.
+        final hasGhosts = (await _indexingService.getNotes(
+          skip: discoveredNoteIds.length,
+          take: 1,
+        )).isNotEmpty;
+
+        if (hasGhosts) {
+          final indexedNotes = await _indexingService.getNotes(
+            skip: 0,
+            take: 10000,
+          );
+          final ghostIds = indexedNotes
+              .map((n) => n.id)
+              .where((id) => !discoveredNoteIds.contains(id))
+              .toList();
+          if (ghostIds.isNotEmpty) {
+            await _indexingService.deleteNotesBatch(ghostIds);
+            updatedCount += ghostIds.length;
+            AppLogger.i(
+              'NoteRepository: Purged ${ghostIds.length} ghost notes from Tantivy',
+            );
+          }
+        }
+      } catch (e) {
+        AppLogger.e('NoteRepository: Failed to purge ghost notes: $e');
+      }
+
+      return updatedCount;
+    } catch (e) {
+      AppLogger.e('NoteRepository: syncNotesFromDisk failed: $e');
+      return 0;
+    }
   }
 }

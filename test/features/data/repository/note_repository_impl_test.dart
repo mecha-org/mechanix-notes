@@ -375,4 +375,172 @@ void main() {
       verify(() => mockIndexingService.togglePin('1')).called(1);
     });
   });
+
+  // -------------------------------------------------------------------------
+  // syncNotesFromDisk
+  // -------------------------------------------------------------------------
+
+  group('syncNotesFromDisk', () {
+    test(
+      'indexes newly dropped untagged .md files and tags them with UUID',
+      () async {
+        final file = File('${tempDir.path}/external_note.md');
+        await file.writeAsString('# External Title\nBody of external note');
+
+        when(() => mockIndexingService.getDocument(any())).thenReturn(null);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.title, 'title', 'External Title')
+                  .having((n) => n.fileName, 'fileName', 'external_note.md'),
+            ),
+          ),
+        ).called(1);
+
+        // Verify file was tagged on disk
+        final updatedContent = await file.readAsString();
+        expect(updatedContent, contains('<!-- mechanix:id='));
+      },
+    );
+
+    test(
+      'purges ghost notes from Tantivy whose files were deleted on disk',
+      () async {
+        final ghostDoc = _makeMetaData(id: 'ghost-1', title: 'Ghost Note');
+        when(
+          () => mockIndexingService.getNotes(skip: 0, take: any(named: 'take')),
+        ).thenAnswer((_) async => [ghostDoc]);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['ghost-1']),
+        ).called(1);
+      },
+    );
+
+    test(
+      're-indexes files whose modified time is newer than indexed updatedAt',
+      () async {
+        final file = File('${tempDir.path}/modified_note.md');
+        await file.writeAsString(
+          '# Updated Title\nUpdated Body\n\n<!-- mechanix:id=mod-1 -->\n',
+        );
+
+        final oldUpdatedAt = DateTime.now().subtract(
+          const Duration(minutes: 10),
+        );
+        final doc = _makeDoc(
+          id: 'mod-1',
+          title: 'Old Title',
+          updatedAt: oldUpdatedAt,
+          fileName: 'modified_note.md',
+        );
+        when(() => mockIndexingService.getDocument('mod-1')).thenReturn(doc);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.id, 'id', 'mod-1')
+                  .having((n) => n.title, 'title', 'Updated Title'),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      're-indexes files when filename on disk does not match indexed fileName (renamed externally)',
+      () async {
+        final file = File('${tempDir.path}/renamed_note.md');
+        await file.writeAsString(
+          '# Note 1\nBody\n\n<!-- mechanix:id=note-1 -->\n',
+        );
+
+        final stat = await file.stat();
+        final doc = _makeDoc(
+          id: 'note-1',
+          title: 'Note 1',
+          updatedAt: stat.modified,
+          fileName: 'old_filename.md',
+        );
+        when(() => mockIndexingService.getDocument('note-1')).thenReturn(doc);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.id, 'id', 'note-1')
+                  .having((n) => n.fileName, 'fileName', 'renamed_note.md'),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'skips full ghost scan when fast count pre-check determines no deletions occurred',
+      () async {
+        final file = File('${tempDir.path}/existing_note.md');
+        await file.writeAsString(
+          '# Note 1\nBody\n\n<!-- mechanix:id=note-1 -->\n',
+        );
+
+        final stat = await file.stat();
+        final doc = _makeDoc(
+          id: 'note-1',
+          title: 'Note 1',
+          updatedAt: stat.modified,
+          fileName: 'existing_note.md',
+        );
+        when(() => mockIndexingService.getDocument('note-1')).thenReturn(doc);
+
+        // Fast pre-check: getNotes(skip: 1, take: 1) returns empty because only 1 note exists in Tantivy
+        when(
+          () => mockIndexingService.getNotes(skip: 1, take: 1),
+        ).thenAnswer((_) async => []);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(0));
+        // Full 10,000 document scan is skipped
+        verifyNever(() => mockIndexingService.getNotes(skip: 0, take: 10000));
+        verifyNever(() => mockIndexingService.deleteNotesBatch(any()));
+      },
+    );
+
+    test(
+      'purges ghost note from Tantivy and returns null when file is missing from disk (Alternative 2)',
+      () async {
+        final doc = _makeDoc(
+          id: 'ghost-note',
+          title: 'Ghost Title',
+          fileName: 'missing_on_disk.md',
+        );
+        when(
+          () => mockIndexingService.getDocument('ghost-note'),
+        ).thenReturn(doc);
+
+        final result = await repository.getNoteById('ghost-note');
+
+        expect(result, isNull);
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['ghost-note']),
+        ).called(1);
+      },
+    );
+  });
 }
