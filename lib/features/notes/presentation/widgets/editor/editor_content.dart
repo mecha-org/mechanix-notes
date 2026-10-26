@@ -157,40 +157,29 @@ class _MechanixTaskToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = context.colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: SizedBox(
-        width: 20,
-        height: 20,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(4),
-          onTap: taskContext.enabled ? taskContext.onToggle : null,
-          child: MechanixCheckbox(
-            value: taskContext.checked,
-            showFocusIndicator: false,
-            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            checkColor: colorScheme.onPrimary,
-            fillColor: WidgetStateProperty.resolveWith<Color>((states) {
-              if (states.contains(WidgetState.selected)) {
-                return colorScheme.primary;
-              }
-              return Colors.transparent;
-            }),
-            side: WidgetStateBorderSide.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return const BorderSide(color: Colors.transparent, width: 0);
-              }
-              return BorderSide(color: colorScheme.onSurfaceVariant, width: 2);
-            }),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(2),
-            ),
-            onChanged: taskContext.enabled
-                ? (_) => taskContext.onToggle()
-                : null,
-          ),
-        ),
+    return InkWell(
+      borderRadius: BorderRadius.circular(4),
+      onTap: taskContext.enabled ? taskContext.onToggle : null,
+      child: MechanixCheckbox(
+        value: taskContext.checked,
+        showFocusIndicator: false,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+        checkColor: colorScheme.onPrimary,
+        fillColor: WidgetStateProperty.resolveWith<Color>((states) {
+          if (states.contains(WidgetState.selected)) {
+            return colorScheme.primary;
+          }
+          return Colors.transparent;
+        }),
+        side: WidgetStateBorderSide.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
+            return const BorderSide(color: Colors.transparent, width: 0);
+          }
+          return BorderSide(color: colorScheme.onSurfaceVariant, width: 2);
+        }),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+        onChanged: taskContext.enabled ? (_) => taskContext.onToggle() : null,
       ),
     );
   }

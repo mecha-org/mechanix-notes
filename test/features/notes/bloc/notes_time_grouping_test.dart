@@ -255,7 +255,7 @@ void main() {
     );
 
     test(
-      'year transition: note from Dec 31 2025 viewed on Jan 1 2026 > 2 hours ago is last7Days',
+      'year transition: note from Dec 31 2025 viewed on Jan 1 2026 > 2 hours ago is yesterday',
       () async {
         final fakeNow = DateTime(2026, 1, 1, 12, 0, 0);
         final noteDec31 = createNote(
@@ -280,7 +280,7 @@ void main() {
               (s) => s.groupedNotes,
               'groupedNotes',
               containsAllInOrder([
-                const TimeGroup(TimeCategory.last7Days),
+                const TimeGroup(TimeCategory.yesterday),
                 noteDec31,
               ]),
             ),

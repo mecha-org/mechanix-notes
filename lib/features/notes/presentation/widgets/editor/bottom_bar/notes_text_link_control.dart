@@ -302,7 +302,7 @@ class _ModeToggleGroup extends StatelessWidget {
             size: IconButtonSize.xSmall,
             foregroundColor: context.colorScheme.onSurface,
             backgroundColor: context.colorScheme.surfaceContainerHigh,
-            icon: const Icon(Icons.attach_file_rounded, size: 15),
+            icon: Image.asset(NotesIcon.paperClipIcon, height: 22, width: 22),
             borderWidth: 0,
             onPressed: enabled
                 ? () => onModeSelected(NotesBottomBarMode.link)

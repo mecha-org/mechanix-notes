@@ -146,8 +146,8 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       flattened.addAll(pinnedNotes);
     }
 
-    // 2. All notes (including pinned notes) grouped chronologically by time
-    final chronologicalNotes = List<NoteMetaData>.from(notes)
+    // 2. Non-pinned notes grouped chronologically by time
+    final chronologicalNotes = notes.where((n) => !n.isPinned).toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
     TimeGroup? currentGroup = existingGroup?.category == TimeCategory.pinned
@@ -325,6 +325,7 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     final group = switch (true) {
       _ when hoursAgo < 2 => const TimeGroup(TimeCategory.recent),
       _ when daysAgo == 0 => const TimeGroup(TimeCategory.today),
+      _ when daysAgo == 1 => const TimeGroup(TimeCategory.yesterday),
       _ when daysAgo <= 7 => const TimeGroup(TimeCategory.last7Days),
       _ when daysAgo <= 30 => const TimeGroup(TimeCategory.lastMonth),
       _ => TimeGroup(

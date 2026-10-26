@@ -407,7 +407,7 @@ void main() {
     );
 
     blocTest<NotesBloc, NotesState>(
-      'assigns TimeCategory.last7Days for a note updated yesterday',
+      'assigns TimeCategory.yesterday for a note updated yesterday',
       build: () {
         when(
           () => mockRepo.getNotes(any(), any()),
@@ -418,7 +418,7 @@ void main() {
       act: (bloc) => bloc.add(LoadNotes()),
       verify: (bloc) {
         expect(
-          hasCategory(bloc.state.groupedNotes, TimeCategory.last7Days),
+          hasCategory(bloc.state.groupedNotes, TimeCategory.yesterday),
           isTrue,
         );
       },
@@ -1494,7 +1494,7 @@ void main() {
     );
 
     blocTest<NotesBloc, NotesState>(
-      'pinned note appears in both Pinned section and its chronological time section',
+      'pinned note appears only in Pinned section and not in chronological time section',
       build: () {
         when(
           () => mockRepo.getNotes(any(), any()),
@@ -1511,7 +1511,7 @@ void main() {
             .whereType<NoteMetaData>()
             .where((n) => n.id == 'p1')
             .toList();
-        expect(p1Instances.length, equals(2));
+        expect(p1Instances.length, equals(1));
 
         final r1Instances = grouped
             .whereType<NoteMetaData>()

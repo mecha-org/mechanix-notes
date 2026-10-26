@@ -9,7 +9,7 @@ import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_state.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_delete_sheet.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_trash_confirmation_sheet.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_list_view.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_note_card.dart';
@@ -179,7 +179,7 @@ void main() {
           matching: find.byType(MechanixListTile),
         ),
       );
-      expect(noteCardTile.leading, isA<ImageIcon>());
+      expect(noteCardTile.leadingWidgets.first, isA<ImageIcon>());
       expect(noteCardTile.trailingWidgets, isEmpty);
     });
 
@@ -243,7 +243,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Verify delete bottom sheet opens
-      expect(find.byType(HomeDeleteSheet), findsOneWidget);
+      expect(find.byType(EditorTrashConfirmationSheet), findsOneWidget);
     });
   });
 }
