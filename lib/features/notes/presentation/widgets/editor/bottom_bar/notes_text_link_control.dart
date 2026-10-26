@@ -189,17 +189,18 @@ class _NotesTextLinkControlState extends State<NotesTextLinkControl> {
               icon: Image.asset(NotesIcon.italicIcon, height: 15, width: 13.5),
               onPressed: onPressed(widget.onItalicPressed),
             ),
-            _ContextualButton(
-              buttonKey: const Key('notes_text_underline_button'),
-              isSelected: widget.isUnderlineActive,
-              size: widget.size,
-              icon: Image.asset(
-                NotesIcon.underlineIcon,
-                height: 17.25,
-                width: 13.5,
-              ),
-              onPressed: onPressed(widget.onUnderlinePressed),
-            ),
+            // TODO: This feature is not implemented
+            // _ContextualButton(
+            //   buttonKey: const Key('notes_text_underline_button'),
+            //   isSelected: widget.isUnderlineActive,
+            //   size: widget.size,
+            //   icon: Image.asset(
+            //     NotesIcon.underlineIcon,
+            //     height: 17.25,
+            //     width: 13.5,
+            //   ),
+            //   onPressed: onPressed(widget.onUnderlinePressed),
+            // ),
             _ContextualButton(
               buttonKey: const Key('notes_text_strikethrough_button'),
               isSelected: widget.isStrikethroughActive,
