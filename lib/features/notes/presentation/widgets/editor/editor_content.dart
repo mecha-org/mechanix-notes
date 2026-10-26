@@ -20,7 +20,6 @@ class _EditorContentState extends State<EditorContent> {
   Timer? _autoSaveTimer;
   MarkdownEditorController? _lastController;
   String _lastText = '';
-  bool _previousTextWasEmpty = false;
 
   @override
   void initState() {
@@ -41,14 +40,6 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
-  static bool _isWhitespaceOnly(String s) {
-    if (s.isEmpty) return true;
-    for (var i = 0; i < s.length; i++) {
-      if (s.codeUnitAt(i) > 32) return false;
-    }
-    return true;
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -57,28 +48,8 @@ class _EditorContentState extends State<EditorContent> {
       _lastController?.removeListener(_onChanged);
       _lastController = controller;
       _lastText = controller.text;
-      _previousTextWasEmpty = _isWhitespaceOnly(controller.text);
       _lastController?.addListener(_onChanged);
     }
-  }
-
-  void _ensureH1OnEmptyNoteTyping() {
-    final controller = _lastController;
-    if (controller == null) return;
-    final text = controller.text;
-
-    // If document was completely empty and user begins typing, format as H1
-    if (_previousTextWasEmpty && text.isNotEmpty && !text.startsWith('#')) {
-      final newText = '# $text';
-      final newOffset = controller.selection.extentOffset + 2;
-      controller.value = TextEditingValue(
-        text: newText,
-        selection: TextSelection.collapsed(
-          offset: newOffset.clamp(0, newText.length),
-        ),
-      );
-    }
-    _previousTextWasEmpty = _isWhitespaceOnly(text);
   }
 
   void _onChanged() {
@@ -91,10 +62,7 @@ class _EditorContentState extends State<EditorContent> {
     if (currentText == _lastText) return;
     _lastText = currentText;
 
-    _ensureH1OnEmptyNoteTyping();
-
-    final textToSave = controller.text;
-    _lastText = textToSave;
+    final textToSave = currentText;
 
     final editorState = context.read<EditorBloc>().state;
     final lastSaved = editorState is EditorLoaded
