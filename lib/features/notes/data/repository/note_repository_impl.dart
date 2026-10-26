@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
@@ -9,7 +10,7 @@ import 'package:mechanix_notes/features/notes/data/repository/note_repository.da
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
-import 'package:mechanix_notes/objectbox.g.dart';
+import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
 
 class NoteRepositoryImpl extends NoteRepository {
   Store? _store;
@@ -81,70 +82,25 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  @override
-  Future<List<NoteMetaData>> getNotes(int skip, int take) async {
-    try {
-      await ensureStoreConnected();
-      final queryBuilder = box.query()
-        ..order(NoteModel_.isPinned, flags: Order.descending)
-        ..order(NoteModel_.updatedAt, flags: Order.descending);
-      final query = queryBuilder.build();
-      query.offset = skip;
-      query.limit = take;
-
-      final notes = query.find();
-      query.close();
-
-      if (notes.isEmpty) {
-        AppLogger.i("No notes found");
-        return [];
-      }
-
-      final metaDataList = notes.map((note) {
-        return NoteMetaData(
-          id: note.id,
-          height: note.height,
-          title: note.title,
-          createdAt: note.createdAt,
-          updatedAt: note.updatedAt,
-          previewText: note.previewText,
-          isPinned: note.isPinned,
-        );
-      }).toList();
-
-      AppLogger.i(
-        "Fetched notes page (skip: $skip, take: $take) → page size: ${metaDataList.length}",
-      );
-      return metaDataList;
-    } catch (e) {
-      AppLogger.e('Failed to fetch notes: $e');
-      return [];
-    }
-  }
+  static NoteMetaData _toMetaData(NoteModel note) => NoteMetaData(
+    id: note.id,
+    height: note.height,
+    title: note.title,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    previewText: note.previewText,
+    isPinned: note.isPinned,
+  );
 
   @override
-  Future<NoteMetaData?> getNoteMetaData(String id) async {
-    try {
-      await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(id)).build();
-      final note = query.findFirst();
-      query.close();
-      if (note != null) {
-        return NoteMetaData(
-          id: note.id,
-          height: note.height,
-          title: note.title,
-          createdAt: note.createdAt,
-          updatedAt: note.updatedAt,
-          previewText: note.previewText,
-          isPinned: note.isPinned,
-        );
-      }
-      return null;
-    } catch (e) {
-      AppLogger.e('Failed to fetch note metadata by id: $e');
-      return null;
-    }
+  Stream<List<NoteMetaData>> watchNotes() async* {
+    await ensureStoreConnected();
+    final queryBuilder = box.query()
+      ..order(NoteModel_.isPinned, flags: Order.descending)
+      ..order(NoteModel_.updatedAt, flags: Order.descending);
+    yield* queryBuilder
+        .watch(triggerImmediately: true)
+        .map((query) => query.find().map(_toMetaData).toList());
   }
 
   @override
@@ -321,13 +277,17 @@ class NoteRepositoryImpl extends NoteRepository {
         currentFileName: currentFileName,
       );
 
-      // Store fileName in ObjectBox and keep content empty in database
+      // Store fileName in ObjectBox; content and plain text live only in the
+      // .md file and the search index, so keep them out of the database
+      final plainText = note.plainText;
       note.fileName = savedFileName;
       note.content = '';
+      note.plainText = '';
       box.put(note);
 
-      // Restore clean markdown in in-memory note instance
+      // Restore clean markdown and plain text in in-memory note instance
       note.content = cleanMarkdown;
+      note.plainText = plainText;
 
       await _indexingService.upsertNote(note.id, note.title, note.plainText);
       AppLogger.i(
@@ -365,19 +325,7 @@ class NoteRepositoryImpl extends NoteRepository {
       final matchingNotes = <NoteMetaData>[];
       for (final id in ids) {
         final note = notesMap[id];
-        if (note != null) {
-          matchingNotes.add(
-            NoteMetaData(
-              id: note.id,
-              height: note.height,
-              title: note.title,
-              createdAt: note.createdAt,
-              updatedAt: note.updatedAt,
-              previewText: note.previewText,
-              isPinned: note.isPinned,
-            ),
-          );
-        }
+        if (note != null) matchingNotes.add(_toMetaData(note));
       }
       AppLogger.i(
         "Found ${matchingNotes.length} matching notes via IndexingService",

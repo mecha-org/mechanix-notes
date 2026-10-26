@@ -22,6 +22,20 @@ class MockNotesBloc extends MockBloc<NotesEvent, NotesState>
 
 class FakeNotesEvent extends Fake implements NotesEvent {}
 
+Map<TimeGroup, int> countNotesPerGroup(List<dynamic> groupedNotes) {
+  final counts = <TimeGroup, int>{};
+  TimeGroup? group;
+  for (final item in groupedNotes) {
+    if (item is TimeGroup) {
+      group = item;
+      counts[item] = 0;
+    } else if (group != null) {
+      counts[group] = counts[group]! + 1;
+    }
+  }
+  return counts;
+}
+
 void main() {
   late MockNotesBloc mockNotesBloc;
 
@@ -39,7 +53,12 @@ void main() {
       supportedLocales: AppLocalizations.supportedLocales,
       home: BlocProvider<NotesBloc>.value(
         value: mockNotesBloc,
-        child: Scaffold(body: HomeListView(groupedNotes: groupedNotes)),
+        child: Scaffold(
+          body: HomeListView(
+            groupedNotes: groupedNotes,
+            groupCounts: countNotesPerGroup(groupedNotes),
+          ),
+        ),
       ),
     );
   }

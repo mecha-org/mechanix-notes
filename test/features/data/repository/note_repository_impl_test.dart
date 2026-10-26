@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
-import 'package:mechanix_notes/objectbox.g.dart';
+import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
 import 'package:mocktail/mocktail.dart';
 
 // ---------------------------------------------------------------------------
@@ -60,6 +62,14 @@ class TestableNoteRepositoryImpl extends NoteRepositoryImpl {
   Future<void> ensureStoreConnected() async {
     ensureStoreCalled = true;
   }
+}
+
+class _FailingStoreRepository extends TestableNoteRepositoryImpl {
+  _FailingStoreRepository(super.fakeBox, super.indexingService);
+
+  @override
+  Future<void> ensureStoreConnected() async =>
+      throw ObjectBoxException('lock failed');
 }
 
 // ---------------------------------------------------------------------------
@@ -179,48 +189,56 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // getNotes
+  // watchNotes
   // -------------------------------------------------------------------------
 
-  group('getNotes', () {
-    test('returns empty list when box is empty', () async {
-      when(() => mockQuery.find()).thenReturn([]);
+  group('watchNotes', () {
+    test('emits mapped metadata on every query change', () async {
+      final changes = StreamController<Query<NoteModel>>();
+      when(
+        () => mockQueryBuilder.watch(triggerImmediately: true),
+      ).thenAnswer((_) => changes.stream);
 
-      final result = await repository.getNotes(0, 10);
+      final note1 = _makeNote(id: '1', title: 'Note 1');
+      final note2 = _makeNote(id: '2', title: 'Note 2');
+      final emitted = <List<String>>[];
+      final sub = repository.watchNotes().listen(
+        (notes) => emitted.add(notes.map((n) => n.id).toList()),
+      );
+      await pumpEventQueue();
 
-      expect(result, isEmpty);
+      when(() => mockQuery.find()).thenReturn([note1]);
+      changes.add(mockQuery);
+      await pumpEventQueue();
+      when(() => mockQuery.find()).thenReturn([note2, note1]);
+      changes.add(mockQuery);
+      await pumpEventQueue();
+
+      expect(emitted, [
+        ['1'],
+        ['2', '1'],
+      ]);
       expect(repository.ensureStoreCalled, isTrue);
+      verify(
+        () => mockQueryBuilder.order(
+          NoteModel_.isPinned,
+          flags: Order.descending,
+        ),
+      ).called(1);
+      verify(
+        () => mockQueryBuilder.order(
+          NoteModel_.updatedAt,
+          flags: Order.descending,
+        ),
+      ).called(1);
+
+      await sub.cancel();
+      await changes.close();
     });
 
-    test('returns NoteMetaData list when box has notes', () async {
-      final now = DateTime.now();
-      final note1 = _makeNote(
-        id: '1',
-        title: 'Note 1',
-        previewText: 'Preview 1',
-        height: 150,
-        updatedAt: now.subtract(const Duration(hours: 1)),
-      );
-      final note2 = _makeNote(
-        id: '2',
-        title: 'Note 2',
-        previewText: 'Preview 2',
-        height: 200,
-        updatedAt: now,
-      );
-
-      when(() => mockQuery.find()).thenReturn([note1, note2]);
-
-      final result = await repository.getNotes(0, 10);
-
-      expect(result, hasLength(2));
-      expect(result.map((n) => n.id), containsAll(['1', '2']));
-    });
-
-    test('maps NoteModel fields to NoteMetaData correctly', () async {
+    test('maps NoteModel fields to NoteMetaData', () async {
       final createdAt = DateTime(2024, 1, 1);
       final updatedAt = DateTime(2024, 6, 1);
-
       final note = _makeNote(
         id: 'abc',
         title: 'My Note',
@@ -228,76 +246,39 @@ void main() {
         height: 300,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        isPinned: true,
       );
-
+      when(
+        () => mockQueryBuilder.watch(triggerImmediately: true),
+      ).thenAnswer((_) => Stream.value(mockQuery));
       when(() => mockQuery.find()).thenReturn([note]);
 
-      final result = await repository.getNotes(0, 10);
+      final meta = (await repository.watchNotes().first).single;
 
-      expect(result, hasLength(1));
-      final meta = result.first;
-      expect(meta.id, equals('abc'));
-      expect(meta.title, equals('My Note'));
-      expect(meta.previewText, equals('Some preview'));
-      expect(meta.height, equals(300));
-      expect(meta.createdAt, equals(createdAt));
-      expect(meta.updatedAt, equals(updatedAt));
+      expect(meta.id, 'abc');
+      expect(meta.title, 'My Note');
+      expect(meta.previewText, 'Some preview');
+      expect(meta.height, 300);
+      expect(meta.createdAt, createdAt);
+      expect(meta.updatedAt, updatedAt);
+      expect(meta.isPinned, isTrue);
     });
 
-    test(
-      'orders query by isPinned and updatedAt in descending order',
-      () async {
-        when(() => mockQuery.find()).thenReturn([]);
+    test('forwards store errors to the listener', () async {
+      final failing = _FailingStoreRepository(mockBox, mockIndexingService);
 
-        await repository.getNotes(0, 10);
-
-        verify(
-          () => mockQueryBuilder.order(
-            NoteModel_.isPinned,
-            flags: Order.descending,
-          ),
-        ).called(1);
-        verify(
-          () => mockQueryBuilder.order(
-            NoteModel_.updatedAt,
-            flags: Order.descending,
-          ),
-        ).called(1);
-      },
-    );
-
-    test('returns empty list and does not throw on exception', () async {
-      when(() => mockQuery.find()).thenThrow(Exception('ObjectBox error'));
-
-      final result = await repository.getNotes(0, 10);
-
-      expect(result, isEmpty);
-    });
-
-    test('calls ensureStoreConnected before accessing box', () async {
-      when(() => mockQuery.find()).thenReturn([]);
-
-      await repository.getNotes(0, 10);
-
-      expect(repository.ensureStoreCalled, isTrue);
+      await expectLater(
+        failing.watchNotes(),
+        emitsError(isA<ObjectBoxException>()),
+      );
     });
   });
 
   // -------------------------------------------------------------------------
-  // getNoteById & getNoteMetaData
+  // getNoteById
   // -------------------------------------------------------------------------
 
-  group('getNoteById & getNoteMetaData', () {
-    test('returns metadata of single note by id correctly', () async {
-      final note = _makeNote(id: 'solo', title: 'Solo Note');
-      when(() => mockQuery.findFirst()).thenReturn(note);
-
-      final result = await repository.getNoteMetaData('solo');
-
-      expect(result, isNotNull);
-      expect(result!.id, equals('solo'));
-    });
-
+  group('getNoteById', () {
     test('returns NoteModel by id correctly', () async {
       final note = _makeNote(id: 'solo', title: 'Solo Note');
       when(() => mockQuery.findFirst()).thenReturn(note);
@@ -338,6 +319,34 @@ void main() {
       expect(note.obxId, 42);
       verify(() => mockBox.put(note)).called(1);
     });
+
+    test(
+      'upsertNote keeps content and plain text out of the database',
+      () async {
+        final note = _makeNote(id: '1', title: 'Title')
+          ..content = '# Title\nbody'
+          ..plainText = 'Title body';
+        String? storedContent;
+        String? storedPlainText;
+
+        when(() => mockQuery.findFirst()).thenReturn(null);
+        when(() => mockBox.put(any())).thenAnswer((inv) {
+          final stored = inv.positionalArguments.first as NoteModel;
+          storedContent = stored.content;
+          storedPlainText = stored.plainText;
+          return 1;
+        });
+
+        await repository.upsertNote(note);
+
+        expect(storedContent, isEmpty);
+        expect(storedPlainText, isEmpty);
+        expect(note.plainText, 'Title body');
+        verify(
+          () => mockIndexingService.upsertNote('1', 'Title', 'Title body'),
+        ).called(1);
+      },
+    );
 
     test(
       'upsertNote propagates DbFullException when writing to box fails',

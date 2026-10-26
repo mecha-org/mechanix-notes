@@ -50,8 +50,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [note]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([note]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
@@ -82,8 +82,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [note1]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([note1]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
@@ -113,8 +113,8 @@ void main() {
       );
 
       when(
-        () => repository.getNotes(any(), any()),
-      ).thenAnswer((_) async => [note]);
+        () => repository.watchNotes(),
+      ).thenAnswer((_) => Stream.value([note]));
 
       final bloc = NotesBloc(noteRepository: repository, clock: () => fakeNow);
 
@@ -141,8 +141,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [note]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([note]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
@@ -179,8 +179,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [note7Days, note8Days]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([note7Days, note8Days]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
@@ -222,8 +222,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [note30Days, note31Days]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([note30Days, note31Days]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
@@ -264,8 +264,8 @@ void main() {
         );
 
         when(
-          () => repository.getNotes(any(), any()),
-        ).thenAnswer((_) async => [noteDec31]);
+          () => repository.watchNotes(),
+        ).thenAnswer((_) => Stream.value([noteDec31]));
 
         final bloc = NotesBloc(
           noteRepository: repository,
