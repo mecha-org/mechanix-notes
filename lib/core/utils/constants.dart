@@ -12,5 +12,5 @@ class Constants {
   static const int searchResultLimit = 1000;
   static const int maxDBSizeInKB = 15000; //15 mb
   static const String notesSubDir = "notes";
-  static const String defaultNoteFileName = "notes";
+  static const String defaultNoteFileName = "untitled";
 }

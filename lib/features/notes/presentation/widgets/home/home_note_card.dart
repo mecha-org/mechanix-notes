@@ -25,11 +25,8 @@ class HomeNoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = note.title.isNotEmpty ? note.title : note.previewText;
-    final supportingText =
-        note.title.isNotEmpty &&
-            note.previewText.isNotEmpty &&
-            note.title != note.previewText
+    final title = note.title.isNotEmpty ? note.title : '';
+    final supportingText = note.previewText.isNotEmpty
         ? note.previewText
         : null;
     final formattedDate = _formatDate(note.updatedAt);

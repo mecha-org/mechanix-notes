@@ -25,7 +25,7 @@ MarkdownEditorThemeData markdownEditorTheme(BuildContext context) {
     textColor: colorScheme.onSurface,
     mutedTextColor: colorScheme.onSurfaceVariant,
     accentColor: colorScheme.primary,
-    selectionColor: colorScheme.primary.withValues(alpha: 0.16),
+    selectionColor: colorScheme.primary.withValues(alpha: 0.25),
     caretColor: colorScheme.primary,
     highlightColor: colorScheme.primary.withValues(alpha: 0.15),
     codeBackgroundColor: colorScheme.surfaceContainer,
