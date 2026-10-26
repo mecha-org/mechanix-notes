@@ -6,6 +6,7 @@ import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/core/utils/markdown_editor_styles.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/editor/markdown_controller_provider.dart';
+import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
 class EditorContent extends StatefulWidget {
@@ -96,23 +97,49 @@ class _EditorContentState extends State<EditorContent> {
   @override
   Widget build(BuildContext context) {
     final provider = MarkdownControllerProvider.of(context);
+    final theme = markdownEditorTheme(context);
+    final l10n = AppLocalizations.of(context);
 
     return RepaintBoundary(
-      child: LiveMarkdownEditor(
-        controller: provider.controller,
-        focusNode: provider.focusNode,
-        scrollController: _scrollController,
-        theme: markdownEditorTheme(context),
-        behavior: const MarkdownEditingBehavior(
-          autoPair: true,
-          wrapSelection: true,
-          smartLists: true,
-          autoCloseFences: true,
-        ),
-        componentBuilders: MarkdownEditorComponentBuilders(
-          taskToggleBuilder: (context, taskContext) =>
-              _MechanixTaskToggle(taskContext: taskContext),
-        ),
+      child: Stack(
+        children: [
+          LiveMarkdownEditor(
+            controller: provider.controller,
+            focusNode: provider.focusNode,
+            scrollController: _scrollController,
+            theme: theme,
+            behavior: const MarkdownEditingBehavior(
+              autoPair: true,
+              wrapSelection: true,
+              smartLists: true,
+              autoCloseFences: true,
+            ),
+            componentBuilders: MarkdownEditorComponentBuilders(
+              taskToggleBuilder: (context, taskContext) =>
+                  _MechanixTaskToggle(taskContext: taskContext),
+            ),
+          ),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: provider.controller,
+            builder: (context, value, _) {
+              if (value.text.isNotEmpty) {
+                return const SizedBox.shrink();
+              }
+              return Positioned(
+                left: theme.contentPadding.left,
+                top: theme.contentPadding.top,
+                child: IgnorePointer(
+                  child: Text(
+                    l10n?.startWriting ?? 'Start writing…',
+                    style: theme.bodyStyle.copyWith(
+                      color: theme.mutedTextColor,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
