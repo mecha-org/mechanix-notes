@@ -116,7 +116,10 @@ class NoteRepositoryImpl extends NoteRepository {
       ..order(NoteModel_.updatedAt, flags: Order.descending);
     yield* queryBuilder
         .watch(triggerImmediately: true)
-        .map((query) => query.find().map(_toMetaData).toList());
+        .asyncMap((query) async {
+          final notes = await query.findAsync();
+          return notes.map(_toMetaData).toList();
+        });
   }
 
   @override

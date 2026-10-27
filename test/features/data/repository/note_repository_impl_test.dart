@@ -207,10 +207,10 @@ void main() {
       );
       await pumpEventQueue();
 
-      when(() => mockQuery.find()).thenReturn([note1]);
+      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1]);
       changes.add(mockQuery);
       await pumpEventQueue();
-      when(() => mockQuery.find()).thenReturn([note2, note1]);
+      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note2, note1]);
       changes.add(mockQuery);
       await pumpEventQueue();
 
@@ -251,7 +251,7 @@ void main() {
       when(
         () => mockQueryBuilder.watch(triggerImmediately: true),
       ).thenAnswer((_) => Stream.value(mockQuery));
-      when(() => mockQuery.find()).thenReturn([note]);
+      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note]);
 
       final meta = (await repository.watchNotes().first).single;
 
