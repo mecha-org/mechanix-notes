@@ -39,9 +39,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     try {
       final ids = await noteRepository.searchNoteIds(query);
-      final firstPage = await noteRepository.getNotesMetaData(
-        _pageIds(ids, 0),
-      );
+      final firstPage = await noteRepository.getNotesMetaData(_pageIds(ids, 0));
 
       AppLogger.i("Found ${ids.length} matching notes");
 
@@ -98,7 +96,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     }
   }
 
-  /// Whether a new search or a clear started while a page of [ids] loaded.
   bool _isStale(List<String> ids) =>
       state.status != SearchStatus.success || !identical(state.resultIds, ids);
 
