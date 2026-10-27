@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SliverLayoutDimensions;
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/features/notes/presentation/widgets/home/home_group_label.dart';
@@ -9,6 +10,13 @@ import 'package:widgets/widgets.dart';
 
 const double _cardGap = 16;
 const double _sectionGap = 24;
+
+/// Gap between an expanded group header and its first note.
+const double _headerGap = 12;
+
+/// Rendered height of [HomeNoteCard] and [HomeGroupHeader]: their 50px tile
+@visibleForTesting
+const double homeTileHeight = 52;
 
 class HomeListView extends StatefulWidget {
   const HomeListView({
@@ -84,8 +92,25 @@ class _HomeListViewState extends State<HomeListView> {
       ? ValueKey<String>(item.id)
       : ValueKey<TimeGroup>(item as TimeGroup);
 
+  /// Exact item heights let the list jump straight to any offset
+  /// instead of building every item in between, and keep the scrollbar thumb's size and position accurate.
+  double _itemExtent(int index, SliverLayoutDimensions dimensions) {
+    final item = _items[index];
+    if (item is TimeGroup) {
+      return homeTileHeight +
+          _GroupHeaderItem.bottomGap(
+            isCollapsed: _collapsedGroups.contains(item),
+            count: widget.groupCounts[item] ?? 0,
+          );
+    }
+    return homeTileHeight +
+        _NoteItem.bottomGap(isLastInGroup: _isLastInGroup(index));
+  }
+
+  bool _isLastInGroup(int index) =>
+      index == _items.length - 1 || _items[index + 1] is TimeGroup;
+
   /// Lets the list keep each item's state (swipe, expansion) when notes move,
-  /// e.g. an edited note jumping to the top.
   int? _findChildIndex(Key key) {
     final indexByKey = _indexByKey ??= {
       for (var i = 0; i < _items.length; i++) _keyFor(_items[i]): i,
@@ -107,6 +132,7 @@ class _HomeListViewState extends State<HomeListView> {
             physics: const AlwaysScrollableScrollPhysics(),
             itemCount: _items.length,
             findChildIndexCallback: _findChildIndex,
+            itemExtentBuilder: _itemExtent,
             itemBuilder: (context, index) {
               final item = _items[index];
               if (item is TimeGroup) {
@@ -121,9 +147,7 @@ class _HomeListViewState extends State<HomeListView> {
               return _NoteItem(
                 key: _keyFor(item),
                 note: item as NoteMetaData,
-                isLastInGroup:
-                    index == _items.length - 1 ||
-                    _items[index + 1] is TimeGroup,
+                isLastInGroup: _isLastInGroup(index),
               );
             },
           ),
@@ -147,11 +171,15 @@ class _GroupHeaderItem extends StatelessWidget {
   final bool isCollapsed;
   final void Function(TimeGroup group, bool isExpanded) onExpansionChanged;
 
+  static double bottomGap({required bool isCollapsed, required int count}) =>
+      (isCollapsed ? 0 : _headerGap) +
+      (isCollapsed || count == 0 ? _sectionGap : 0);
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        bottom: isCollapsed || count == 0 ? _sectionGap : 0,
+        bottom: bottomGap(isCollapsed: isCollapsed, count: count),
       ),
       child: HomeGroupHeader(
         group: group,
@@ -170,6 +198,9 @@ class _NoteItem extends StatelessWidget {
   final NoteMetaData note;
   final bool isLastInGroup;
 
+  static double bottomGap({required bool isLastInGroup}) =>
+      isLastInGroup ? _cardGap + _sectionGap : _cardGap;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -177,7 +208,7 @@ class _NoteItem extends StatelessWidget {
         10,
         0,
         10,
-        isLastInGroup ? _cardGap + _sectionGap : _cardGap,
+        bottomGap(isLastInGroup: isLastInGroup),
       ),
       child: HomeNoteCard(note: note),
     );

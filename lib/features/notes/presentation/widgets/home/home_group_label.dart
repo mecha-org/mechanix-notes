@@ -31,7 +31,7 @@ class HomeGroupHeader extends StatelessWidget {
 
     return MechanixExpandableListTile(
       key: ValueKey('tile_${group.category}_${group.customLabel}'),
-      expandedContentGap: 12,
+      expandedContentGap: 0,
       label: SizedBox(
         height: 50,
         child: Column(
