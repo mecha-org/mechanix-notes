@@ -30,6 +30,9 @@ class IntegrationTestHelper {
           await noteRepository!.deleteNotes(notes.map((n) => n.id).toList());
         }
       } catch (_) {}
+      try {
+        await noteRepository!.close();
+      } catch (_) {}
     }
     if (tempDir != null && tempDir!.existsSync()) {
       try {

@@ -13,15 +13,19 @@ import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart
 import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
 
 class NoteRepositoryImpl extends NoteRepository {
+  static Store? _sharedStore;
+
   Store? _store;
   Box<NoteModel>? _box;
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
 
   NoteRepositoryImpl({
+    Store? store,
     IndexingService? indexingService,
     NoteFileStorage? fileStorage,
-  }) : _indexingService = indexingService ?? IndexingService(),
+  }) : _store = store,
+       _indexingService = indexingService ?? IndexingService(),
        _fileStorage = fileStorage ?? NoteFileStorage();
 
   Box<NoteModel> get box {
@@ -35,6 +39,12 @@ class NoteRepositoryImpl extends NoteRepository {
 
   Future<void> ensureStoreConnected() async {
     if (_store != null && !_store!.isClosed()) return;
+
+    if (_sharedStore != null && !_sharedStore!.isClosed()) {
+      _store = _sharedStore;
+      _box = _store!.box<NoteModel>();
+      return;
+    }
 
     try {
       await _initializeStore();
@@ -69,10 +79,16 @@ class NoteRepositoryImpl extends NoteRepository {
         await appDir.create(recursive: true);
       }
 
-      _store = await openStore(
-        maxDBSizeInKB: Constants.maxDBSizeInKB,
-        directory: appDir.path,
-      );
+      if (_sharedStore != null && !_sharedStore!.isClosed()) {
+        _store = _sharedStore;
+      } else {
+        _sharedStore = await openStore(
+          maxDBSizeInKB: Constants.maxDBSizeInKB,
+          directory: appDir.path,
+        );
+        _store = _sharedStore;
+      }
+
       _box = _store!.box<NoteModel>();
 
       AppLogger.i('[NoteRepository] ObjectBox store opened at ${appDir.path}');
@@ -356,5 +372,15 @@ class NoteRepositoryImpl extends NoteRepository {
       AppLogger.e('NoteRepository: togglePinNote failed: $e');
       return false;
     }
+  }
+
+  @override
+  Future<void> close() async {
+    if (_sharedStore != null && !_sharedStore!.isClosed()) {
+      _sharedStore!.close();
+      _sharedStore = null;
+    }
+    _store = null;
+    _box = null;
   }
 }

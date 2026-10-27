@@ -30,12 +30,10 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
 
   Future<void> _loadNotes(LoadNotes event, Emitter<NotesState> emit) async {
     emit(state.copyWith(isLoading: true));
-    AppLogger.i("Watching notes");
 
     await emit.forEach<List<NoteMetaData>>(
       noteRepository.watchNotes(),
       onData: (notes) {
-        AppLogger.i("Notes updated — ${notes.length} notes");
         final (groupedNotes, groupCounts) = _buildFlattenedNotes(notes);
         return state.copyWith(
           notes: notes,

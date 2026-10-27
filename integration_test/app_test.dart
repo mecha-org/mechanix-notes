@@ -26,6 +26,9 @@ void main() {
           await noteRepository.deleteNotes(notes.map((n) => n.id).toList());
         }
       } catch (_) {}
+      try {
+        await noteRepository.close();
+      } catch (_) {}
     });
 
     // Helper to find EditorButton by asset

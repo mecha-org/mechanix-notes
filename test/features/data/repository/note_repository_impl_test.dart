@@ -412,7 +412,8 @@ void main() {
         // File renamed externally on disk to 'Renamed File.md'
         await fileStorage.writeNoteContent(
           title: 'Renamed File',
-          markdown: '# Renamed Title\n\nContent\n\n<!-- mechanix:id=heal-test -->\n',
+          markdown:
+              '# Renamed Title\n\nContent\n\n<!-- mechanix:id=heal-test -->\n',
         );
 
         // ObjectBox still has old fileName 'Old File.md'
@@ -438,7 +439,8 @@ void main() {
         final largeBody = 'A' * 2500;
         await fileStorage.writeNoteContent(
           title: 'Large File',
-          markdown: '# Large Note\n\n$largeBody\n\n<!-- mechanix:id=large-heal -->\n',
+          markdown:
+              '# Large Note\n\n$largeBody\n\n<!-- mechanix:id=large-heal -->\n',
         );
 
         final noteInDb = _makeNote(id: 'large-heal', title: 'Large Note');
@@ -537,6 +539,12 @@ void main() {
 
       expect(result, isFalse);
       verifyNever(() => mockBox.put(any()));
+    });
+  });
+
+  group('close', () {
+    test('closes store and completes without error', () async {
+      await expectLater(repository.close(), completes);
     });
   });
 }
