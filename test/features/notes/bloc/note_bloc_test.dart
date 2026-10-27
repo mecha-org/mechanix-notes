@@ -78,7 +78,13 @@ class FakeNoteRepository implements NoteRepository {
   Future<void> upsertNote(NoteModel note) async {}
 
   @override
-  Future<List<NoteMetaData>> searchNotes(String query) async => [];
+  Future<List<String>> searchNoteIds(String query) async => [];
+
+  @override
+  Future<List<NoteMetaData>> getNotesMetaData(List<String> ids) async => [];
+
+  @override
+  Future<void> close() async {}
 }
 
 // ---------------------------------------------------------------------------

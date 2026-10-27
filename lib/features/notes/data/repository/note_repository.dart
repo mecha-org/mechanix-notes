@@ -8,7 +8,13 @@ abstract class NoteRepository {
   Future<NoteModel?> getNoteById(String id);
   Future<void> deleteNotes(List<String> ids);
   Future<void> upsertNote(NoteModel note);
-  Future<List<NoteMetaData>> searchNotes(String query);
+
+  /// Returns the ids of notes matching [query], most relevant first.
+  Future<List<String>> searchNoteIds(String query);
+
+  /// Returns the metadata of the notes with the given [ids], in the same
+  /// order. Ids with no stored note are skipped.
+  Future<List<NoteMetaData>> getNotesMetaData(List<String> ids);
   Future<bool> togglePinNote(String id);
   Future<void> close();
 }

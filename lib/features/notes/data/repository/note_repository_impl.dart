@@ -329,29 +329,35 @@ class NoteRepositoryImpl extends NoteRepository {
   }
 
   @override
-  Future<List<NoteMetaData>> searchNotes(String query) async {
+  Future<List<String>> searchNoteIds(String query) async {
     try {
       await ensureStoreConnected();
       final ids = await _indexingService.search(query);
-      if (ids.isEmpty) return [];
-
-      final queryBuilder = box.query(NoteModel_.id.oneOf(ids));
-      final q = queryBuilder.build();
-      final dbNotes = q.find();
-      q.close();
-
-      final notesMap = {for (var note in dbNotes) note.id: note};
-      final matchingNotes = <NoteMetaData>[];
-      for (final id in ids) {
-        final note = notesMap[id];
-        if (note != null) matchingNotes.add(_toMetaData(note));
-      }
-      AppLogger.i(
-        "Found ${matchingNotes.length} matching notes via IndexingService",
-      );
-      return matchingNotes;
+      AppLogger.i("Found ${ids.length} matching note ids via IndexingService");
+      return ids;
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
+      return [];
+    }
+  }
+
+  @override
+  Future<List<NoteMetaData>> getNotesMetaData(List<String> ids) async {
+    if (ids.isEmpty) return [];
+    try {
+      await ensureStoreConnected();
+      final q = box.query(NoteModel_.id.oneOf(ids)).build();
+      final dbNotes = await q.findAsync();
+      q.close();
+
+      // Restore the caller's order (search relevance); oneOf does not keep it
+      final notesMap = {for (var note in dbNotes) note.id: note};
+      return [
+        for (final id in ids)
+          if (notesMap[id] case final note?) _toMetaData(note),
+      ];
+    } catch (e) {
+      AppLogger.e('Failed to load notes metadata: $e');
       return [];
     }
   }

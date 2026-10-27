@@ -479,27 +479,48 @@ void main() {
   });
 
   // -------------------------------------------------------------------------
-  // searchNotes
+  // searchNoteIds / getNotesMetaData
   // -------------------------------------------------------------------------
 
-  group('searchNotes', () {
-    test('queries box with title and preview text contains', () async {
-      final note1 = _makeNote(id: '1', title: 'matching title');
-      final note2 = _makeNote(
-        id: '2',
-        title: 'other',
-        previewText: 'matching preview',
-      );
-
+  group('searchNoteIds', () {
+    test('returns ids from the index in relevance order', () async {
       when(
         () => mockIndexingService.search('match'),
-      ).thenAnswer((_) async => ['1', '2']);
-      when(() => mockQuery.find()).thenReturn([note1, note2]);
+      ).thenAnswer((_) async => ['2', '1']);
 
-      final result = await repository.searchNotes('match');
+      final result = await repository.searchNoteIds('match');
 
-      expect(result, hasLength(2));
-      expect(result.map((n) => n.id), containsAll(['1', '2']));
+      expect(result, ['2', '1']);
+      verifyNever(() => mockBox.query(any()));
+    });
+  });
+
+  group('getNotesMetaData', () {
+    test('returns notes in the order of the given ids', () async {
+      final note1 = _makeNote(id: '1', title: 'first');
+      final note2 = _makeNote(id: '2', title: 'second');
+      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1, note2]);
+
+      final result = await repository.getNotesMetaData(['2', '1']);
+
+      expect(result.map((n) => n.id), ['2', '1']);
+      verify(() => mockQuery.close()).called(1);
+    });
+
+    test('skips ids with no stored note', () async {
+      final note1 = _makeNote(id: '1', title: 'first');
+      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1]);
+
+      final result = await repository.getNotesMetaData(['gone', '1']);
+
+      expect(result.map((n) => n.id), ['1']);
+    });
+
+    test('does not query the box for an empty id list', () async {
+      final result = await repository.getNotesMetaData([]);
+
+      expect(result, isEmpty);
+      verifyNever(() => mockBox.query(any()));
     });
   });
 
