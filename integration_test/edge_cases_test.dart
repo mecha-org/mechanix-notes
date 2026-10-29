@@ -1,118 +1,76 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
-import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/core/utils/constants.dart';
+
 import 'test_helper.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Edge Cases Tests', () {
-    final helper = IntegrationTestHelper();
+  appTest('very long title is saved in full', (tester) async {
+    final longTitle = List.filled(30, 'Longword').join(' '); // ~270 chars
+    await createNote(tester, '$longTitle\nbody');
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    expect(find.text(longTitle), findsOneWidget);
+    expect((await savedNotes()).single.title, longTitle);
+  });
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+  appTest('very long content is saved in full, preview is capped', (
+    tester,
+  ) async {
+    final body = List.generate(2000, (i) => 'word$i').join(' ');
+    await createNote(tester, 'Big note\n$body');
 
-    testWidgets('Very Long Title', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    final meta = (await savedNotes()).single;
+    expect(
+      meta.previewText.length,
+      lessThanOrEqualTo(Constants.notePreviewTextMaxLength),
+    );
+    final saved = await savedNote(meta.id);
+    expect(saved!.content, 'Big note\n$body');
 
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    await openNote(tester, 'Big note');
+    expect(editorText(tester), 'Big note\n$body');
+  });
 
-      final titleField = find.byType(TextField).first;
-      final longTitle = 'A' * 200;
-      await tester.enterText(titleField, longTitle);
+  appTest('unicode and special characters', (tester) async {
+    const title = 'Café ☕ naïve "quotes" / back\\slash: 日本語';
+    await createNote(tester, '$title\nemoji 🎉 body');
 
-      // Wait debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
+    expect(find.text(title), findsOneWidget);
+    final saved = await savedNote((await savedNotes()).single.id);
+    expect(saved!.title, title);
+    expect(saved.content, '$title\nemoji 🎉 body');
+  });
 
-      // Back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
+  appTest('whitespace-only note is discarded', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, '   \n   \n');
+    await tapEditorBack(tester);
 
-      // Verify no overflow by pumping
-      expect(find.text('Notes'), findsWidgets);
-    });
+    expect(find.text('Write a note'), findsOneWidget);
+    expect(await savedNotes(), isEmpty);
+  });
 
-    testWidgets('Very Long Content', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+  appTest('rapid open and close does not create notes', (tester) async {
+    for (var i = 0; i < 5; i++) {
+      await openNewNote(tester);
+      await tapEditorBack(tester);
+    }
+    expect(find.text('Write a note'), findsOneWidget);
+    expect(await savedNotes(), isEmpty);
+  });
 
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+  appTest('two notes with the same title are both kept', (tester) async {
+    await createNote(tester, 'Same title\nfirst body');
+    await createNote(tester, 'Same title\nsecond body');
 
-      final longContent = 'B' * 1000;
-      await IntegrationTestHelper.enterQuillText(tester, longContent);
-
-      // Wait debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      // Back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Notes'), findsWidgets);
-    });
-
-    testWidgets('Empty Note Handling', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      // Leave empty and go back immediately or after debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Notes'), findsWidgets);
-    });
-
-    testWidgets('Rapid Open/Close', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      for (int i = 0; i < 3; i++) {
-        await tester.tap(
-          IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-        );
-        await tester.pumpAndSettle();
-        await IntegrationTestHelper.waitForEditor(tester);
-
-        await tester.tap(
-          IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-        );
-        await tester.pumpAndSettle();
-      }
-
-      expect(find.text('Notes'), findsWidgets);
-    });
+    expect(find.text('Same title'), findsNWidgets(2));
+    final notes = await savedNotes();
+    expect(notes, hasLength(2));
+    final contents = [for (final n in notes) (await savedNote(n.id))!.content];
+    expect(
+      contents,
+      unorderedEquals(['Same title\nfirst body', 'Same title\nsecond body']),
+    );
   });
 }

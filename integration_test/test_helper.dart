@@ -1,153 +1,265 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:live_markdown_editor/live_markdown_editor.dart'
-    show LiveMarkdownEditor;
+import 'package:integration_test/integration_test.dart';
+import 'package:live_markdown_editor/live_markdown_editor.dart';
+import 'package:mechanix_notes/core/utils/app_paths.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
+import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
+import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
-import 'package:mechanix_notes/features/notes/presentation/widgets/editor/editor_button.dart';
+import 'package:mechanix_notes/main.dart' as app;
 
-class IntegrationTestHelper {
-  NoteRepository? noteRepository;
-  Directory? tempDir;
+// ---------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------
 
-  Future<void> setUp({bool useTempDir = false}) async {
-    if (useTempDir) {
-      tempDir = Directory.systemTemp.createTempSync('mechanix_notes_it_');
-      noteRepository = NoteRepositoryImpl();
-    } else {
-      noteRepository = NoteRepositoryImpl();
-    }
-  }
+/// Call once at the top of `main()` in every integration test file.
+///
+/// All app data (database, search index, note files) goes to a temp folder
+/// for this file, so the user's real notes are never touched. The search
+/// index can only be opened once per process, so the folder is shared by
+/// every test in the file and [appTest] empties it before each test.
+void setUpIntegrationTests() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  Future<void> tearDown() async {
-    if (noteRepository != null) {
-      try {
-        final notes = await noteRepository!.watchNotes().first;
-        if (notes.isNotEmpty) {
-          await noteRepository!.deleteNotes(notes.map((n) => n.id).toList());
-        }
-      } catch (_) {}
-      try {
-        await noteRepository!.close();
-      } catch (_) {}
-    }
-    if (tempDir != null && tempDir!.existsSync()) {
-      try {
-        tempDir!.deleteSync(recursive: true);
-      } catch (_) {}
-    }
-  }
+  late Directory dataRoot;
+  setUpAll(() {
+    dataRoot = Directory.systemTemp.createTempSync('mechanix_notes_it_');
+    AppPaths.dataRootOverride = dataRoot.path;
+  });
+  tearDownAll(() {
+    AppPaths.dataRootOverride = null;
+    if (dataRoot.existsSync()) dataRoot.deleteSync(recursive: true);
+  });
+}
 
-  static Finder findEditorButton(String asset) {
-    return find
-        .byWidgetPredicate(
-          (widget) => widget is EditorButton && widget.asset == asset,
-        )
-        .last;
-  }
+/// A test that starts the app with no notes and waits for the home screen.
+void appTest(
+  String description,
+  Future<void> Function(WidgetTester tester) body, {
+  Timeout? timeout,
+}) {
+  testWidgets(description, timeout: timeout, (tester) async {
+    await deleteAllNotes();
 
-  static Finder findImageAsset(String asset) {
-    return find
-        .byWidgetPredicate(
-          (widget) =>
-              widget is Image &&
-              widget.image is AssetImage &&
-              (widget.image as AssetImage).assetName == asset,
-        )
-        .last;
-  }
+    // The editor calls a menu plugin that does not exist on eLinux
+    // (MissingPluginException ... dismissMenu). Answer it with "done".
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      const MethodChannel('native_adaptive_toolbox/menu'),
+      (MethodCall call) async {
+        if (call.method == 'dismissMenu') return null;
+        throw MissingPluginException('Not faked in test: ${call.method}');
+      },
+    );
 
-  static Future<void> waitForEditor(WidgetTester tester) async {
-    int retry = 0;
-    while (find.byType(TextField).evaluate().isEmpty && retry < 15) {
-      await tester.pump(const Duration(milliseconds: 200));
-      retry++;
-    }
-  }
+    // A Num Lock keyboard message from this device can fail a test.
+    // Ignore ONLY that one message. Everything else is reported normally.
+    final originalHandler = FlutterError.onError;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      final text = details.exceptionAsString();
+      if (text.contains('RawKeyboard reported')) {
+        debugPrint('IGNORED KNOWN NOISE: ${text.split('\n').first}');
+        return;
+      }
+      originalHandler?.call(details);
+    };
 
-  static Future<void> enterQuillText(WidgetTester tester, String text) async {
-    final editorFinder = find.byType(LiveMarkdownEditor);
-    if (editorFinder.evaluate().isNotEmpty) {
-      final editorWidget = tester.widget<LiveMarkdownEditor>(editorFinder);
-      editorWidget.controller.text = text;
-      await tester.pump();
-      return;
-    }
-    final editableFinder = find.byType(EditableText);
-    if (editableFinder.evaluate().isNotEmpty) {
-      await tester.enterText(editableFinder.first, text);
-      await tester.pump();
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Search helpers
-  // -------------------------------------------------------------------------
-
-  static Finder get searchFab => find.byWidgetPredicate(
-    (widget) => widget is FloatingActionButton && widget.heroTag == 'search',
-  );
-
-  static Finder get searchTextField => find.byWidgetPredicate(
-    (widget) =>
-        widget is TextField && widget.decoration?.hintText == 'Search in notes',
-  );
-
-  static Finder get searchCancelButton => find.byIcon(Icons.cancel);
-
-  /// Creates a note with [title], waits for autosave, and returns to home.
-  static Future<void> createNoteWithTitle(
-    WidgetTester tester,
-    String title, {
-    String? body,
-  }) async {
-    await tester.tap(findImageAsset(NotesIcon.createIcon));
-    await tester.pumpAndSettle();
-    await waitForEditor(tester);
-
-    await tester.enterText(find.byType(TextField).first, title);
-    await tester.pump(const Duration(milliseconds: 500));
-
-    if (body != null) {
-      await enterQuillText(tester, body);
+    try {
+      app.main(const <String>[]);
+      await waitForHome(tester);
+      await body(tester);
+    } finally {
+      // Remove the app (closes its database) while the handler above is
+      // still on, then restore the normal error handler.
+      await tester.pumpWidget(const SizedBox());
       await tester.pump(const Duration(milliseconds: 500));
+      FlutterError.onError = originalHandler;
     }
+  });
+}
 
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+// ---------------------------------------------------------------
+// Direct data access (to check what was really saved)
+// ---------------------------------------------------------------
 
-    await tester.tap(findImageAsset(NotesIcon.backIcon));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
+/// Notes currently saved in the database, newest first.
+/// Shares the app's open database, so it must not close the repository.
+Future<List<NoteMetaData>> savedNotes() =>
+    NoteRepositoryImpl().watchNotes().first;
+
+Future<NoteModel?> savedNote(String id) => NoteRepositoryImpl().getNoteById(id);
+
+Future<void> deleteAllNotes() async {
+  final notes = await savedNotes();
+  if (notes.isNotEmpty) {
+    await NoteRepositoryImpl().deleteNotes(notes.map((n) => n.id).toList());
   }
+}
 
-  static Future<void> openSearch(WidgetTester tester) async {
-    await tester.tap(searchFab);
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 500));
-  }
+// ---------------------------------------------------------------
+// Finders
+// ---------------------------------------------------------------
 
-  /// Types in the search field and waits for the 400 ms debounce.
-  static Future<void> enterSearchQuery(
-    WidgetTester tester,
-    String query,
-  ) async {
-    await tester.enterText(searchTextField, query);
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.pumpAndSettle();
-  }
+/// An image (also inside an [ImageIcon]) showing [asset].
+Finder imageAsset(String asset) => find.byWidgetPredicate(
+  (w) =>
+      w is Image &&
+      w.image is AssetImage &&
+      (w.image as AssetImage).assetName == asset,
+);
 
-  static Future<void> clearSearchQuery(WidgetTester tester) async {
-    await tester.tap(searchCancelButton);
-    await tester.pumpAndSettle();
-  }
+Finder get addButton => find.byIcon(Icons.add);
+Finder get editor => find.byType(LiveMarkdownEditor);
+Finder get searchField => find.byType(TextField);
 
-  static Future<void> closeSearchScreen(WidgetTester tester) async {
-    await tester.tap(searchCancelButton);
-    await tester.pumpAndSettle();
+/// Search results are rich text with the match highlighted.
+Finder searchResult(String text) =>
+    find.textContaining(text, findRichText: true);
+
+Finder noteTile(String id) => find.byKey(ValueKey('note_tile_$id'));
+
+// ---------------------------------------------------------------
+// Waiting
+// ---------------------------------------------------------------
+
+/// Waits (up to [timeout]) until [finder] shows something. No fixed sleeping.
+Future<void> waitFor(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (finder.evaluate().isEmpty) {
+    if (DateTime.now().isAfter(end)) {
+      throw TestFailure('Timed out after $timeout waiting for: $finder');
+    }
+    await tester.pump(const Duration(milliseconds: 200));
   }
+}
+
+/// Waits (up to [timeout]) until [finder] shows nothing any more.
+Future<void> waitUntilGone(
+  WidgetTester tester,
+  Finder finder, {
+  Duration timeout = const Duration(seconds: 15),
+}) async {
+  final end = DateTime.now().add(timeout);
+  while (finder.evaluate().isNotEmpty) {
+    if (DateTime.now().isAfter(end)) {
+      throw TestFailure(
+        'Timed out after $timeout waiting to disappear: $finder',
+      );
+    }
+    await tester.pump(const Duration(milliseconds: 200));
+  }
+}
+
+/// Waits until the home screen is up, loaded and takes taps.
+Future<void> waitForHome(WidgetTester tester) async {
+  await waitFor(tester, find.text('NOTES'));
+  await waitUntilGone(tester, find.byType(CircularProgressIndicator));
+  await waitFor(tester, addButton.hitTestable());
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Waits until the editor is open and takes taps.
+Future<void> waitForEditor(WidgetTester tester) async {
+  await waitFor(tester, editor.hitTestable());
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+// ---------------------------------------------------------------
+// Editor
+// ---------------------------------------------------------------
+
+Future<void> openNewNote(WidgetTester tester) async {
+  await tester.tap(addButton);
+  await waitForEditor(tester);
+}
+
+/// Replaces the whole editor text. The first line becomes the note title.
+Future<void> typeInEditor(WidgetTester tester, String text) async {
+  await tester.tap(editor);
+  await tester.pump(const Duration(milliseconds: 300));
+  tester.testTextInput.enterText(text);
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+MarkdownEditorController editorController(WidgetTester tester) =>
+    tester.widget<LiveMarkdownEditor>(editor).controller;
+
+String editorText(WidgetTester tester) => editorController(tester).text;
+
+/// The app's back button: saves the note and returns to the list.
+Future<void> tapEditorBack(WidgetTester tester) async {
+  await tester.tap(imageAsset(NotesIcon.backIcon));
+  await waitForHome(tester);
+}
+
+/// Creates a note from home and returns to home.
+Future<void> createNote(WidgetTester tester, String text) async {
+  await openNewNote(tester);
+  await typeInEditor(tester, text);
+  await tapEditorBack(tester);
+}
+
+/// Opens the note shown as [title] in the home list.
+Future<void> openNote(WidgetTester tester, String title) async {
+  await tester.tap(find.text(title).first);
+  await waitForEditor(tester);
+}
+
+/// Opens the editor's "more" menu.
+Future<void> openEditorMenu(WidgetTester tester) async {
+  await tester.tap(imageAsset(NotesIcon.moreVertIcon));
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+// ---------------------------------------------------------------
+// Delete confirmation sheet
+// ---------------------------------------------------------------
+
+Future<void> confirmDelete(WidgetTester tester) async {
+  await waitFor(tester, find.text('DELETE').hitTestable());
+  await tester.tap(find.text('DELETE'));
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+Future<void> cancelDelete(WidgetTester tester) async {
+  await waitFor(tester, find.text('CANCEL').hitTestable());
+  await tester.tap(find.text('CANCEL'));
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
+/// Swipes a home list tile left to show its pin/delete actions.
+Future<void> swipeNoteTile(WidgetTester tester, String id) async {
+  await tester.drag(noteTile(id), const Offset(-300, 0));
+  await tester.pump(const Duration(milliseconds: 600));
+}
+
+// ---------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------
+
+Future<void> openSearch(WidgetTester tester) async {
+  await tester.tap(imageAsset(NotesIcon.searchIcon).first);
+  await waitFor(tester, searchField.hitTestable());
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// Types [query] and waits for the debounce and the search to finish.
+Future<void> searchFor(WidgetTester tester, String query) async {
+  await tester.enterText(searchField, query);
+  await tester.pump(const Duration(milliseconds: 600));
+  await waitUntilGone(tester, find.byType(CircularProgressIndicator));
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+/// The search bar's X: clears the query, or closes search when empty.
+Future<void> tapSearchClose(WidgetTester tester) async {
+  await tester.tap(imageAsset(NotesIcon.closeIcon));
+  await tester.pump(const Duration(milliseconds: 600));
 }

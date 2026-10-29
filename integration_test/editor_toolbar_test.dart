@@ -1,192 +1,132 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
 import 'package:mechanix_notes/core/utils/icons.dart';
+
 import 'test_helper.dart';
 
+/// Sets the editor text with the caret at the end.
+Future<void> setText(WidgetTester tester, String text) async {
+  await typeInEditor(tester, text);
+}
+
+/// Sets the editor text with [selection] selected, as if dragged with a mouse.
+Future<void> setTextWithSelection(
+  WidgetTester tester,
+  String text,
+  TextSelection selection,
+) async {
+  await typeInEditor(tester, text);
+  tester.testTextInput.updateEditingValue(
+    TextEditingValue(text: text, selection: selection),
+  );
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
+Future<void> tapTool(WidgetTester tester, String asset) async {
+  await tester.tap(imageAsset(asset).last);
+  await tester.pump(const Duration(milliseconds: 300));
+}
+
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Editor Toolbar Tests', () {
-    final helper = IntegrationTestHelper();
+  appTest('H1, H2 and body style change the current line', (tester) async {
+    await openNewNote(tester);
+    await setText(tester, 'Hello');
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    await tapTool(tester, NotesIcon.h2Icon);
+    expect(editorText(tester), '## Hello');
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+    await tapTool(tester, NotesIcon.h2Icon); // again: back to body
+    expect(editorText(tester), 'Hello');
 
-    testWidgets('Text Formatting Toolbar Actions', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.h1Icon);
+    expect(editorText(tester), '# Hello');
 
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    await tapTool(tester, NotesIcon.textstyleIcon);
+    expect(editorText(tester), 'Hello');
+  });
 
-      // Open text toolbar
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.textstyleIcon),
-      );
-      await tester.pumpAndSettle();
+  appTest('checklist adds and removes a task box', (tester) async {
+    await openNewNote(tester);
+    await setText(tester, 'Buy milk');
 
-      // Bold Formatting
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.boldIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.enterQuillText(tester, 'Bold Text ');
-      await tester.pumpAndSettle();
-      // Deselect Bold
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.boldIcon),
-      );
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.todoIcon);
+    expect(editorText(tester), '- [ ] Buy milk');
 
-      // Italic Formatting
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.italicIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.enterQuillText(tester, 'Italic Text ');
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.todoIcon);
+    expect(editorText(tester), 'Buy milk');
+  });
 
-      // Underline Formatting
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.underlineIcon),
-      );
-      await tester.pumpAndSettle();
+  appTest('bold, italic and strikethrough wrap the selection', (tester) async {
+    const word = TextSelection(baseOffset: 0, extentOffset: 5);
 
-      // Heading H1
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.h1Icon),
-      );
-      await tester.pumpAndSettle();
+    await openNewNote(tester);
 
-      // Heading H2
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.h2Icon),
-      );
-      await tester.pumpAndSettle();
+    await setTextWithSelection(tester, 'Hello world', word);
+    await tapTool(tester, NotesIcon.boldIcon);
+    expect(editorText(tester), '**Hello** world');
 
-      // Wait debounce to save
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
+    await setTextWithSelection(tester, 'Hello world', word);
+    await tapTool(tester, NotesIcon.italicIcon);
+    expect(editorText(tester), '*Hello* world');
 
-      // Navigate back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-    });
+    await setTextWithSelection(tester, 'Hello world', word);
+    await tapTool(tester, NotesIcon.strikethroughIcon);
+    expect(editorText(tester), '~~Hello~~ world');
+  });
 
-    testWidgets('Paragraph Toolbar Actions', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+  appTest('bold on an already bold selection removes it', (tester) async {
+    await openNewNote(tester);
+    await setTextWithSelection(
+      tester,
+      '**Hello** world',
+      const TextSelection(baseOffset: 0, extentOffset: 9),
+    );
+    await tapTool(tester, NotesIcon.boldIcon);
+    expect(editorText(tester), 'Hello world');
+  });
 
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+  appTest('code block inserts a fence', (tester) async {
+    await openNewNote(tester);
+    await setText(tester, 'Snippet');
 
-      // Open text toolbar to access paragraph icon
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.textstyleIcon),
-      );
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.codeBlockIcon);
+    expect(editorText(tester), contains('```'));
+  });
 
-      // Tap paragraph icon
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.paragraphIcon),
-      );
-      await tester.pumpAndSettle();
+  appTest('undo and redo', (tester) async {
+    await openNewNote(tester);
+    expect(editorController(tester).canUndo, isFalse);
 
-      // Note: Paragraph toolbar might have list icons (bullet, ordered).
-      // Assuming NotesIcon.listIcon is bullet list and NotesIcon.todoIcon is todo list.
-      // Adjust if they have specific numbered list icons.
+    await setText(tester, 'Hello');
+    await tapTool(tester, NotesIcon.h1Icon);
+    expect(editorText(tester), '# Hello');
 
-      // Open menu toolbar
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.menuIcon),
-      );
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.undoIcon);
+    expect(editorText(tester), 'Hello');
+    expect(editorController(tester).canRedo, isTrue);
 
-      // Bullet List
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.listIcon),
-      );
-      await tester.pumpAndSettle();
+    await tapTool(tester, NotesIcon.redoIcon);
+    expect(editorText(tester), '# Hello');
+  });
 
-      // Switch back to text toolbar for code block
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.textstyleIcon),
-      );
-      await tester.pumpAndSettle();
+  appTest('formatting is saved with the note', (tester) async {
+    await openNewNote(tester);
+    await setTextWithSelection(
+      tester,
+      'Styled\nsome text',
+      const TextSelection(baseOffset: 7, extentOffset: 11),
+    );
+    await tapTool(tester, NotesIcon.boldIcon);
+    expect(editorText(tester), 'Styled\n**some** text');
+    await tapEditorBack(tester);
 
-      // Check if code block exists
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.codeBlockIcon),
-      );
-      await tester.pumpAndSettle();
+    final saved = await savedNote((await savedNotes()).single.id);
+    expect(saved!.title, 'Styled');
+    expect(saved.content, 'Styled\n**some** text');
 
-      // Wait debounce to save
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      // Navigate back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-    });
-
-    testWidgets('Undo / Redo', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-      final uniqueTitle =
-          'Undo Test Note ${DateTime.now().millisecondsSinceEpoch}';
-      await tester.enterText(titleField, uniqueTitle);
-
-      await IntegrationTestHelper.enterQuillText(tester, 'Content to undo');
-      await tester.pumpAndSettle();
-
-      // Undo
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.undoIcon),
-      );
-      await tester.pumpAndSettle();
-
-      // Redo
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.redoIcon),
-      );
-      await tester.pumpAndSettle();
-
-      // Wait debounce to save
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      // Navigate back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text(uniqueTitle), findsOneWidget);
-    });
+    await openNote(tester, 'Styled');
+    expect(editorText(tester), 'Styled\n**some** text');
   });
 }

@@ -1,16 +1,19 @@
 import 'dart:io';
 import 'package:flutter_tantivy/flutter_tantivy.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
+import 'package:mechanix_notes/core/utils/app_paths.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 
 class IndexingService {
-  bool _initialized = false;
+  // The Rust bridge and Tantivy index are process-wide, so a second
+  // repository (e.g. after the app restarts in tests) must not init again.
+  static bool _initialized = false;
 
   Future<void> initialize() async {
     if (_initialized) return;
     try {
       await RustLib.init();
-      final home = Platform.environment['HOME'];
+      final home = AppPaths.home;
       final indexDir = Directory('$home${Constants.notesTantivyDbPath}');
       AppLogger.d('[IndexingService] Init: ${indexDir.path}');
       if (!await indexDir.exists()) {
