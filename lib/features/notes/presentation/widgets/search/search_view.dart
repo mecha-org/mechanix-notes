@@ -122,19 +122,32 @@ class _SearchViewState extends State<SearchView> {
       return;
     }
 
+    // The editor returns the note's id when it was deleted. Not typed as
+    // pushNamed<String>: routes from the `routes` table are
+    // MaterialPageRoute<dynamic>, and the cast to Route<String?> throws
     Navigator.pushNamed(
       context,
       AppRoutes.noteEditor,
       arguments: {'noteId': note.id, 'noteTitle': note.title},
-    ).then((_) {
-      if (mounted && _searchController.text.isNotEmpty) {
-        final searchBloc = context.read<SearchBloc>();
-        final currentQuery = searchBloc.state.query.isNotEmpty
-            ? searchBloc.state.query
-            : _searchController.text.trim();
-        searchBloc.add(SearchQueryChanged(query: currentQuery));
+    ).then((result) {
+      if (!mounted || _searchController.text.trim().isEmpty) return;
+      final searchBloc = context.read<SearchBloc>();
+      if (result case final String deletedNoteId) {
+        // The delete may still be running, so a new search could return the
+        // note again; remove it from the loaded results instead
+        searchBloc.add(SearchResultRemoved(noteId: deletedNoteId));
+        return;
       }
+      _refreshResults(searchBloc);
     });
+  }
+
+  /// Re-runs the active query so results reflect edits made in the editor.
+  void _refreshResults(SearchBloc searchBloc) {
+    final currentQuery = searchBloc.state.query.isNotEmpty
+        ? searchBloc.state.query
+        : _searchController.text.trim();
+    searchBloc.add(SearchQueryChanged(query: currentQuery));
   }
 
   @override
