@@ -84,7 +84,8 @@ class _EditorViewState extends State<EditorView> {
         if (state is EditorDeleteRequest) {
           context.read<NotesBloc>().add(DeleteNotes(noteIds: [state.noteId]));
           _canPop = true;
-          Navigator.of(context).pop();
+          // Return the deleted note's id so the opening screen can drop it
+          Navigator.of(context).pop(state.noteId);
         }
         if (state is EditorFailure) {
           _isSavingAndExiting = false;

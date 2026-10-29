@@ -46,7 +46,8 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
         if (noteId != null) {
           notesBloc.add(DeleteNotes(noteIds: [noteId]));
         }
-        navigator.pop();
+        // Return the deleted note's id so the opening screen can drop it
+        navigator.pop(noteId);
       },
     );
   }

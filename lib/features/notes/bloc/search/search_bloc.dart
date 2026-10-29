@@ -16,6 +16,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       transformer: droppable(),
     );
     on<ClearSearch>(_onClearSearch);
+    on<SearchResultRemoved>(_onSearchResultRemoved);
   }
 
   Future<void> _onSearchQueryChanged(
@@ -104,5 +105,26 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
   void _onClearSearch(ClearSearch event, Emitter<SearchState> emit) {
     emit(const SearchState());
+  }
+
+  /// Drops a deleted note from the loaded results without searching again.
+  void _onSearchResultRemoved(
+    SearchResultRemoved event,
+    Emitter<SearchState> emit,
+  ) {
+    final index = state.resultIds.indexOf(event.noteId);
+    if (index == -1) return;
+
+    final resultIds = List<String>.of(state.resultIds)..removeAt(index);
+    final results = state.results.where((n) => n.id != event.noteId).toList();
+    final loadedCount = (state.currentPage + 1) * Constants.pageSize;
+
+    emit(
+      state.copyWith(
+        results: results,
+        resultIds: resultIds,
+        hasMore: loadedCount < resultIds.length,
+      ),
+    );
   }
 }
