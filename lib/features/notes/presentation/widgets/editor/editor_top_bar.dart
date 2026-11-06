@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
@@ -34,7 +36,7 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
 
     EditorTrashConfirmationSheet.show(
       context: context,
-      onConfirm: () {
+      onConfirm: () async {
         final editorState = editorBloc.state;
         String? noteId;
         if (editorState is EditorLoaded && !editorState.isNewNote) {
@@ -44,9 +46,12 @@ class EditorTopBar extends StatelessWidget implements PreferredSizeWidget {
         }
 
         if (noteId != null) {
-          notesBloc.add(DeleteNotes(noteIds: [noteId]));
+          final completer = Completer<void>();
+          notesBloc.add(DeleteNotes(noteIds: [noteId], completer: completer));
+          try {
+            await completer.future;
+          } catch (_) {}
         }
-        // Return the deleted note's id so the opening screen can drop it
         navigator.pop(noteId);
       },
     );

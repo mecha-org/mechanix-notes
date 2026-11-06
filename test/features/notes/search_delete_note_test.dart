@@ -172,8 +172,7 @@ void main() {
   });
 
   testWidgets(
-    'trashing a note from search removes its card while the delete is '
-    'still running',
+    'trashing a note from search deletes it and refetches search results',
     (tester) async {
       await tester.pumpWidget(_buildApp(repository));
       await _search(tester, 'groceries');
@@ -184,17 +183,12 @@ void main() {
       await tester.tap(find.text('Delete'));
       await _settle(tester);
       await tester.tap(find.text('DELETE'));
-      await _settle(tester);
-
-      // Back on search with the delete not finished yet
-      expect(find.byType(EditorScreen), findsNothing);
-      expect(repository.deleteRequests, ['1']);
-      expect(_resultCard('Groceries list'), findsNothing);
-      expect(_resultCard('Groceries budget'), findsOneWidget);
 
       repository.finishDeletes();
       await _settle(tester);
 
+      expect(find.byType(EditorScreen), findsNothing);
+      expect(repository.deleteRequests, ['1']);
       expect(_resultCard('Groceries list'), findsNothing);
       expect(_resultCard('Groceries budget'), findsOneWidget);
     },

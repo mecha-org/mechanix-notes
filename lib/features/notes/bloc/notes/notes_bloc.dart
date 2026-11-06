@@ -105,15 +105,20 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
   Future<void> _deleteNotes(DeleteNotes event, Emitter<NotesState> emit) async {
     try {
       final ids = event.noteIds ?? List<String>.from(state.selectedNotes);
-      if (ids.isEmpty) return;
+      if (ids.isEmpty) {
+        event.completer?.complete();
+        return;
+      }
 
       AppLogger.i("Deleting ${ids.length} notes");
       await noteRepository.deleteNotes(ids);
 
       emit(state.copyWith(selectedNotes: const [], isSelectionMode: false));
+      event.completer?.complete();
     } catch (e) {
       AppLogger.e("Error deleting notes: $e");
       emit(state.copyWith(error: ErrorCategory.failedToDeleteNotes));
+      event.completer?.completeError(e);
     }
   }
 
