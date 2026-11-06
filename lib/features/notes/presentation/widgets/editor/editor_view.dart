@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:live_markdown_editor/live_markdown_editor.dart';
@@ -82,9 +84,21 @@ class _EditorViewState extends State<EditorView> {
           Navigator.of(context).pop();
         }
         if (state is EditorDeleteRequest) {
-          context.read<NotesBloc>().add(DeleteNotes(noteIds: [state.noteId]));
-          _canPop = true;
-          Navigator.of(context).pop();
+          final completer = Completer<void>();
+          context.read<NotesBloc>().add(
+            DeleteNotes(noteIds: [state.noteId], completer: completer),
+          );
+          completer.future.then((_) {
+            _canPop = true;
+            if (context.mounted) {
+              Navigator.of(context).pop(state.noteId);
+            }
+          }).catchError((_) {
+            _canPop = true;
+            if (context.mounted) {
+              Navigator.of(context).pop(state.noteId);
+            }
+          });
         }
         if (state is EditorFailure) {
           _isSavingAndExiting = false;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 abstract class NotesEvent {}
 
 /// Starts watching the notes in the repository. The list then stays up to
@@ -6,7 +8,8 @@ class LoadNotes extends NotesEvent {}
 
 class DeleteNotes extends NotesEvent {
   final List<String>? noteIds;
-  DeleteNotes({this.noteIds});
+  final Completer<void>? completer;
+  DeleteNotes({this.noteIds, this.completer});
 }
 
 class ToggleSelectionMode extends NotesEvent {}

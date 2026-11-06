@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
+import 'package:mechanix_notes/core/utils/app_paths.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
@@ -71,7 +72,7 @@ class NoteRepositoryImpl extends NoteRepository {
 
   Future<void> _initializeStore() async {
     try {
-      final home = Platform.environment['HOME'];
+      final home = AppPaths.home;
       final appDir = Directory('$home${Constants.notesDbPath}');
       final exists = await appDir.exists();
 

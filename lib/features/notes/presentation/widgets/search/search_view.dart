@@ -127,14 +127,18 @@ class _SearchViewState extends State<SearchView> {
       AppRoutes.noteEditor,
       arguments: {'noteId': note.id, 'noteTitle': note.title},
     ).then((_) {
-      if (mounted && _searchController.text.isNotEmpty) {
-        final searchBloc = context.read<SearchBloc>();
-        final currentQuery = searchBloc.state.query.isNotEmpty
-            ? searchBloc.state.query
-            : _searchController.text.trim();
-        searchBloc.add(SearchQueryChanged(query: currentQuery));
-      }
+      if (!mounted || _searchController.text.trim().isEmpty) return;
+      final searchBloc = context.read<SearchBloc>();
+      _refreshResults(searchBloc);
     });
+  }
+
+  /// Re-runs the active query so results reflect edits made in the editor.
+  void _refreshResults(SearchBloc searchBloc) {
+    final currentQuery = searchBloc.state.query.isNotEmpty
+        ? searchBloc.state.query
+        : _searchController.text.trim();
+    searchBloc.add(SearchQueryChanged(query: currentQuery));
   }
 
   @override

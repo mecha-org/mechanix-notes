@@ -1,92 +1,54 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
-import 'package:mechanix_notes/core/utils/icons.dart';
+
 import 'test_helper.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Navigation Tests', () {
-    final helper = IntegrationTestHelper();
+  appTest('open a note shows its content; back without changes keeps it', (
+    tester,
+  ) async {
+    await createNote(tester, 'Recipe\nAdd salt.');
+    final before = (await savedNotes()).single;
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    await openNote(tester, 'Recipe');
+    expect(editorText(tester), 'Recipe\nAdd salt.');
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+    await tapEditorBack(tester);
+    expect(find.text('Recipe'), findsOneWidget);
+    final after = (await savedNotes()).single;
+    expect(after.updatedAt, before.updatedAt); // nothing was rewritten
+  });
 
-    testWidgets('Open Existing Note and Back Navigation', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+  appTest('edit then back saves the change', (tester) async {
+    await createNote(tester, 'Recipe\nAdd salt.');
 
-      // Create a note first
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    await openNote(tester, 'Recipe');
+    await typeInEditor(tester, 'Recipe\nAdd pepper.');
+    await tapEditorBack(tester);
 
-      final titleField = find.byType(TextField).first;
-      final uniqueTitle =
-          'Navigation Note ${DateTime.now().millisecondsSinceEpoch}';
-      await tester.enterText(titleField, uniqueTitle);
+    expect(find.text('Add pepper.'), findsOneWidget);
+    expect(find.text('Add salt.'), findsNothing);
+    expect(await savedNotes(), hasLength(1));
+  });
 
-      // Wait debounce to save
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
+  appTest('system back from the editor saves the note', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'System back\nstill saved');
 
-      // Navigate back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await waitForHome(tester);
 
-      // Open the existing note
-      final existingNote = find.text(uniqueTitle).first;
-      await tester.tap(existingNote);
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    expect(find.text('System back'), findsOneWidget);
+    expect(await savedNotes(), hasLength(1));
+  });
 
-      // Verify correct note opened
-      expect(find.text(uniqueTitle), findsWidgets);
+  appTest('home -> search -> home', (tester) async {
+    await openSearch(tester);
+    expect(find.text('SEARCH NOTE'), findsOneWidget);
 
-      // Navigate back again
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      // Return to notes list
-      expect(find.text('Notes'), findsWidgets);
-    });
-
-    testWidgets('Unsaved Typing + Back', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-      final uniqueTitle =
-          'Unsaved Note ${DateTime.now().millisecondsSinceEpoch}';
-      await tester.enterText(titleField, uniqueTitle);
-
-      // Immediately go back before debounce
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      // Depend on implementation whether it's saved or not. We'll just verify no crash
-      expect(find.text('Notes'), findsWidgets);
-    });
+    await tapSearchClose(tester); // empty query: X closes search
+    await waitForHome(tester);
+    expect(searchField, findsNothing);
   });
 }

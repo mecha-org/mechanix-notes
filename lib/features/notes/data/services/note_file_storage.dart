@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:mechanix_notes/core/utils/app_logger.dart';
+import 'package:mechanix_notes/core/utils/app_paths.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:path/path.dart' as p;
 
@@ -14,6 +15,11 @@ class NoteFileStorage {
   Directory get directory => _directory;
 
   static Directory _resolveDefaultDirectory() {
+    final dataRoot = AppPaths.dataRootOverride;
+    if (dataRoot != null) {
+      return Directory(p.join(dataRoot, 'Documents', Constants.notesSubDir));
+    }
+
     final customDocs = Platform.environment['DOCUMENTS_DIR'];
     if (customDocs != null && customDocs.isNotEmpty) {
       return Directory(p.join(customDocs, Constants.notesSubDir));
@@ -24,7 +30,7 @@ class NoteFileStorage {
       return Directory(p.join(xdgDocs, Constants.notesSubDir));
     }
 
-    final home = Platform.environment['HOME'];
+    final home = AppPaths.home;
     if (home != null && home.isNotEmpty) {
       return Directory(p.join(home, 'Documents', Constants.notesSubDir));
     }

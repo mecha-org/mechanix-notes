@@ -1,125 +1,84 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:mechanix_notes/main.dart' as app;
 
 import 'test_helper.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Delete Note Tests', () {
-    final helper = IntegrationTestHelper();
+  appTest('delete from the editor menu', (tester) async {
+    await createNote(tester, 'Delete me\nbody');
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    await openNote(tester, 'Delete me');
+    await openEditorMenu(tester);
+    await tester.tap(find.text('Delete'));
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Do you want to delete this note?'), findsOneWidget);
+    await confirmDelete(tester);
+    await waitForHome(tester);
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+    expect(find.text('Delete me'), findsNothing);
+    expect(find.text('Write a note'), findsOneWidget);
+    expect(await savedNotes(), isEmpty);
+  });
 
-    testWidgets('Delete Single Note from Home', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+  appTest('cancel in the delete sheet keeps the note', (tester) async {
+    await createNote(tester, 'Keep me\nbody');
 
-      final uniqueTitle =
-          'Delete Me Note ${DateTime.now().millisecondsSinceEpoch}';
+    await openNote(tester, 'Keep me');
+    await openEditorMenu(tester);
+    await tester.tap(find.text('Delete'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await cancelDelete(tester);
+    await waitUntilGone(tester, find.text('Do you want to delete this note?'));
 
-      // Create a note
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    expect(editor, findsOneWidget); // still in the editor
+    await tapEditorBack(tester);
+    expect(find.text('Keep me'), findsOneWidget);
+    expect(await savedNotes(), hasLength(1));
+  });
 
-      final titleField = find.byType(TextField).first;
-      await tester.enterText(titleField, uniqueTitle);
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
+  appTest('delete a new, unsaved note from the editor menu', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'Never kept\nbody');
+    await openEditorMenu(tester);
+    await tester.tap(find.text('Delete'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await confirmDelete(tester);
+    await waitForHome(tester);
 
-      // Tap back to save and go to home
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+    expect(find.text('Never kept'), findsNothing);
+    expect(await savedNotes(), isEmpty);
+  });
 
-      // Verify note exists on home
-      expect(find.text(uniqueTitle), findsOneWidget);
+  appTest('delete with the swipe action on home', (tester) async {
+    await createNote(tester, 'Swipe delete\nbody');
+    await createNote(tester, 'Stays\nbody');
+    final id = (await savedNotes())
+        .firstWhere((n) => n.title == 'Swipe delete')
+        .id;
 
-      // Long press to select
-      await tester.longPress(find.text(uniqueTitle));
-      await tester.pumpAndSettle();
+    await swipeNoteTile(tester, id);
+    await tester.tap(find.byKey(ValueKey('delete_action_$id')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await confirmDelete(tester);
+    await waitUntilGone(tester, find.text('Swipe delete'));
 
-      // Tap delete icon in bottom bar
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.trashIcon),
-      );
-      await tester.pumpAndSettle();
+    expect(find.text('Stays'), findsOneWidget);
+    final notes = await savedNotes();
+    expect(notes.map((n) => n.title), ['Stays']);
+  });
 
-      // Confirm delete
-      final confirmBtn = find.text('Delete');
-      expect(confirmBtn, findsOneWidget);
-      await tester.tap(confirmBtn);
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+  appTest('cancel the swipe delete keeps the note', (tester) async {
+    await createNote(tester, 'Swipe keep\nbody');
+    final id = (await savedNotes()).single.id;
 
-      // Verify note is gone
-      expect(find.text(uniqueTitle), findsNothing);
-    });
+    await swipeNoteTile(tester, id);
+    await tester.tap(find.byKey(ValueKey('delete_action_$id')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await cancelDelete(tester);
 
-    testWidgets('Delete Cancel Flow', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      final uniqueTitle =
-          'Do Not Delete Note ${DateTime.now().millisecondsSinceEpoch}';
-
-      // Create a note
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-      await tester.enterText(titleField, uniqueTitle);
-      await tester.pump(const Duration(milliseconds: 500));
-      await tester.pumpAndSettle();
-
-      // Tap back to save and go to home
-      await tester.tap(
-        IntegrationTestHelper.findEditorButton(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-
-      // Verify note exists on home
-      expect(find.text(uniqueTitle), findsOneWidget);
-
-      // Long press to select
-      await tester.longPress(find.text(uniqueTitle));
-      await tester.pumpAndSettle();
-
-      // Tap delete icon in bottom bar
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.trashIcon),
-      );
-      await tester.pumpAndSettle();
-
-      // Tap cancel in sheet
-      final cancelBtn = find.text('Cancel');
-      expect(cancelBtn, findsOneWidget);
-      await tester.tap(cancelBtn);
-      await tester.pumpAndSettle();
-
-      // Verify note is still there
-      expect(find.text(uniqueTitle), findsOneWidget);
-    });
+    expect(find.text('Swipe keep'), findsOneWidget);
+    expect(await savedNotes(), hasLength(1));
   });
 }

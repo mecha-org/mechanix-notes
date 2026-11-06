@@ -1,232 +1,137 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:live_markdown_editor/live_markdown_editor.dart'
-    show LiveMarkdownEditor;
-import 'package:mechanix_notes/core/utils/icons.dart';
-import 'package:mechanix_notes/main.dart' as app;
 
 import 'test_helper.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Search', () {
-    final helper = IntegrationTestHelper();
+  appTest('opens with an empty, focused search box', (tester) async {
+    await openSearch(tester);
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    expect(find.text('SEARCH NOTE'), findsOneWidget); // hint
+    expect(find.text('No note found'), findsNothing);
+    expect(tester.testTextInput.isVisible, isTrue);
+  });
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+  appTest('with no notes, a search finds nothing', (tester) async {
+    await openSearch(tester);
+    await searchFor(tester, 'anything');
 
-    testWidgets('search FAB is disabled when there are no notes', (
-      tester,
-    ) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    expect(find.text('No note found'), findsOneWidget);
+  });
 
-      expect(IntegrationTestHelper.searchFab, findsOneWidget);
+  appTest('finds a note by title', (tester) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
+    await createNote(tester, 'Shopping\nbread and butter');
 
-      final fab = tester.widget<FloatingActionButton>(
-        IntegrationTestHelper.searchFab,
-      );
-      expect(fab.onPressed, isNull);
+    await openSearch(tester);
+    await searchFor(tester, 'Journal');
 
-      await tester.tap(IntegrationTestHelper.searchFab);
-      await tester.pumpAndSettle();
+    expect(searchResult('Daily Journal'), findsOneWidget);
+    expect(searchResult('Shopping'), findsNothing);
+  });
 
-      expect(find.text('Type to search'), findsNothing);
-      expect(find.text('Notes'), findsWidgets);
-    });
+  appTest('finds a note by body text', (tester) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
+    await createNote(tester, 'Shopping\nbread and butter');
 
-    testWidgets('opens search and shows initial prompt', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    await openSearch(tester);
+    await searchFor(tester, 'butter');
 
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Search Setup $suffix',
-      );
+    expect(searchResult('Shopping'), findsOneWidget);
+    expect(searchResult('Daily Journal'), findsNothing);
+  });
 
-      await IntegrationTestHelper.openSearch(tester);
+  appTest('search ignores case', (tester) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
 
-      expect(find.text('Type to search'), findsOneWidget);
-      expect(find.text('Search in notes'), findsOneWidget);
-      expect(IntegrationTestHelper.searchTextField, findsOneWidget);
-    });
+    await openSearch(tester);
+    await searchFor(tester, 'dAiLy');
 
-    testWidgets('finds a note by title', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    expect(searchResult('Daily Journal'), findsOneWidget);
+  });
 
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      final title = 'UniqueAlphaTitle $suffix';
+  appTest('shows a message when nothing matches', (tester) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
 
-      await IntegrationTestHelper.createNoteWithTitle(tester, title);
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Other Note $suffix',
-      );
+    await openSearch(tester);
+    await searchFor(tester, 'zzzz');
 
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'UniqueAlpha');
+    expect(find.text('No note found'), findsOneWidget);
+    expect(searchResult('Daily Journal'), findsNothing);
+  });
 
-      expect(find.text(title), findsOneWidget);
-      expect(find.text('Other Note $suffix'), findsNothing);
-    });
+  appTest('X clears the query, a second X closes search', (tester) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
 
-    testWidgets('finds a note by body preview text', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    await openSearch(tester);
+    await searchFor(tester, 'Daily');
+    expect(searchResult('Daily Journal'), findsOneWidget);
 
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      final title = 'Body Search Title $suffix';
-      const bodySnippet = 'zzBodySnippetzz';
+    await tapSearchClose(tester);
+    expect(find.text('SEARCH NOTE'), findsOneWidget); // empty again
+    expect(searchResult('Daily Journal'), findsNothing);
 
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        title,
-        body: bodySnippet,
-      );
+    await tapSearchClose(tester);
+    await waitForHome(tester);
+    expect(searchField, findsNothing);
+  });
 
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'BodySnippet');
+  appTest('shows every matching note', (tester) async {
+    await createNote(tester, 'Project alpha\nkickoff');
+    await createNote(tester, 'Project beta\nreview');
+    await createNote(tester, 'Holiday\nbeach');
 
-      expect(find.text(title), findsOneWidget);
-    });
+    await openSearch(tester);
+    await searchFor(tester, 'Project');
 
-    testWidgets('search is case insensitive', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    expect(searchResult('Project alpha'), findsOneWidget);
+    expect(searchResult('Project beta'), findsOneWidget);
+    expect(searchResult('Holiday'), findsNothing);
+  });
 
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      final title = 'CamelCaseNote $suffix';
+  appTest('open a result, edit it, and come back to updated results', (
+    tester,
+  ) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
 
-      await IntegrationTestHelper.createNoteWithTitle(tester, title);
+    await openSearch(tester);
+    await searchFor(tester, 'Daily');
+    await tester.tap(searchResult('Daily Journal'));
+    await waitForEditor(tester);
+    expect(editorText(tester), 'Daily Journal\nToday was calm.');
 
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'camelcasenote');
+    await typeInEditor(tester, 'Daily Journal\nToday was busy.');
+    await tester.tap(imageAsset('assets/icons/back.png'));
+    await waitFor(tester, searchField.hitTestable());
+    await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text(title), findsOneWidget);
-    });
+    // Back on search, with the query kept and the new preview shown.
+    expect(find.text('Daily'), findsOneWidget);
+    expect(searchResult('Today was busy.'), findsOneWidget);
+  });
 
-    testWidgets('shows no results message when nothing matches', (
-      tester,
-    ) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+  appTest('a note deleted from a result disappears from results', (
+    tester,
+  ) async {
+    await createNote(tester, 'Daily Journal\nToday was calm.');
+    await createNote(tester, 'Daily Plan\nwork, gym');
 
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Some Note $suffix',
-      );
+    await openSearch(tester);
+    await searchFor(tester, 'Daily');
+    expect(searchResult('Daily Journal'), findsOneWidget);
+    expect(searchResult('Daily Plan'), findsOneWidget);
 
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(
-        tester,
-        'xyz_no_match_$suffix',
-      );
+    await tester.tap(searchResult('Daily Journal'));
+    await waitForEditor(tester);
+    await openEditorMenu(tester);
+    await tester.tap(find.text('Delete'));
+    await tester.pump(const Duration(milliseconds: 500));
+    await confirmDelete(tester);
+    await waitFor(tester, searchField.hitTestable());
+    await tester.pump(const Duration(seconds: 1));
 
-      expect(find.text('No notes found'), findsOneWidget);
-    });
-
-    testWidgets('clearing query returns to initial search prompt', (
-      tester,
-    ) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Clear Query Note $suffix',
-      );
-
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'Clear Query');
-      expect(find.text('Clear Query Note $suffix'), findsOneWidget);
-
-      await IntegrationTestHelper.clearSearchQuery(tester);
-
-      expect(find.text('Type to search'), findsOneWidget);
-      expect(find.text('Clear Query Note $suffix'), findsNothing);
-    });
-
-    testWidgets('closes search screen and returns to home', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Close Search $suffix',
-      );
-
-      await IntegrationTestHelper.openSearch(tester);
-      expect(find.text('Type to search'), findsOneWidget);
-
-      await IntegrationTestHelper.closeSearchScreen(tester);
-
-      expect(find.text('Notes'), findsWidgets);
-      expect(find.text('Type to search'), findsNothing);
-    });
-
-    testWidgets('opens a note from search results and returns to search', (
-      tester,
-    ) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      final title = 'Open From Search $suffix';
-
-      await IntegrationTestHelper.createNoteWithTitle(tester, title);
-
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'Open From Search');
-
-      await tester.tap(find.text(title));
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      expect(find.text(title), findsWidgets);
-      expect(find.byType(LiveMarkdownEditor), findsOneWidget);
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Type to search'), findsNothing);
-      expect(find.text(title), findsOneWidget);
-    });
-
-    testWidgets('shows multiple matching notes', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      final suffix = DateTime.now().millisecondsSinceEpoch;
-      final title1 = 'FindMe One $suffix';
-      final title2 = 'FindMe Two $suffix';
-
-      await IntegrationTestHelper.createNoteWithTitle(tester, title1);
-      await IntegrationTestHelper.createNoteWithTitle(tester, title2);
-      await IntegrationTestHelper.createNoteWithTitle(
-        tester,
-        'Unrelated $suffix',
-      );
-
-      await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'FindMe');
-
-      expect(find.text(title1), findsOneWidget);
-      expect(find.text(title2), findsOneWidget);
-      expect(find.text('Unrelated $suffix'), findsNothing);
-    });
+    expect(searchResult('Daily Journal'), findsNothing);
+    expect(searchResult('Daily Plan'), findsOneWidget);
   });
 }

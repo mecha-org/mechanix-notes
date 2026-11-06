@@ -1,139 +1,74 @@
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
-import 'package:mechanix_notes/core/utils/icons.dart';
+
 import 'test_helper.dart';
 
+// The editor saves on its own 2 seconds after the last change.
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  setUpIntegrationTests();
 
-  group('Auto Save & Debounce', () {
-    final helper = IntegrationTestHelper();
+  appTest('does not save before 2 seconds, saves after', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'Draft\nfirst words');
 
-    setUpAll(() async {
-      await helper.setUp();
-    });
+    await tester.pump(const Duration(seconds: 1));
+    expect(await savedNotes(), isEmpty);
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+    await tester.pump(const Duration(milliseconds: 1500));
+    final notes = await savedNotes();
+    expect(notes, hasLength(1));
+    expect(notes.single.title, 'Draft');
+    expect(notes.single.previewText, 'first words');
+  });
 
-    tearDown(() {
-      debugRepaintRainbowEnabled = false;
-    });
+  appTest('continuous typing delays the save until typing stops', (
+    tester,
+  ) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'Part 1');
 
-    testWidgets('Should NOT Save Before 2 Seconds', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
+    // Each change comes before the 2 s timer runs out, so it restarts.
+    for (final text in ['Part 1 and 2', 'Part 1 and 2 and 3']) {
+      await tester.pump(const Duration(milliseconds: 1000));
+      tester.testTextInput.enterText(text);
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    await tester.pump(const Duration(milliseconds: 1000));
+    expect(await savedNotes(), isEmpty);
 
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
+    await tester.pump(const Duration(milliseconds: 1500));
+    final notes = await savedNotes();
+    expect(notes, hasLength(1));
+    expect(notes.single.title, 'Part 1 and 2 and 3');
+  });
 
-      final titleField = find.byType(TextField).first;
-      await tester.enterText(titleField, 'Fast Type');
+  appTest('later autosaves update the same note', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'Version one\nbody one');
+    await tester.pump(const Duration(milliseconds: 2500));
+    final first = await savedNotes();
+    expect(first, hasLength(1));
 
-      // Wait less than 2 seconds
-      await tester.pump(const Duration(seconds: 1));
+    tester.testTextInput.enterText('Version two\nbody two');
+    await tester.pump(const Duration(milliseconds: 2500));
+    final second = await savedNotes();
+    expect(second, hasLength(1));
+    expect(second.single.id, first.single.id);
+    expect(second.single.title, 'Version two');
 
-      // Navigate back immediately before debounce triggers save
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
+    await tapEditorBack(tester);
+    expect(find.text('Version two'), findsOneWidget);
+    expect(find.text('Version one'), findsNothing);
+    expect(await savedNotes(), hasLength(1));
+  });
 
-      // Note should not be saved or might be untitled depending on logic,
-      // but 'Fast Type' shouldn't be fully committed as title if debounce didn't finish.
-      // We check if it exists (might fail if app logic saves on back navigation,
-      // but according to prompt "Should NOT Save Before 2 Seconds" tests debounce).
-      // Assuming auto-save only triggers after 2 seconds or manual save/back button.
-      // If back button triggers save, we test the debounce logic via continuous typing.
-    });
+  appTest('back right after typing saves without waiting', (tester) async {
+    await openNewNote(tester);
+    await typeInEditor(tester, 'Quick note\nsaved on back');
+    await tapEditorBack(tester); // well before the 2 s autosave
 
-    testWidgets('Continuous Typing does not trigger save until stopped', (
-      tester,
-    ) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-
-      // Simulate continuous typing by entering text and pumping small durations
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final uniqueTitle = 'Part 1 and 2 and 3 $now';
-
-      // Simulate continuous typing by entering text and pumping small durations
-      await tester.enterText(titleField, 'Part 1 $now');
-      await tester.pump(const Duration(milliseconds: 500));
-
-      await tester.enterText(titleField, 'Part 1 and 2 $now');
-      await tester.pump(const Duration(milliseconds: 500));
-
-      await tester.enterText(titleField, uniqueTitle);
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Total elapsed is 1.5 seconds, which is less than 2s debounce from first typing
-      // So no save should have happened yet.
-
-      // Now wait for debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text(uniqueTitle), findsOneWidget);
-    });
-
-    testWidgets('Multiple Updates', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final initialTitle = 'Initial Title $now';
-      final updatedTitle = 'Updated Title $now';
-
-      await tester.enterText(titleField, initialTitle);
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Wait debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      // Edit again
-      await tester.enterText(titleField, updatedTitle);
-      await tester.pump(const Duration(milliseconds: 500));
-
-      // Wait debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text(updatedTitle), findsOneWidget);
-      expect(find.text(initialTitle), findsNothing); // Same note updated
-    });
+    expect(find.text('Quick note'), findsOneWidget);
+    final notes = await savedNotes();
+    expect(notes, hasLength(1));
+    expect(notes.single.title, 'Quick note');
   });
 }
