@@ -26,4 +26,3 @@ class TogglePinNote extends NotesEvent {
 }
 
 class SyncNotesFromDisk extends NotesEvent {}
-

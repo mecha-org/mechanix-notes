@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_tantivy/flutter_tantivy.dart' as tantivy;
@@ -125,6 +124,14 @@ void main() {
     // Setup default indexing stubs
     when(() => mockIndexingService.initialize()).thenAnswer((_) async {});
     when(() => mockIndexingService.upsertNote(any())).thenAnswer((_) async {});
+    when(
+      () => mockIndexingService.upsertNotesBatch(any()),
+    ).thenAnswer((invocation) async {
+      final notes = invocation.positionalArguments[0] as List<NoteModel>;
+      for (final note in notes) {
+        await mockIndexingService.upsertNote(note);
+      }
+    });
     when(
       () => mockIndexingService.deleteNotesBatch(any()),
     ).thenAnswer((_) async {});
@@ -327,35 +334,48 @@ void main() {
   // searchNoteIds / getNotesMetaData
   // -------------------------------------------------------------------------
 
-  group('searchNotes', () {
-    test('returns matching notes from IndexingService', () async {
+  group('searchNoteIds / getNotesMetaData', () {
+    test('searchNoteIds returns ids from IndexingService in order', () async {
       final meta1 = _makeMetaData(id: '1', title: 'matching title');
       final meta2 = _makeMetaData(id: '2', title: 'other');
-
       when(
         () => mockIndexingService.search('match'),
       ).thenAnswer((_) async => [meta1, meta2]);
 
+      final result = await repository.searchNoteIds('match');
+
+      expect(result, ['1', '2']);
+    });
+
+    test('getNotesMetaData keeps the caller order', () async {
+      when(
+        () => mockIndexingService.getNoteMetaData('1'),
+      ).thenReturn(_makeMetaData(id: '1', title: 'first'));
+      when(
+        () => mockIndexingService.getNoteMetaData('2'),
+      ).thenReturn(_makeMetaData(id: '2', title: 'second'));
+
       final result = await repository.getNotesMetaData(['2', '1']);
 
       expect(result.map((n) => n.id), ['2', '1']);
-      verify(() => mockQuery.close()).called(1);
     });
 
     test('skips ids with no stored note', () async {
-      final note1 = _makeNote(id: '1', title: 'first');
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1]);
+      when(
+        () => mockIndexingService.getNoteMetaData('1'),
+      ).thenReturn(_makeMetaData(id: '1', title: 'first'));
+      when(() => mockIndexingService.getNoteMetaData('gone')).thenReturn(null);
 
       final result = await repository.getNotesMetaData(['gone', '1']);
 
       expect(result.map((n) => n.id), ['1']);
     });
 
-    test('does not query the box for an empty id list', () async {
+    test('does not touch the index for an empty id list', () async {
       final result = await repository.getNotesMetaData([]);
 
       expect(result, isEmpty);
-      verifyNever(() => mockBox.query(any()));
+      verifyNever(() => mockIndexingService.getNoteMetaData(any()));
     });
   });
 
@@ -540,6 +560,62 @@ void main() {
         verify(
           () => mockIndexingService.deleteNotesBatch(['ghost-note']),
         ).called(1);
+      },
+    );
+
+    test(
+      'batches multiple modified notes into a single upsertNotesBatch call',
+      () async {
+        final file1 = File('${tempDir.path}/note1.md');
+        await file1.writeAsString(
+          '# Note 1\nBody 1\n\n<!-- mechanix:id=batch-1 -->\n',
+        );
+        final file2 = File('${tempDir.path}/note2.md');
+        await file2.writeAsString(
+          '# Note 2\nBody 2\n\n<!-- mechanix:id=batch-2 -->\n',
+        );
+
+        when(() => mockIndexingService.getDocument(any())).thenReturn(null);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(2));
+        verify(
+          () => mockIndexingService.upsertNotesBatch(
+            any(
+              that: isA<List<NoteModel>>().having(
+                (list) => list.map((n) => n.id).toList(),
+                'ids',
+                containsAll(['batch-1', 'batch-2']),
+              ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'skips re-indexing when notes on disk are unmodified',
+      () async {
+        final file = File('${tempDir.path}/unmodified.md');
+        await file.writeAsString(
+          '# Unmodified\nBody\n\n<!-- mechanix:id=unmod-1 -->\n',
+        );
+
+        final stat = await file.stat();
+        final doc = _makeDoc(
+          id: 'unmod-1',
+          title: 'Unmodified',
+          updatedAt: stat.modified,
+          fileName: 'unmodified.md',
+        );
+        when(() => mockIndexingService.getDocument('unmod-1')).thenReturn(doc);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(0));
+        verifyNever(() => mockIndexingService.upsertNotesBatch(any()));
+        verifyNever(() => mockIndexingService.upsertNote(any()));
       },
     );
   });

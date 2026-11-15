@@ -109,6 +109,21 @@ class IndexingService {
     }
   }
 
+  Future<void> upsertNotesBatch(List<NoteModel> notes) async {
+    if (notes.isEmpty) return;
+    try {
+      if (!_initialized) {
+        await initialize();
+      }
+      AppLogger.d('[IndexingService] Batch upsert: ${notes.length} notes');
+      final docs = notes.map(noteModelToDoc).toList();
+      await tantivy.addDocumentsBatch(docs: docs);
+    } catch (e) {
+      AppLogger.e('[IndexingService] Batch upsert failed: $e');
+      rethrow;
+    }
+  }
+
   Future<void> deleteNotesBatch(List<String> ids) async {
     try {
       if (!_initialized) {

@@ -35,12 +35,12 @@ void main() {
     });
 
     test(
-      'falls back to notes when title is empty or only special characters',
+      'falls back to untitled when title is empty or only special characters',
       () {
-        expect(NoteFileStorage.sanitizeFileName(''), 'notes');
-        expect(NoteFileStorage.sanitizeFileName('    '), 'notes');
-        expect(NoteFileStorage.sanitizeFileName('###'), 'notes');
-        expect(NoteFileStorage.sanitizeFileName('...'), 'notes');
+        expect(NoteFileStorage.sanitizeFileName(''), 'untitled');
+        expect(NoteFileStorage.sanitizeFileName('    '), 'untitled');
+        expect(NoteFileStorage.sanitizeFileName('###'), 'untitled');
+        expect(NoteFileStorage.sanitizeFileName('...'), 'untitled');
       },
     );
 
@@ -65,18 +65,18 @@ void main() {
     test(
       'increments counter when collision exists with different note',
       () async {
-        File('${tempDir.path}/notes.md').writeAsStringSync('existing');
+        File('${tempDir.path}/untitled.md').writeAsStringSync('existing');
         final firstCollision = await storage.resolveFileName(title: '');
-        expect(firstCollision, 'notes (1).md');
+        expect(firstCollision, 'untitled (1).md');
 
-        File('${tempDir.path}/notes (1).md').writeAsStringSync('existing 2');
+        File('${tempDir.path}/untitled (1).md').writeAsStringSync('existing 2');
         final secondCollision = await storage.resolveFileName(title: '');
-        expect(secondCollision, 'notes (2).md');
+        expect(secondCollision, 'untitled (2).md');
       },
     );
 
     test('retains currentFileName when title has not changed', () async {
-      File('${tempDir.path}/notes (1).md').writeAsStringSync('mine');
+      File('${tempDir.path}/untitled (1).md').writeAsStringSync('mine');
       final result = await storage.resolveFileName(
         title: '',
         currentFileName: 'untitled (1).md',

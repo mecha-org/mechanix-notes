@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
@@ -18,12 +17,16 @@ class NoteRepositoryImpl extends NoteRepository {
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
 
+  /// Fires whenever notes are created, updated, deleted or re-synced, so
+  /// [watchNotes] can re-emit. Shared by all instances, because they all
+  /// read and write the same Tantivy index.
+  static final StreamController<void> _changes =
+      StreamController<void>.broadcast();
+
   NoteRepositoryImpl({
-    Store? store,
     IndexingService? indexingService,
     NoteFileStorage? fileStorage,
-  }) : _store = store,
-       _indexingService = indexingService ?? IndexingService(),
+  }) : _indexingService = indexingService ?? IndexingService(),
        _fileStorage = fileStorage ?? NoteFileStorage();
 
   Future<void> ensureStoreConnected() async {
@@ -40,7 +43,6 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  @override
   Future<List<NoteMetaData>> getNotes(int skip, int take) async {
     try {
       await ensureStoreConnected();
@@ -61,7 +63,6 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  @override
   Future<NoteMetaData?> getNoteMetaData(String id) async {
     try {
       await ensureStoreConnected();
@@ -109,11 +110,14 @@ class NoteRepositoryImpl extends NoteRepository {
           if (markdown != null) {
             note.fileName = titleFileName;
             unawaited(
-              _indexingService.upsertNote(note).catchError((e) {
-                AppLogger.e(
-                  'NoteRepository: Healing index update failed for ${note.id}: $e',
-                );
-              }),
+              _indexingService
+                  .upsertNote(note)
+                  .then((_) => _notifyChanged())
+                  .catchError((e) {
+                    AppLogger.e(
+                      'NoteRepository: Healing index update failed for ${note.id}: $e',
+                    );
+                  }),
             );
           }
         }
@@ -140,11 +144,14 @@ class NoteRepositoryImpl extends NoteRepository {
             }
           }
           unawaited(
-            _indexingService.upsertNote(note).catchError((e) {
-              AppLogger.e(
-                'NoteRepository: Auto-heal index update failed for ${note.id}: $e',
-              );
-            }),
+            _indexingService
+                .upsertNote(note)
+                .then((_) => _notifyChanged())
+                .catchError((e) {
+                  AppLogger.e(
+                    'NoteRepository: Auto-heal index update failed for ${note.id}: $e',
+                  );
+                }),
           );
           AppLogger.i(
             'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
@@ -171,9 +178,14 @@ class NoteRepositoryImpl extends NoteRepository {
           'NoteRepository: Note $id (${note.fileName}) missing on disk. Purging ghost note from Tantivy...',
         );
         unawaited(
-          _indexingService.deleteNotesBatch([id]).catchError((e) {
-            AppLogger.e('NoteRepository: Failed to purge ghost note $id: $e');
-          }),
+          _indexingService
+              .deleteNotesBatch([id])
+              .then((_) => _notifyChanged())
+              .catchError((e) {
+                AppLogger.e(
+                  'NoteRepository: Failed to purge ghost note $id: $e',
+                );
+              }),
         );
         return null;
       }
@@ -225,6 +237,7 @@ class NoteRepositoryImpl extends NoteRepository {
         );
 
         await _indexingService.upsertNote(updatedNote);
+        _notifyChanged();
       }
     } catch (e) {
       AppLogger.e('NoteRepository: Background auto-reindex failed: $e');
@@ -301,6 +314,7 @@ class NoteRepositoryImpl extends NoteRepository {
       }
 
       await _indexingService.deleteNotesBatch(ids);
+      _notifyChanged();
       AppLogger.i('NoteRepository: deleteNotes(${ids.length})');
     } catch (e) {
       AppLogger.e('NoteRepository: deleteNotes failed: $e');
@@ -325,9 +339,9 @@ class NoteRepositoryImpl extends NoteRepository {
 
       note.fileName = savedFileName;
       note.content = cleanMarkdown;
-      note.plainText = plainText;
 
       await _indexingService.upsertNote(note);
+      _notifyChanged();
       AppLogger.i(
         'NoteRepository: upsertNote(${note.id}) ${note.updatedAt} ${note.title} saved to $savedFileName ✓',
       );
@@ -346,7 +360,8 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<List<String>> searchNoteIds(String query) async {
     try {
       await ensureStoreConnected();
-      return await _indexingService.search(query);
+      final results = await _indexingService.search(query);
+      return results.map((n) => n.id).toList();
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
       return [];
@@ -358,16 +373,8 @@ class NoteRepositoryImpl extends NoteRepository {
     if (ids.isEmpty) return [];
     try {
       await ensureStoreConnected();
-      final q = box.query(NoteModel_.id.oneOf(ids)).build();
-      final dbNotes = await q.findAsync();
-      q.close();
-
-      // Restore the caller's order (search relevance); oneOf does not keep it
-      final notesMap = {for (var note in dbNotes) note.id: note};
-      return [
-        for (final id in ids)
-          if (notesMap[id] case final note?) _toMetaData(note),
-      ];
+      // Keep the caller's order (search relevance)
+      return [for (final id in ids) ?_indexingService.getNoteMetaData(id)];
     } catch (e) {
       AppLogger.e('Failed to load notes metadata: $e');
       return [];
@@ -379,6 +386,7 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
       final result = await _indexingService.togglePin(id);
+      _notifyChanged();
       AppLogger.i('NoteRepository: togglePinNote($id) → $result');
       return result;
     } catch (e) {
@@ -390,6 +398,40 @@ class NoteRepositoryImpl extends NoteRepository {
   @override
   Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45}) async {
     return getNotes(0, limit);
+  }
+
+  @override
+  Stream<List<NoteMetaData>> watchNotes() async* {
+    await ensureStoreConnected();
+    // Subscribe before the first read so no change is missed in between
+    final changes = StreamIterator(_changes.stream);
+    try {
+      yield await _getAllNotes();
+      while (await changes.moveNext()) {
+        yield await _getAllNotes();
+      }
+    } finally {
+      await changes.cancel();
+    }
+  }
+
+  /// All notes, pinned first and then most recently updated (the order
+  /// Tantivy's getNotes returns).
+  Future<List<NoteMetaData>> _getAllNotes() async {
+    const batchSize = 500;
+    final all = <NoteMetaData>[];
+    while (true) {
+      final batch = await _indexingService.getNotes(
+        skip: all.length,
+        take: batchSize,
+      );
+      all.addAll(batch);
+      if (batch.length < batchSize) return all;
+    }
+  }
+
+  void _notifyChanged() {
+    if (!_changes.isClosed) _changes.add(null);
   }
 
   (String title, String previewText) _extractTitleAndPreview(
@@ -435,6 +477,7 @@ class NoteRepositoryImpl extends NoteRepository {
       int updatedCount = 0;
       final entities = await dir.list().toList();
       final discoveredNoteIds = <String>{};
+      final notesToUpsert = <NoteModel>[];
 
       for (final entity in entities) {
         if (entity is! File || !entity.path.endsWith('.md')) continue;
@@ -445,10 +488,11 @@ class NoteRepositoryImpl extends NoteRepository {
           final tail = await _readTailString(entity);
           String? noteId = tail != null ? NoteTagHelper.extractId(tail) : null;
           final fileStat = await entity.stat();
-          final rawContent = await entity.readAsString();
+          String? rawContent;
 
           // Auto-tag untagged external files
           if (noteId == null) {
+            rawContent = await entity.readAsString();
             noteId = const Uuid().v4();
             final tagged = NoteTagHelper.appendTag(rawContent, noteId);
             await entity.writeAsString(tagged);
@@ -463,11 +507,14 @@ class NoteRepositoryImpl extends NoteRepository {
               : null;
 
           // Re-index if missing from Tantivy, renamed, or externally modified
-          if (existingDoc == null ||
+          final needsReindex = existingDoc == null ||
               existingDoc.fileName != fileName ||
               fileStat.modified.isAfter(
                 indexedUpdatedAt!.add(const Duration(seconds: 1)),
-              )) {
+              );
+
+          if (needsReindex) {
+            rawContent ??= await entity.readAsString();
             final cleanContent = NoteTagHelper.stripTag(rawContent);
             final fallbackTitle = fileName.endsWith('.md')
                 ? fileName.substring(0, fileName.length - 3)
@@ -492,15 +539,19 @@ class NoteRepositoryImpl extends NoteRepository {
               isPinned: existingDoc?.isPinned ?? false,
             );
 
-            await _indexingService.upsertNote(note);
-            updatedCount++;
+            notesToUpsert.add(note);
             AppLogger.i(
-              'NoteRepository: Reconciled $fileName (id: $noteId) into Tantivy',
+              'NoteRepository: Reconciled $fileName (id: $noteId) for Tantivy batch indexing',
             );
           }
         } catch (e) {
           AppLogger.e('NoteRepository: Failed to sync $fileName: $e');
         }
+      }
+
+      if (notesToUpsert.isNotEmpty) {
+        await _indexingService.upsertNotesBatch(notesToUpsert);
+        updatedCount += notesToUpsert.length;
       }
 
       // Clean up ghost notes in Tantivy whose files were deleted on disk
@@ -532,6 +583,7 @@ class NoteRepositoryImpl extends NoteRepository {
         AppLogger.e('NoteRepository: Failed to purge ghost notes: $e');
       }
 
+      if (updatedCount > 0) _notifyChanged();
       return updatedCount;
     } catch (e) {
       AppLogger.e('NoteRepository: syncNotesFromDisk failed: $e');

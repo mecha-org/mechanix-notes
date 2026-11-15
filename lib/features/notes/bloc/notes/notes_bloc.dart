@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -30,26 +32,24 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
   }
 
   Future<void> _loadNotes(LoadNotes event, Emitter<NotesState> emit) async {
-    emit(state.copyWith(isLoading: true, error: null));
-    AppLogger.i("Loading notes");
+    emit(state.copyWith(isLoading: true));
 
-    try {
-      try {
-        await noteRepository.syncNotesFromDisk();
-      } catch (e) {
-        AppLogger.d("NotesBloc: Disk sync error ignored: $e");
-      }
+    // Reconcile the index with the notes folder in the background so that
+    unawaited(
+      noteRepository.syncNotesFromDisk().catchError((e) {
+        AppLogger.d("NotesBloc: Background disk sync error: $e");
+        return 0;
+      }),
+    );
 
-      final firstPage = await noteRepository.getNotes(0, Constants.pageSize);
-      final flattened = _buildFlattenedNotes(firstPage);
-      final hasMore = firstPage.length == Constants.pageSize;
-      AppLogger.i(
-        "Notes loaded — showing ${firstPage.length}, hasMore: $hasMore",
-      );
-      emit(
-        state.copyWith(
-          notes: firstPage,
-          groupedNotes: flattened,
+    await emit.forEach<List<NoteMetaData>>(
+      noteRepository.watchNotes(),
+      onData: (notes) {
+        final (groupedNotes, groupCounts) = _buildFlattenedNotes(notes);
+        return state.copyWith(
+          notes: notes,
+          groupedNotes: groupedNotes,
+          groupCounts: groupCounts,
           isLoading: false,
           selectedNotes: _existingSelection(notes),
         );
@@ -190,17 +190,18 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       _ when daysAgo <= 30 => const TimeGroup(TimeCategory.lastMonth),
       _ => TimeGroup(TimeCategory.custom, monthYear.format(updated)),
     };
-
-    AppLogger.i(
-      "Time group for note ${note.id}: ${group.category} ${group.customLabel} $updated",
-    );
-    return group;
   }
 
+  /// Re-syncs the index with the notes folder. [watchNotes] then emits the
+  /// updated list, so there is no need to reload.
   Future<void> _onSyncNotesFromDisk(
     SyncNotesFromDisk event,
     Emitter<NotesState> emit,
   ) async {
-    add(LoadNotes());
+    try {
+      await noteRepository.syncNotesFromDisk();
+    } catch (e) {
+      AppLogger.e("NotesBloc: Disk sync failed: $e");
+    }
   }
 }
