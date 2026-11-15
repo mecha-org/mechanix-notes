@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
@@ -23,8 +24,8 @@ class EditorView extends StatefulWidget {
 class _EditorViewState extends State<EditorView> {
   MarkdownEditorController? _controller;
   late final FocusNode _focusNode;
-  bool _canPop = false;
   bool _isSavingAndExiting = false;
+  bool _didPop = false;
 
   @override
   void initState() {
@@ -52,15 +53,12 @@ class _EditorViewState extends State<EditorView> {
     });
   }
 
-  void _saveAndExit() {
+  void _saveOnExit() {
     if (_isSavingAndExiting) return;
     _isSavingAndExiting = true;
     if (_controller != null) {
       final markdown = _controller!.text;
       context.read<EditorBloc>().add(EditorSaveRequested(content: markdown));
-    } else {
-      _canPop = true;
-      Navigator.of(context).pop();
     }
   }
 
@@ -75,17 +73,23 @@ class _EditorViewState extends State<EditorView> {
           _initController(state.markdownContent);
         }
         if (state is EditorDiscarded) {
-          _canPop = true;
-          Navigator.of(context).pop();
+          if (!_didPop) {
+            _didPop = true;
+            Navigator.of(context).pop();
+          }
         }
         if (state is EditorSaveSuccess) {
-          _canPop = true;
-          Navigator.of(context).pop();
+          if (!_didPop) {
+            _didPop = true;
+            Navigator.of(context).pop();
+          }
         }
         if (state is EditorDeleteRequest) {
           context.read<NotesBloc>().add(DeleteNotes(noteIds: [state.noteId]));
-          _canPop = true;
-          Navigator.of(context).pop();
+          if (!_didPop) {
+            _didPop = true;
+            Navigator.of(context).pop(state.noteId);
+          }
         }
         if (state is EditorFailure) {
           _isSavingAndExiting = false;
@@ -100,8 +104,10 @@ class _EditorViewState extends State<EditorView> {
             if (noteId != null) {
               context.read<NotesBloc>().add(DeleteNotes(noteIds: [noteId]));
             }
-            _canPop = true;
-            Navigator.of(context).pop();
+            if (!_didPop) {
+              _didPop = true;
+              Navigator.of(context).pop();
+            }
           }
         }
       },
@@ -149,12 +155,20 @@ class _EditorViewState extends State<EditorView> {
           );
 
           final wrappedShell = PopScope(
-            canPop: _canPop,
+            canPop: true,
             onPopInvokedWithResult: (didPop, _) {
-              if (didPop) return;
-              _saveAndExit();
+              if (didPop) {
+                _didPop = true;
+                _saveOnExit();
+              }
             },
-            child: shell,
+            child: CallbackShortcuts(
+              bindings: {
+                const SingleActivator(LogicalKeyboardKey.escape): () =>
+                    Navigator.of(context).maybePop(),
+              },
+              child: Focus(autofocus: true, child: shell),
+            ),
           );
 
           if (_controller != null) {

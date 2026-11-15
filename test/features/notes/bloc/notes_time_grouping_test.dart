@@ -21,6 +21,7 @@ void main() {
 
     setUp(() {
       repository = MockNoteRepository();
+      when(() => repository.syncNotesFromDisk()).thenAnswer((_) async => 0);
     });
 
     NoteMetaData createNote({

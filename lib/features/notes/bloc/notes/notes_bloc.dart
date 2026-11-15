@@ -56,9 +56,11 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       },
       onError: (e, _) {
         AppLogger.e("Error loading notes: $e");
+        final isLocked = e is ObjectBoxException ||
+            e.toString().toLowerCase().contains('lock');
         return state.copyWith(
           isLoading: false,
-          error: e is ObjectBoxException
+          error: isLocked
               ? ErrorCategory.appAlreadyRunning
               : ErrorCategory.failedToLoadNotes,
         );

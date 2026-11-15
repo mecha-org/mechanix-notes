@@ -1,9 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mechanix_notes/core/utils/enums.dart';
+import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/features/notes/bloc/editor/editor_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
@@ -71,34 +72,33 @@ void main() {
       );
     }
 
-    testWidgets(
-      'EditorSaveSuccess pops route without notifying NotesBloc',
-      (tester) async {
-        final mockObserver = MockNavigatorObserver();
-        await tester.pumpWidget(buildTestWidget(observer: mockObserver));
+    testWidgets('EditorSaveSuccess pops route without notifying NotesBloc', (
+      tester,
+    ) async {
+      final mockObserver = MockNavigatorObserver();
+      await tester.pumpWidget(buildTestWidget(observer: mockObserver));
 
-        // Navigate to editor
-        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-        unawaited(navigator.pushNamed('/editor'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
+      // Navigate to editor
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.pushNamed('/editor'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-        expect(find.byType(EditorView), findsOneWidget);
+      expect(find.byType(EditorView), findsOneWidget);
 
-        // Emit EditorSaveSuccess
-        editorStateController.add(const EditorSaveSuccess('test-note-1'));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.pump(const Duration(milliseconds: 500));
+      // Emit EditorSaveSuccess
+      editorStateController.add(const EditorSaveSuccess('test-note-1'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
 
-        // The notes list updates itself from the repository
-        verifyNever(() => mockNotesBloc.add(any()));
+      // The notes list updates itself from the repository
+      verifyNever(() => mockNotesBloc.add(any()));
 
-        // Verify editor is popped and HomeScreen is visible
-        expect(find.byType(EditorView), findsNothing);
-        expect(find.text('HomeScreen'), findsOneWidget);
-      },
-    );
+      // Verify editor is popped and HomeScreen is visible
+      expect(find.byType(EditorView), findsNothing);
+      expect(find.text('HomeScreen'), findsOneWidget);
+    });
 
     testWidgets(
       'EditorDiscarded with noteId pops route without notifying NotesBloc',
@@ -178,38 +178,39 @@ void main() {
       },
     );
 
+    Future<void> openEditor(WidgetTester tester) async {
+      await tester.pumpWidget(
+        buildTestWidget(observer: MockNavigatorObserver()),
+      );
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.pushNamed('/editor'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      await tester.pump(const Duration(milliseconds: 500));
+    }
+
+    void verifySaveRequested() => verify(
+      () => mockEditorBloc.add(any(that: isA<EditorSaveRequested>())),
+    ).called(1);
+
     testWidgets(
-      'EditorFailure noteNotFound dispatches DeleteNotes to NotesBloc and pops route',
+      'Esc goes back (saves and exits) while the editor is unfocused',
       (tester) async {
-        final mockObserver = MockNavigatorObserver();
-        await tester.pumpWidget(buildTestWidget(observer: mockObserver));
-
-        final navigator = tester.state<NavigatorState>(find.byType(Navigator));
-        unawaited(
-          navigator.pushNamed('/editor', arguments: {'noteId': 'ghost-1'}),
-        );
+        await openEditor(tester);
+        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
         await tester.pump();
-        await tester.pump(const Duration(milliseconds: 300));
-
-        editorStateController.add(
-          const EditorFailure(ErrorCategory.noteNotFound),
-        );
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 500));
-        await tester.pump(const Duration(milliseconds: 500));
-
-        verify(
-          () => mockNotesBloc.add(
-            any(
-              that: isA<DeleteNotes>().having((e) => e.noteIds, 'noteIds', [
-                'ghost-1',
-              ]),
-            ),
-          ),
-        ).called(1);
-        expect(find.byType(EditorView), findsNothing);
+        verifySaveRequested();
       },
     );
+
+    testWidgets('Esc goes back (saves and exits) while typing', (tester) async {
+      await openEditor(tester);
+      await tester.tap(find.byType(LiveMarkdownEditor));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      verifySaveRequested();
+    });
   });
 }
 

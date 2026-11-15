@@ -49,6 +49,7 @@ void main() {
 
   Widget buildTestWidget({required List<dynamic> groupedNotes}) {
     return MaterialApp(
+      theme: MechanixTheme.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: BlocProvider<NotesBloc>.value(
@@ -75,7 +76,7 @@ void main() {
   final note2 = NoteMetaData(
     id: 'n2',
     title: 'Skit dialogues',
-    previewText: 'Skit dialogues',
+    previewText: 'Characters: Alex, Sam and Jordan discussing the script...',
     createdAt: DateTime(2026, 8, 21, 13, 0),
     updatedAt: DateTime(2026, 8, 21, 14, 0),
     height: 60.0,
@@ -84,7 +85,7 @@ void main() {
   final note3 = NoteMetaData(
     id: 'n3',
     title: 'Culinary- curry',
-    previewText: 'Culinary- curry',
+    previewText: 'Recipe ingredients: onions, tomatoes, spices...',
     createdAt: DateTime(2026, 8, 21, 14, 0),
     updatedAt: DateTime(2026, 8, 21, 15, 0),
     height: 60.0,
@@ -198,7 +199,10 @@ void main() {
           matching: find.byType(MechanixListTile),
         ),
       );
-      expect(noteCardTile.leadingWidgets.first, isA<ImageIcon>());
+      expect(
+        (noteCardTile.leadingWidgets.first as Container).child,
+        isA<ImageIcon>(),
+      );
       expect(noteCardTile.trailingWidgets, isEmpty);
     });
 

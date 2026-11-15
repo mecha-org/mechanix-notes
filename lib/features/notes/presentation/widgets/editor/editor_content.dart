@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/core/utils/markdown_editor_styles.dart';
@@ -94,6 +95,21 @@ class _EditorContentState extends State<EditorContent> {
     super.dispose();
   }
 
+  /// Ctrl+B / Ctrl+I (or Cmd on macOS keyboards) wrap the selection, or
+  /// insert an empty pair at the caret, with bold / italic markers.
+  Map<ShortcutActivator, VoidCallback> _formattingShortcuts(
+    MarkdownEditorController controller,
+  ) {
+    void bold() => controller.execute(MarkdownCommand.bold);
+    void italic() => controller.execute(MarkdownCommand.italic);
+    return {
+      const SingleActivator(LogicalKeyboardKey.keyB, control: true): bold,
+      const SingleActivator(LogicalKeyboardKey.keyB, meta: true): bold,
+      const SingleActivator(LogicalKeyboardKey.keyI, control: true): italic,
+      const SingleActivator(LogicalKeyboardKey.keyI, meta: true): italic,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = MarkdownControllerProvider.of(context);
@@ -103,20 +119,23 @@ class _EditorContentState extends State<EditorContent> {
     return RepaintBoundary(
       child: Stack(
         children: [
-          LiveMarkdownEditor(
-            controller: provider.controller,
-            focusNode: provider.focusNode,
-            scrollController: _scrollController,
-            theme: theme,
-            behavior: const MarkdownEditingBehavior(
-              autoPair: true,
-              wrapSelection: true,
-              smartLists: true,
-              autoCloseFences: true,
-            ),
-            componentBuilders: MarkdownEditorComponentBuilders(
-              taskToggleBuilder: (context, taskContext) =>
-                  _MechanixTaskToggle(taskContext: taskContext),
+          CallbackShortcuts(
+            bindings: _formattingShortcuts(provider.controller),
+            child: LiveMarkdownEditor(
+              controller: provider.controller,
+              focusNode: provider.focusNode,
+              scrollController: _scrollController,
+              theme: theme,
+              behavior: const MarkdownEditingBehavior(
+                autoPair: true,
+                wrapSelection: true,
+                smartLists: true,
+                autoCloseFences: true,
+              ),
+              componentBuilders: MarkdownEditorComponentBuilders(
+                taskToggleBuilder: (context, taskContext) =>
+                    _MechanixTaskToggle(taskContext: taskContext),
+              ),
             ),
           ),
           ValueListenableBuilder<TextEditingValue>(

@@ -401,18 +401,67 @@ class NoteRepositoryImpl extends NoteRepository {
   }
 
   @override
-  Stream<List<NoteMetaData>> watchNotes() async* {
-    await ensureStoreConnected();
-    // Subscribe before the first read so no change is missed in between
-    final changes = StreamIterator(_changes.stream);
-    try {
-      yield await _getAllNotes();
-      while (await changes.moveNext()) {
-        yield await _getAllNotes();
-      }
-    } finally {
-      await changes.cancel();
-    }
+  Stream<List<NoteMetaData>> watchNotes() {
+    late final StreamController<List<NoteMetaData>> controller;
+    StreamSubscription<void>? changesSub;
+
+    controller = StreamController<List<NoteMetaData>>(
+      onListen: () async {
+        try {
+          await _fileStorage.ensureDirectoryExists();
+        } catch (e) {
+          AppLogger.e('Failed to initialize note file directory: $e');
+        }
+
+        try {
+          await _indexingService.initialize();
+        } catch (e, s) {
+          if (!controller.isClosed) {
+            controller.addError(e, s);
+            await controller.close();
+          }
+          return;
+        }
+
+        bool hasPendingChange = false;
+        bool isReading = false;
+
+        Future<void> readAndEmit() async {
+          if (isReading) {
+            hasPendingChange = true;
+            return;
+          }
+          isReading = true;
+          try {
+            do {
+              hasPendingChange = false;
+              final notes = await _getAllNotes();
+              if (!controller.isClosed) {
+                controller.add(notes);
+              }
+            } while (hasPendingChange && !controller.isClosed);
+          } catch (e, s) {
+            if (!controller.isClosed) {
+              controller.addError(e, s);
+            }
+          } finally {
+            isReading = false;
+          }
+        }
+
+        // Subscribe before the first read so no change is missed in between
+        changesSub = _changes.stream.listen((_) {
+          unawaited(readAndEmit());
+        });
+
+        await readAndEmit();
+      },
+      onCancel: () async {
+        await changesSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   /// All notes, pinned first and then most recently updated (the order

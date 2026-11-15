@@ -140,7 +140,7 @@ class _SearchViewState extends State<SearchView> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: _searchController.text.isEmpty && widget.onClose == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_searchController.text.isNotEmpty) {

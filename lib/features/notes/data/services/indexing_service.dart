@@ -7,14 +7,24 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
+  Future<void>? _initFuture;
   bool _initialized = false;
 
   bool get isInitialized => _initialized;
 
-  Future<void> initialize() async {
-    if (_initialized) return;
+  Future<void> initialize() {
+    if (_initialized) return Future.value();
+    return _initFuture ??= _doInitialize().catchError((Object e, StackTrace s) {
+      _initFuture = null;
+      Error.throwWithStackTrace(e, s);
+    });
+  }
+
+  Future<void> _doInitialize() async {
     try {
-      await tantivy.RustLib.init();
+      if (!tantivy.RustLib.instance.initialized) {
+        await tantivy.RustLib.init();
+      }
       final home = Platform.environment['HOME'];
       final indexDir = Directory('$home${Constants.notesTantivyDbPath}');
       AppLogger.d('[IndexingService] Init: ${indexDir.path}');

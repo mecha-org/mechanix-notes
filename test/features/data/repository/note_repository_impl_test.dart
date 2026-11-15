@@ -154,6 +154,55 @@ void main() {
   // watchNotes
   // -------------------------------------------------------------------------
 
+  group('watchNotes', () {
+    test('emits initial notes and re-emits when a note is updated', () async {
+      final note1 = _makeMetaData(id: '1', title: 'Note 1');
+      final note2 = _makeMetaData(id: '2', title: 'Note 2');
+
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer((_) async => [note1]);
+
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+
+      try {
+        await pumpEventQueue();
+        expect(emissions.length, 1);
+        expect(emissions.first.first.id, '1');
+
+        when(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).thenAnswer((_) async => [note1, note2]);
+
+        await repository.upsertNote(_makeNote(id: '2', title: 'Note 2'));
+        await pumpEventQueue();
+
+        expect(emissions.length, 2);
+        expect(emissions.last.length, 2);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('re-throws when indexingService.initialize fails', () async {
+      when(
+        () => mockIndexingService.initialize(),
+      ).thenAnswer((_) => Future.error(StateError('init failed')));
+
+      expect(
+        () => repository.watchNotes().first,
+        throwsA(isA<StateError>()),
+      );
+    });
+  });
+
   group('getNotes', () {
     test('returns empty list when index is empty', () async {
       when(

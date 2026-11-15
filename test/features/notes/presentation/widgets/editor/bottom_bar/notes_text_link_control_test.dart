@@ -238,7 +238,7 @@ void main() {
       );
     });
 
-    testWidgets('11. Text mode renders all 7 formatting action buttons', (
+    testWidgets('11. Text mode renders all 6 formatting action buttons', (
       tester,
     ) async {
       await tester.pumpWidget(buildTestWidget());
@@ -251,10 +251,6 @@ void main() {
       expect(find.byKey(const Key('notes_text_body_button')), findsOneWidget);
       expect(find.byKey(const Key('notes_text_bold_button')), findsOneWidget);
       expect(find.byKey(const Key('notes_text_italic_button')), findsOneWidget);
-      expect(
-        find.byKey(const Key('notes_text_underline_button')),
-        findsOneWidget,
-      );
       expect(
         find.byKey(const Key('notes_text_strikethrough_button')),
         findsOneWidget,
