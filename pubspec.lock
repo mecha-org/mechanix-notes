@@ -299,11 +299,9 @@ packages:
   flutter_tantivy:
     dependency: "direct main"
     description:
-      path: "."
-      ref: "feat/title-indexing"
-      resolved-ref: "96d1204e343e09ddc13c101a3a41dfc40cc845cd"
-      url: "https://github.com/ojas-mecha/flutter_tantivy.git"
-    source: git
+      path: "/home/batman/Work/flutter_tantivy"
+      relative: false
+    source: path
     version: "0.0.1"
   flutter_test:
     dependency: "direct dev"
