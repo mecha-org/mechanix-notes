@@ -17,6 +17,7 @@ class NoteRepositoryImpl extends NoteRepository {
   final NotesWatcher _notesWatcher;
 
   StreamSubscription<NotesWatcherEvent>? _watcherSub;
+  Future<void> _watcherQueue = Future.value();
 
   /// Fires whenever notes are created, updated, deleted or re-synced, so
   /// [watchNotes] can re-emit. Shared by all instances, because they all
@@ -73,7 +74,11 @@ class NoteRepositoryImpl extends NoteRepository {
 
   void _startWatcher() {
     if (_watcherSub != null) return;
-    _watcherSub = _notesWatcher.events.listen(_handleWatcherEvent);
+    _watcherSub = _notesWatcher.events.listen((event) {
+      _watcherQueue = _watcherQueue.then((_) => _handleWatcherEvent(event)).catchError((e) {
+        AppLogger.e('NoteRepository: Error in watcher event queue: $e');
+      });
+    });
     unawaited(_notesWatcher.start());
   }
 
@@ -538,17 +543,18 @@ class NoteRepositoryImpl extends NoteRepository {
       if (!await dir.exists()) return 0;
 
       int updatedCount = 0;
-      final entities = await dir.list().toList();
-      final discoveredNoteIds = <String>{};
-      final notesToUpsert = <NoteModel>[];
-
-      // Files are matched to notes by filename
+      // Snapshot the index BEFORE listing files on disk so notes saved
+      // concurrently while listing are never falsely flagged as ghosts.
       final indexedDocs = await _indexingService.getAllDocuments();
       final docsById = {for (final d in indexedDocs) d.id: d};
       final docsByFileName = <String, tantivy.Document>{
         for (final d in indexedDocs)
           if (d.fileName != null && d.fileName!.isNotEmpty) d.fileName!: d,
       };
+
+      final entities = await dir.list().toList();
+      final discoveredNoteIds = <String>{};
+      final notesToUpsert = <NoteModel>[];
 
       for (final entity in entities) {
         if (entity is! File || !NotesWatcher.isTrackedFile(entity.path)) {
@@ -647,6 +653,7 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<void> close() async {
     await _watcherSub?.cancel();
     _watcherSub = null;
+    await _watcherQueue;
     await _notesWatcher.dispose();
   }
 }

@@ -6,7 +6,6 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
-import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
@@ -235,16 +234,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       final isH1 =
           firstContentLine.startsWith('#') &&
           !firstContentLine.startsWith('##');
-
-      final isListOrBlock =
-          firstContentLine.startsWith('- ') ||
-          firstContentLine.startsWith('* ') ||
-          firstContentLine.startsWith('+ ') ||
-          firstContentLine.startsWith('> ') ||
-          firstContentLine.startsWith('```') ||
-          RegExp(r'^\d+[.)]\s+').hasMatch(firstContentLine);
-
-      if (isH1 || isListOrBlock) {
+      if (isH1) {
         return extractTitleAndPreviewFromMarkdown(
           content,
           fallbackTitle: currentTitle,
@@ -252,34 +242,10 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       }
     }
 
-    final lines = plainText
-        .split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
-        .toList();
-
-    if (lines.length > 1) {
-      final title = lines.first;
-      final bodyText = lines.skip(1).join(' ');
-      final preview = bodyText.length > Constants.notePreviewTextMaxLength
-          ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
-          : bodyText;
-      return (title, preview);
-    }
-
-    // Only 1 line of text:
-    final singleLine = lines.first;
-    if (currentTitle.isNotEmpty && currentTitle != singleLine) {
-      final preview = singleLine.length > Constants.notePreviewTextMaxLength
-          ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
-          : singleLine;
-      return (currentTitle, preview);
-    }
-
-    final preview = singleLine.length > Constants.notePreviewTextMaxLength
-        ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
-        : singleLine;
-    return (singleLine, preview);
+    return extractTitleAndPreviewFromMarkdown(
+      plainText,
+      fallbackTitle: currentTitle,
+    );
   }
 
   NoteModel buildNote({

@@ -13,7 +13,10 @@ void main() {
     });
 
     test('ignores hidden files and directories', () {
-      expect(NotesWatcher.isTrackedFile('/notes/.mechanix/state.json'), isFalse);
+      expect(
+        NotesWatcher.isTrackedFile('/notes/.mechanix/state.json'),
+        isFalse,
+      );
       expect(NotesWatcher.isTrackedFile('/notes/.hidden.md'), isFalse);
       expect(NotesWatcher.isTrackedFile('/notes/.obsidian/app.json'), isFalse);
     });
@@ -75,7 +78,9 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 100));
 
       final deleteEventFuture = watcher.events.firstWhere(
-        (e) => e.fileName == 'to_delete.md' && e.type == NotesWatcherEventType.delete,
+        (e) =>
+            e.fileName == 'to_delete.md' &&
+            e.type == NotesWatcherEventType.delete,
       );
 
       await file.delete();
@@ -106,6 +111,32 @@ void main() {
 
       expect(receivedEvent, isFalse);
     });
+
+    test(
+      'suppresses self-writes when temp file is renamed onto markdown file',
+      () async {
+        final tempFile = File('${tempDir.path}/..tmp_atomic_123.md');
+        final targetFile = File('${tempDir.path}/atomic.md');
+        await tempFile.writeAsString('# Atomic Save');
+        await tempFile.rename(targetFile.path);
+        final stat = await targetFile.stat();
+
+        // Record self-write as NoteFileStorage._writeAtomic does
+        NoteFileStorage.recordSelfWrite('atomic.md', stat.modified);
+
+        var receivedEvent = false;
+        final sub = watcher.events.listen((e) {
+          if (e.fileName == 'atomic.md') {
+            receivedEvent = true;
+          }
+        });
+
+        // Wait past the debounce duration
+        await Future.delayed(const Duration(milliseconds: 250));
+        await sub.cancel();
+
+        expect(receivedEvent, isFalse);
+      },
+    );
   });
 }
-

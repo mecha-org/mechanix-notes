@@ -4,12 +4,7 @@ import 'dart:io';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 
-enum NotesWatcherEventType {
-  create,
-  modify,
-  delete,
-  move,
-}
+enum NotesWatcherEventType { create, modify, delete, move }
 
 class NotesWatcherEvent {
   final NotesWatcherEventType type;
@@ -131,7 +126,7 @@ class NotesWatcher {
         // Moved from non-tracked into tracked -> treat as create
         _debounce(
           newName,
-          () => _emit(
+          () => _emitIfExternal(
             NotesWatcherEvent(
               type: NotesWatcherEventType.create,
               fileName: newName,
@@ -155,7 +150,7 @@ class NotesWatcher {
         // True rename within tracked directory
         _debounce(
           newName,
-          () => _emit(
+          () => _emitIfExternal(
             NotesWatcherEvent(
               type: NotesWatcherEventType.move,
               fileName: newName,
@@ -215,7 +210,9 @@ class NotesWatcher {
 
       // Check self-write suppression
       if (NoteFileStorage.isRecentSelfWrite(event.fileName, stat.modified)) {
-        AppLogger.d('[NotesWatcher] Dropped self-write event for ${event.fileName}');
+        AppLogger.d(
+          '[NotesWatcher] Dropped self-write event for ${event.fileName}',
+        );
         return;
       }
 

@@ -178,6 +178,12 @@ String markdownToPlainText(String markdown) {
   }
 
   final singleLine = lines.isNotEmpty ? lines.first : '';
+  if (fallbackTitle.isNotEmpty && fallbackTitle != singleLine) {
+    final preview = singleLine.length > Constants.notePreviewTextMaxLength
+        ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
+        : singleLine;
+    return (fallbackTitle, preview);
+  }
   var title = singleLine;
   if (title.length > Constants.noteTitleMaxLength) {
     title = title.substring(0, Constants.noteTitleMaxLength).trim();
