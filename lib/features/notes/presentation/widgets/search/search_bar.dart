@@ -16,6 +16,7 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.onSearchIconTap,
     this.onClear,
     this.onClose,
+    this.onBack,
     this.autofocus = true,
     this.searchWidget,
     this.searchDecoration,
@@ -57,6 +58,9 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// Called when closing the search mode.
   final VoidCallback? onClose;
 
+  /// Called when the back button is pressed. Defaults to popping the route.
+  final VoidCallback? onBack;
+
   /// Whether the search field should autofocus when entering active mode.
   final bool autofocus;
 
@@ -96,6 +100,13 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
       primary: false,
       automaticallyImplyLeading: false,
       backgroundColor: colorScheme.surfaceContainerLowest,
+      leading: MechanixIconButton.standard(
+        type: IconButtonType.rounded,
+        size: IconButtonSize.small,
+        foregroundColor: colorScheme.onSurface,
+        onPressed: onBack ?? () => Navigator.of(context).maybePop(),
+        icon: Image.asset(NotesIcon.backIcon, width: 9, height: 16.5),
+      ),
       searchWidget:
           searchWidget ??
           Container(
