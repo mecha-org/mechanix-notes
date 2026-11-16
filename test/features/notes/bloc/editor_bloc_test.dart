@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
@@ -46,6 +48,10 @@ NoteModel makeNote({
   );
 }
 
+/// Stub for upsertNote: the repository returns the note's id after saving.
+Future<String> savedId(Invocation inv) async =>
+    (inv.positionalArguments.first as NoteModel).id;
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 void main() {
@@ -57,6 +63,7 @@ void main() {
 
   setUp(() {
     repository = MockNoteRepository();
+    when(() => repository.noteRenames).thenAnswer((_) => const Stream.empty());
   });
 
   EditorBloc buildBloc() => EditorBloc(repository);
@@ -332,7 +339,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -353,7 +360,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () =>
           const EditorLoaded(noteId: kTestNoteId, title: '', isNewNote: true),
@@ -371,7 +378,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -394,7 +401,7 @@ void main() {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -424,7 +431,7 @@ void main() {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -454,7 +461,7 @@ void main() {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -566,7 +573,7 @@ void main() {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -657,7 +664,7 @@ void main() {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
           (_) async => makeNote(title: 'Old Title', content: kSomeMarkdown),
         );
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -684,7 +691,7 @@ void main() {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
           (_) async => makeNote(title: kTestTitle, content: kEmptyMarkdown),
         );
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -711,7 +718,7 @@ void main() {
         ).thenAnswer((_) async => original);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -740,7 +747,7 @@ void main() {
         ).thenAnswer((_) async => original);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -820,7 +827,7 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -926,7 +933,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -950,7 +957,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -973,7 +980,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -999,7 +1006,7 @@ void main() {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
           (_) async => makeNote(title: kTestTitle, content: kEmptyMarkdown),
         );
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1025,7 +1032,7 @@ void main() {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
           (_) async => makeNote(title: 'Old Title', content: kSomeMarkdown),
         );
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1075,7 +1082,7 @@ void main() {
         ).thenAnswer((_) async => original);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1104,7 +1111,7 @@ void main() {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
         when(
           () => repository.upsertNote(captureAny()),
-        ).thenAnswer((_) async {});
+        ).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1132,7 +1139,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1182,7 +1189,7 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => makeNote(content: kEmptyMarkdown));
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1207,7 +1214,7 @@ void main() {
       'never calls getNoteById during auto-save when lastSavedContent baseline is present in memory',
       build: buildBloc,
       setUp: () {
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => EditorLoaded(
         noteId: kTestNoteId,
@@ -1316,8 +1323,8 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1357,8 +1364,8 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       act: (bloc) async {
         bloc.emit(
@@ -1407,7 +1414,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () =>
           const EditorLoaded(noteId: kTestNoteId, title: '', isNewNote: true),
@@ -1436,7 +1443,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () =>
           const EditorLoaded(noteId: kTestNoteId, title: '', isNewNote: true),
@@ -1460,7 +1467,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () =>
           const EditorLoaded(noteId: kTestNoteId, title: '', isNewNote: true),
@@ -1487,7 +1494,7 @@ void main() {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
           (_) async => makeNote(title: 'Old Title', content: '# Old Title\nBody'),
         );
-        when(() => repository.upsertNote(any())).thenAnswer((_) async {});
+        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1616,5 +1623,121 @@ void main() {
         verifyNever(() => repository.upsertNote(any()));
       },
     );
+  });
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // One note must never become several files
+  // ════════════════════════════════════════════════════════════════════════════
+
+  group('note id and file tracking', () {
+    const newNote = EditorLoaded(
+      noteId: 'uuid-1',
+      title: '',
+      isNewNote: true,
+      lastSavedContent: '# ',
+    );
+
+    late List<String?> savedFileNames;
+
+    setUp(() {
+      savedFileNames = [];
+      // Like the real repository: creating returns the title-based filename.
+      when(() => repository.upsertNote(any())).thenAnswer((inv) async {
+        final note = inv.positionalArguments.first as NoteModel;
+        savedFileNames.add(note.fileName);
+        return 'Hello.md';
+      });
+    });
+
+    blocTest<EditorBloc, EditorState>(
+      'first save creates (fileName null), later saves update the returned file',
+      build: buildBloc,
+      seed: () => newNote,
+      act: (bloc) {
+        bloc.add(EditorAutoSaveRequested(content: '# Hello\na', plainText: 'a'));
+        bloc.add(EditorAutoSaveRequested(content: '# Hello\nab', plainText: 'ab'));
+      },
+      verify: (bloc) {
+        expect(savedFileNames, [null, 'Hello.md']);
+        expect((bloc.state as EditorLoaded).noteId, 'Hello.md');
+        expect((bloc.state as EditorLoaded).isNewNote, isFalse);
+      },
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'manual save reports the id returned by the repository',
+      build: buildBloc,
+      seed: () => newNote,
+      act: (bloc) =>
+          bloc.add(EditorSaveRequested(content: '# Hello\na', plainText: 'a')),
+      verify: (bloc) => expect(bloc.state, const EditorSaveSuccess('Hello.md')),
+    );
+
+    test('manual save waits for an in-flight auto-save (one queue)', () async {
+      var running = 0;
+      var maxRunning = 0;
+      final calls = <String?>[];
+      when(() => repository.upsertNote(any())).thenAnswer((inv) async {
+        final note = inv.positionalArguments.first as NoteModel;
+        calls.add(note.fileName);
+        running++;
+        maxRunning = running > maxRunning ? running : maxRunning;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        running--;
+        return 'Hello.md';
+      });
+
+      final bloc = buildBloc()..emit(newNote);
+      bloc.add(EditorAutoSaveRequested(content: '# Hello\na', plainText: 'a'));
+      bloc.add(EditorSaveRequested(content: '# Hello\nab', plainText: 'ab'));
+      await bloc.stream.firstWhere((s) => s is EditorSaveSuccess);
+      await bloc.close();
+
+      expect(maxRunning, 1);
+      // The manual save saw the auto-save's result, so it updates, not creates.
+      expect(calls, [null, 'Hello.md']);
+    });
+
+    blocTest<EditorBloc, EditorState>(
+      're-creates the note when its file vanished, instead of failing',
+      build: buildBloc,
+      setUp: () {
+        when(() => repository.upsertNote(any())).thenAnswer((inv) async {
+          final note = inv.positionalArguments.first as NoteModel;
+          savedFileNames.add(note.fileName);
+          if (note.fileName != null) throw NoteFileMissingException('Foo.md');
+          return 'Foo.md';
+        });
+      },
+      seed: () => const EditorLoaded(
+        noteId: 'Foo.md',
+        title: 'Foo',
+        lastSavedContent: '# Foo\n',
+        lastSavedTitle: 'Foo',
+      ),
+      act: (bloc) =>
+          bloc.add(EditorSaveRequested(content: '# Foo\nnew', plainText: 'new')),
+      verify: (bloc) {
+        expect(savedFileNames, ['Foo.md', null]);
+        expect(bloc.state, const EditorSaveSuccess('Foo.md'));
+      },
+    );
+
+    test('follows a rename of the open note and ignores other notes', () async {
+      final renames = StreamController<NoteRenamed>();
+      when(() => repository.noteRenames).thenAnswer((_) => renames.stream);
+      final bloc = buildBloc()
+        ..emit(const EditorLoaded(noteId: 'Foo.md', title: 'Foo'));
+
+      renames.add(const NoteRenamed(oldId: 'Other.md', newId: 'X.md'));
+      renames.add(const NoteRenamed(oldId: 'Foo.md', newId: 'Bar.md'));
+      await bloc.stream.firstWhere(
+        (s) => s is EditorLoaded && s.noteId != 'Foo.md',
+      );
+
+      expect((bloc.state as EditorLoaded).noteId, 'Bar.md');
+      await bloc.close();
+      await renames.close();
+    });
   });
 }

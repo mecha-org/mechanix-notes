@@ -19,14 +19,47 @@ part 'editor_state.dart';
 class EditorBloc extends Bloc<EditorEvent, EditorState> {
   final NoteRepository _repository;
 
+  StreamSubscription<NoteRenamed>? _renameSub;
+
   EditorBloc(this._repository) : super(const EditorInitial()) {
     on<EditorInitialised>(_onInitialised);
-    on<EditorSaveRequested>(_onSaveRequested, transformer: sequential());
-    on<EditorAutoSaveRequested>(
-      _onAutoSaveRequested,
+    on<EditorPersistEvent>(
+      (event, emit) => switch (event) {
+        EditorSaveRequested() => _onSaveRequested(event, emit),
+        EditorAutoSaveRequested() => _onAutoSaveRequested(event, emit),
+        EditorPinToggled() => _onPinToggled(event, emit),
+      },
       transformer: sequential(),
     );
-    on<EditorPinToggled>(_onPinToggled, transformer: sequential());
+    // Not queued: a rename must apply even while a save is in flight.
+    on<_EditorNoteRenamed>(_onNoteRenamed);
+    _renameSub = _repository.noteRenames.listen(
+      (renamed) => add(_EditorNoteRenamed(renamed)),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    await _renameSub?.cancel();
+    return super.close();
+  }
+
+  void _onNoteRenamed(_EditorNoteRenamed event, Emitter<EditorState> emit) {
+    final current = state;
+    if (current is EditorLoaded && current.noteId == event.renamed.oldId) {
+      AppLogger.i('EditorBloc: Following rename ${event.renamed}');
+      emit(current.copyWith(noteId: event.renamed.newId));
+    }
+  }
+
+  Future<String> _persist(NoteModel note) async {
+    try {
+      return await _repository.upsertNote(note);
+    } on NoteFileMissingException catch (e) {
+      AppLogger.i('EditorBloc: $e; re-creating note');
+      note.fileName = null;
+      return await _repository.upsertNote(note);
+    }
   }
 
   // Event Handlers
@@ -62,7 +95,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         AppLogger.i('EditorBloc: Content ready for ${event.noteId}');
         emit(
           EditorLoaded(
-            noteId: note.id,
+            noteId: note.fileName ?? note.id,
             title: event.noteTitle ?? note.title,
             markdownContent: initialContent,
             lastSavedContent: initialContent,
@@ -148,7 +181,8 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
             : current.lastSavedIsPinned;
 
         final isContentUnchanged = lastSavedContent == markdown;
-        final isTitleUnchanged = lastSavedTitle == note.title ||
+        final isTitleUnchanged =
+            lastSavedTitle == note.title ||
             (isContentUnchanged && lastSavedTitle == current.title);
         final isPinUnchanged = lastSavedIsPinned == note.isPinned;
 
@@ -163,10 +197,10 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
       emit(current.copyWith(isSaving: true, title: note.title));
 
-      await _repository.upsertNote(note);
+      final savedId = await _persist(note);
 
-      AppLogger.i('EditorBloc: Manual save success for ${current.noteId}');
-      emit(EditorSaveSuccess(current.noteId));
+      AppLogger.i('EditorBloc: Manual save success for $savedId');
+      emit(EditorSaveSuccess(savedId));
     } on DbFullException catch (e) {
       AppLogger.e('EditorBloc: Manual save failed due to full database: $e');
       emit(const EditorFailure(ErrorCategory.storageFull));
@@ -199,30 +233,22 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       final trimmedContent = content.trimLeft();
       final firstContentLine = trimmedContent.split('\n').first.trim();
       final isH1 =
-          firstContentLine.startsWith('#') && !firstContentLine.startsWith('##');
+          firstContentLine.startsWith('#') &&
+          !firstContentLine.startsWith('##');
 
-      if (isH1) {
-        final headingTitle =
-            firstContentLine.replaceFirst(RegExp(r'^#\s*'), '').trim();
-        final bodyLines = trimmedContent.split('\n').skip(1).join('\n');
-        final bodyPlain = markdownToPlainText(bodyLines).trim();
-        final preview = bodyPlain.length > Constants.notePreviewTextMaxLength
-            ? bodyPlain.substring(0, Constants.notePreviewTextMaxLength)
-            : bodyPlain;
-        return (headingTitle, preview);
-      }
-
-      final isListOrBlock = firstContentLine.startsWith('- ') ||
+      final isListOrBlock =
+          firstContentLine.startsWith('- ') ||
           firstContentLine.startsWith('* ') ||
           firstContentLine.startsWith('+ ') ||
           firstContentLine.startsWith('> ') ||
           firstContentLine.startsWith('```') ||
           RegExp(r'^\d+[.)]\s+').hasMatch(firstContentLine);
-      if (isListOrBlock) {
-        final preview = trimmed.length > Constants.notePreviewTextMaxLength
-            ? trimmed.substring(0, Constants.notePreviewTextMaxLength)
-            : trimmed;
-        return ('', preview);
+
+      if (isH1 || isListOrBlock) {
+        return extractTitleAndPreviewFromMarkdown(
+          content,
+          fallbackTitle: currentTitle,
+        );
       }
     }
 
@@ -278,6 +304,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
       createdAt: existing?.createdAt ?? current.createdAt ?? now,
       updatedAt: now,
       isPinned: current.isPinned,
+      fileName: current.isNewNote ? null : current.noteId,
     );
   }
 
@@ -318,7 +345,8 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
             : current.lastSavedIsPinned;
 
         final isContentUnchanged = lastSavedContent == markdown;
-        final isTitleUnchanged = lastSavedTitle == note.title ||
+        final isTitleUnchanged =
+            lastSavedTitle == note.title ||
             (isContentUnchanged && lastSavedTitle == current.title);
         final isPinUnchanged = lastSavedIsPinned == note.isPinned;
 
@@ -332,14 +360,15 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         return;
       }
 
-      await _repository.upsertNote(note);
+      final savedId = await _persist(note);
 
-      AppLogger.i('EditorBloc: Auto-save success for ${current.noteId}');
+      AppLogger.i('EditorBloc: Auto-save success for $savedId');
       final latestState = state;
       if (latestState is! EditorLoaded) return;
 
       emit(
         latestState.copyWith(
+          noteId: savedId,
           title: note.title,
           lastSavedContent: markdown,
           lastSavedTitle: note.title,

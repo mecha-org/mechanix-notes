@@ -76,7 +76,10 @@ class FakeNoteRepository implements NoteRepository {
   Future<NoteModel?> getNoteById(String id) async => null;
 
   @override
-  Future<void> upsertNote(NoteModel note) async {}
+  Future<String> upsertNote(NoteModel note) async => note.id;
+
+  @override
+  Stream<NoteRenamed> get noteRenames => const Stream.empty();
 
   @override
   Future<List<String>> searchNoteIds(String query) async => [];
@@ -92,6 +95,11 @@ class FakeNoteRepository implements NoteRepository {
   Future<int> syncNotesFromDisk() async {
     syncCount++;
     return 0;
+  }
+
+  @override
+  Future<void> close() async {
+    await _changes.close();
   }
 }
 

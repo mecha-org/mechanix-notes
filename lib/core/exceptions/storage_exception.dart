@@ -22,3 +22,12 @@ class StorageFullException implements Exception {
 /// Backwards-compatibility aliases
 typedef ObjectBoxException = DatabaseLockedException;
 typedef DbFullException = StorageFullException;
+
+class NoteFileMissingException implements Exception {
+  final String fileName;
+
+  NoteFileMissingException(this.fileName);
+
+  @override
+  String toString() => 'Note file not found: $fileName';
+}

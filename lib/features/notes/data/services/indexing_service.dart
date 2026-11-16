@@ -7,6 +7,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
+  static const int currentSchemaVersion = 2;
   Future<void>? _initFuture;
   bool _initialized = false;
 
@@ -22,6 +23,7 @@ class IndexingService {
 
   Future<void> _doInitialize() async {
     try {
+      // ignore: invalid_use_of_internal_member
       if (!tantivy.RustLib.instance.initialized) {
         await tantivy.RustLib.init();
       }
@@ -31,6 +33,31 @@ class IndexingService {
       if (!await indexDir.exists()) {
         await indexDir.create(recursive: true);
       }
+
+      final versionFile = File('${indexDir.path}/version.txt');
+      var needsFresh = false;
+      if (await versionFile.exists()) {
+        final versionStr = (await versionFile.readAsString()).trim();
+        if (int.tryParse(versionStr) != currentSchemaVersion) {
+          needsFresh = true;
+        }
+      } else if (await indexDir.exists()) {
+        final count = await indexDir.list().length;
+        if (count > 0) {
+          needsFresh = true;
+        }
+      }
+
+      if (needsFresh) {
+        AppLogger.i(
+          '[IndexingService] Schema version change detected. Recreating fresh index (v$currentSchemaVersion)...',
+        );
+        if (await indexDir.exists()) {
+          await indexDir.delete(recursive: true);
+          await indexDir.create(recursive: true);
+        }
+      }
+
       try {
         tantivy.initTantivy(dirPath: indexDir.path);
       } catch (e) {
@@ -43,8 +70,10 @@ class IndexingService {
         }
         tantivy.initTantivy(dirPath: indexDir.path);
       }
+
+      await versionFile.writeAsString('$currentSchemaVersion');
       _initialized = true;
-      AppLogger.d('[IndexingService] Ready');
+      AppLogger.d('[IndexingService] Ready (v$currentSchemaVersion)');
     } catch (e) {
       AppLogger.e('[IndexingService] Init failed: $e');
       rethrow;
@@ -226,6 +255,22 @@ class IndexingService {
     } catch (e) {
       AppLogger.e('[IndexingService] Search failed ($query): $e');
       return [];
+    }
+  }
+
+  /// Fetches every stored document from the Tantivy index, in pages.
+  Future<List<tantivy.Document>> getAllDocuments({int batchSize = 500}) async {
+    if (!_initialized) {
+      await initialize();
+    }
+    final all = <tantivy.Document>[];
+    while (true) {
+      final batch = await tantivy.getNotes(
+        skip: BigInt.from(all.length),
+        take: BigInt.from(batchSize),
+      );
+      all.addAll(batch);
+      if (batch.length < batchSize) return all;
     }
   }
 

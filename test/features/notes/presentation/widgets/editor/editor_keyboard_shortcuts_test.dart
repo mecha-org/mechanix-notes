@@ -228,6 +228,102 @@ void main() {
       expect(controller.text, 'abc\n');
     });
 
+    testWidgets(
+      'Enter on a numbered list item automatically generates 2. on the next line and clears on empty enter',
+      (tester) async {
+        const text = '1. First item';
+        await pumpEditor(tester, text, selection: sel(text.length));
+
+        // Press Enter after '1. First item'
+        await press(tester, LogicalKeyboardKey.enter);
+        expect(controller.text, '1. First item\n2. ');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '1. First item\n2. '.length),
+        );
+
+        // If the embedder also sends an enter echo:
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '1. First item\n',
+            selection: TextSelection.collapsed(offset: 14),
+          ),
+        );
+        await tester.pump();
+        expect(controller.text, '1. First item\n2. ');
+
+        // Press Enter again on empty '2. ' -> clears the list continuation
+        await press(tester, LogicalKeyboardKey.enter);
+        expect(controller.text, '1. First item\n');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '1. First item\n'.length),
+        );
+
+        // If the embedder also sends an enter echo on the second enter:
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '1. First item\n2. \n',
+            selection: TextSelection.collapsed(offset: 18),
+          ),
+        );
+        await tester.pump();
+        expect(controller.text, '1. First item\n');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '1. First item\n'.length),
+        );
+      },
+    );
+
+    testWidgets(
+      'Enter on a bullet list item automatically generates - on the next line and clears on empty enter',
+      (tester) async {
+        const text = '- First item';
+        await pumpEditor(tester, text, selection: sel(text.length));
+
+        // Press Enter after '- First item'
+        await press(tester, LogicalKeyboardKey.enter);
+        expect(controller.text, '- First item\n- ');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '- First item\n- '.length),
+        );
+
+        // If the embedder also sends an enter echo:
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '- First item\n',
+            selection: TextSelection.collapsed(offset: 13),
+          ),
+        );
+        await tester.pump();
+        expect(controller.text, '- First item\n- ');
+
+        // Press Enter again on empty '- ' -> clears the list continuation
+        await press(tester, LogicalKeyboardKey.enter);
+        expect(controller.text, '- First item\n');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '- First item\n'.length),
+        );
+
+        // If the embedder also sends an enter echo on the second enter:
+        tester.testTextInput.updateEditingValue(
+          const TextEditingValue(
+            text: '- First item\n- \n',
+            selection: TextSelection.collapsed(offset: 16),
+          ),
+        );
+        await tester.pump();
+        expect(controller.text, '- First item\n');
+        expect(
+          controller.selection,
+          const TextSelection.collapsed(offset: '- First item\n'.length),
+        );
+      },
+    );
+
     testWidgets('Ctrl+Enter does not insert a new line', (tester) async {
       await pumpEditor(tester, 'abc', selection: sel(3));
       await press(tester, LogicalKeyboardKey.enter, control: true);

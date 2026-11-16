@@ -88,4 +88,61 @@ void main() {
       expect(result.trim(), equals('deleted and highlighted'));
     });
   });
+
+  group('extractTitleAndPreviewFromMarkdown Tests', () {
+    test('extracts H1 title and produces clean plain preview text without markdown tokens', () {
+      const input = '''
+# Full Feature Showcase
+
+This note demonstrates all formatting features supported by **Mechanix Notes** and Obsidian.
+
+1. Text Styling
+
+You can format text with:
+- **Bold text** for emphasis
+- *Italicized text* for subtleties
+- ~~Strikethrough text~~ for crossed-out ideas
+- Inline `code snippets` for commands or variables
+- Hyperlinks: [Mechanix Notes](https://example.com)
+<!-- mechanix:id=test-id -->
+''';
+
+      final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
+
+      expect(title, equals('Full Feature Showcase'));
+      expect(preview, isNot(contains('**')));
+      expect(preview, isNot(contains('~~')));
+      expect(preview, isNot(contains('`')));
+      expect(preview, isNot(contains('<!--')));
+      expect(preview, isNot(contains('https://example.com')));
+      expect(preview, contains('Mechanix Notes and Obsidian'));
+      expect(preview, contains('Bold text for emphasis'));
+      expect(preview, contains('Italicized text for subtleties'));
+    });
+
+    test('list-only note sets empty title and clean list preview', () {
+      const input = '''
+- First task
+- Second task with **important** note
+''';
+
+      final (title, preview) = extractTitleAndPreviewFromMarkdown(
+        input,
+        fallbackTitle: 'fallback.md',
+      );
+
+      expect(title, equals('fallback.md'));
+      expect(preview, isNot(contains('- ')));
+      expect(preview, isNot(contains('**')));
+      expect(preview, contains('First task'));
+      expect(preview, contains('Second task with important note'));
+    });
+
+    test('single line note uses that line for both title and preview', () {
+      const input = 'Only One Line';
+      final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
+      expect(title, equals('Only One Line'));
+      expect(preview, equals('Only One Line'));
+    });
+  });
 }

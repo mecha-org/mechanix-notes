@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mechanix_notes/core/utils/constants.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/data/models/time_group.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
@@ -107,4 +108,82 @@ String markdownToPlainText(String markdown) {
   text = text.replaceAll(_horizontalRuleRegex, '');
 
   return text;
+}
+
+/// Extracts (title, previewText) from note markdown content.
+(String title, String previewText) extractTitleAndPreviewFromMarkdown(
+  String markdown, {
+  String fallbackTitle = '',
+}) {
+  final cleanMarkdown = markdown.replaceAll(_htmlCommentRegex, '').trim();
+  if (cleanMarkdown.isEmpty || cleanMarkdown == '#') {
+    return (fallbackTitle, '');
+  }
+
+  final trimmedContent = cleanMarkdown.trimLeft();
+  final firstContentLine = trimmedContent.split('\n').first.trim();
+  final isH1 =
+      firstContentLine.startsWith('#') && !firstContentLine.startsWith('##');
+
+  if (isH1) {
+    var headingTitle = firstContentLine
+        .replaceFirst(RegExp(r'^#\s*'), '')
+        .trim();
+    if (headingTitle.length > Constants.noteTitleMaxLength) {
+      headingTitle = headingTitle
+          .substring(0, Constants.noteTitleMaxLength)
+          .trim();
+    }
+    final bodyLines = trimmedContent.split('\n').skip(1).join('\n');
+    final bodyPlain = markdownToPlainText(bodyLines).trim();
+    final preview = bodyPlain.length > Constants.notePreviewTextMaxLength
+        ? bodyPlain.substring(0, Constants.notePreviewTextMaxLength)
+        : bodyPlain;
+    return (headingTitle, preview);
+  }
+
+  final isListOrBlock =
+      firstContentLine.startsWith('- ') ||
+      firstContentLine.startsWith('* ') ||
+      firstContentLine.startsWith('+ ') ||
+      firstContentLine.startsWith('> ') ||
+      firstContentLine.startsWith('```') ||
+      RegExp(r'^\d+[.)]\s+').hasMatch(firstContentLine);
+
+  final plainText = markdownToPlainText(cleanMarkdown).trim();
+
+  if (isListOrBlock) {
+    final preview = plainText.length > Constants.notePreviewTextMaxLength
+        ? plainText.substring(0, Constants.notePreviewTextMaxLength)
+        : plainText;
+    return (fallbackTitle, preview);
+  }
+
+  final lines = plainText
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty)
+      .toList();
+
+  if (lines.length > 1) {
+    var title = lines.first;
+    if (title.length > Constants.noteTitleMaxLength) {
+      title = title.substring(0, Constants.noteTitleMaxLength).trim();
+    }
+    final bodyText = lines.skip(1).join(' ');
+    final preview = bodyText.length > Constants.notePreviewTextMaxLength
+        ? bodyText.substring(0, Constants.notePreviewTextMaxLength)
+        : bodyText;
+    return (title.isNotEmpty ? title : fallbackTitle, preview);
+  }
+
+  final singleLine = lines.isNotEmpty ? lines.first : '';
+  var title = singleLine;
+  if (title.length > Constants.noteTitleMaxLength) {
+    title = title.substring(0, Constants.noteTitleMaxLength).trim();
+  }
+  final preview = singleLine.length > Constants.notePreviewTextMaxLength
+      ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
+      : singleLine;
+  return (title.isNotEmpty ? title : fallbackTitle, preview);
 }

@@ -7,10 +7,22 @@ abstract class NoteRepository {
   Stream<List<NoteMetaData>> watchNotes();
   Future<NoteModel?> getNoteById(String id);
   Future<void> deleteNotes(List<String> ids);
-  Future<void> upsertNote(NoteModel note);
+  Future<String> upsertNote(NoteModel note);
+  Stream<NoteRenamed> get noteRenames;
   Future<List<String>> searchNoteIds(String query);
   Future<List<NoteMetaData>> getNotesMetaData(List<String> ids);
   Future<bool> togglePinNote(String id);
   Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45});
   Future<int> syncNotesFromDisk();
+  Future<void> close();
+}
+
+class NoteRenamed {
+  final String oldId;
+  final String newId;
+
+  const NoteRenamed({required this.oldId, required this.newId});
+
+  @override
+  String toString() => 'NoteRenamed($oldId -> $newId)';
 }

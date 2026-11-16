@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 
 void main() {
@@ -51,98 +52,151 @@ void main() {
     });
   });
 
-  group('resolveFileName and collision handling', () {
-    test('resolves simple title to filename with .md', () async {
-      final filename = await storage.resolveFileName(title: 'Grocery List');
-      expect(filename, 'Grocery List.md');
-    });
-
-    test('resolves empty title to untitled.md', () async {
-      final filename = await storage.resolveFileName(title: '');
-      expect(filename, 'untitled.md');
-    });
-
-    test(
-      'increments counter when collision exists with different note',
-      () async {
-        File('${tempDir.path}/untitled.md').writeAsStringSync('existing');
-        final firstCollision = await storage.resolveFileName(title: '');
-        expect(firstCollision, 'untitled (1).md');
-
-        File('${tempDir.path}/untitled (1).md').writeAsStringSync('existing 2');
-        final secondCollision = await storage.resolveFileName(title: '');
-        expect(secondCollision, 'untitled (2).md');
-      },
-    );
-
-    test('retains currentFileName when title has not changed', () async {
-      File('${tempDir.path}/untitled (1).md').writeAsStringSync('mine');
-      final result = await storage.resolveFileName(
-        title: '',
-        currentFileName: 'untitled (1).md',
+  group('isFileNameForTitle', () {
+    test('accepts the exact name and numbered variants', () {
+      expect(NoteFileStorage.isFileNameForTitle('Title.md', 'Title'), isTrue);
+      expect(
+        NoteFileStorage.isFileNameForTitle('Title (3).md', '# Title'),
+        isTrue,
       );
-      expect(result, 'untitled (1).md');
+    });
+
+    test('rejects other names', () {
+      expect(NoteFileStorage.isFileNameForTitle('Other.md', 'Title'), isFalse);
+      expect(
+        NoteFileStorage.isFileNameForTitle('Title 2.md', 'Title'),
+        isFalse,
+      );
     });
   });
 
-  group('writeNoteContent & readNoteContent', () {
+  group('createNoteFile', () {
     test('writes content atomically and reads back accurately', () async {
       const content =
           '# Title\n\n- [ ] Task 1\n- [x] Task 2\n\n```dart\nvar x = 1;\n```';
-      final fileName = await storage.writeNoteContent(
+      final fileName = await storage.createNoteFile(
         title: 'Title',
         markdown: content,
       );
 
       expect(fileName, 'Title.md');
-      final file = File('${tempDir.path}/$fileName');
-      expect(file.existsSync(), isTrue);
-
-      final read = await storage.readNoteContent(fileName);
-      expect(read, content);
+      expect(await storage.readNoteContent(fileName), content);
     });
 
-    test('renames file when title changes and removes old file', () async {
-      final oldFileName = await storage.writeNoteContent(
-        title: 'Old Title',
-        markdown: 'Content 1',
+    test('uses untitled.md for an empty title', () async {
+      expect(
+        await storage.createNoteFile(title: '', markdown: 'x'),
+        'untitled.md',
       );
-      expect(File('${tempDir.path}/$oldFileName').existsSync(), isTrue);
+    });
 
-      final newFileName = await storage.writeNoteContent(
-        title: 'New Title',
-        markdown: 'Content 2',
-        currentFileName: oldFileName,
+    test('numbers the name when another note already has it', () async {
+      File('${tempDir.path}/untitled.md').writeAsStringSync('existing');
+      expect(
+        await storage.createNoteFile(title: '', markdown: 'a'),
+        'untitled (1).md',
       );
-
-      expect(newFileName, 'New Title.md');
-      expect(File('${tempDir.path}/$oldFileName').existsSync(), isFalse);
-      expect(File('${tempDir.path}/$newFileName').existsSync(), isTrue);
-      expect(await storage.readNoteContent(newFileName), 'Content 2');
+      expect(
+        await storage.createNoteFile(title: '', markdown: 'b'),
+        'untitled (2).md',
+      );
+      expect(await storage.readNoteContent('untitled.md'), 'existing');
     });
 
     test(
-      'overwrites existing file when content changes under same title',
+      'concurrent creates with the same title never overwrite each other',
       () async {
-        final fileName1 = await storage.writeNoteContent(
-          title: 'Shopping',
-          markdown: 'Milk',
-        );
-        final fileName2 = await storage.writeNoteContent(
-          title: 'Shopping',
-          markdown: 'Milk, Bread',
-          currentFileName: fileName1,
-        );
+        final names = await Future.wait([
+          for (var i = 0; i < 5; i++)
+            storage.createNoteFile(title: 'Same', markdown: 'Write $i'),
+        ]);
 
-        expect(fileName1, fileName2);
-        expect(await storage.readNoteContent(fileName2), 'Milk, Bread');
+        expect(names.toSet().length, 5);
+        final contents = {
+          for (final n in names) await storage.readNoteContent(n),
+        };
+        expect(contents, {for (var i = 0; i < 5; i++) 'Write $i'});
+      },
+    );
+  });
+
+  group('updateNoteFile', () {
+    test('overwrites in place when the title is unchanged', () async {
+      final name = await storage.createNoteFile(
+        title: 'Shopping',
+        markdown: 'Milk',
+      );
+      final updated = await storage.updateNoteFile(
+        fileName: name,
+        title: 'Shopping',
+        markdown: 'Milk, Bread',
+      );
+
+      expect(updated, name);
+      expect(await storage.readNoteContent(name), 'Milk, Bread');
+    });
+
+    test('keeps a numbered name whose base still matches the title', () async {
+      File('${tempDir.path}/Shopping (2).md').writeAsStringSync('old');
+      final updated = await storage.updateNoteFile(
+        fileName: 'Shopping (2).md',
+        title: 'Shopping',
+        markdown: 'new',
+      );
+      expect(updated, 'Shopping (2).md');
+    });
+
+    test('renames file when title changes and removes old file', () async {
+      final oldName = await storage.createNoteFile(
+        title: 'Old Title',
+        markdown: 'Content 1',
+      );
+      final newName = await storage.updateNoteFile(
+        fileName: oldName,
+        title: 'New Title',
+        markdown: 'Content 2',
+      );
+
+      expect(newName, 'New Title.md');
+      expect(await storage.noteFileExists(oldName), isFalse);
+      expect(await storage.readNoteContent(newName), 'Content 2');
+    });
+
+    test('rename numbers the name if another note already has it', () async {
+      File('${tempDir.path}/Taken.md').writeAsStringSync('other note');
+      final name = await storage.createNoteFile(title: 'Mine', markdown: 'a');
+      final renamed = await storage.updateNoteFile(
+        fileName: name,
+        title: 'Taken',
+        markdown: 'b',
+      );
+
+      expect(renamed, 'Taken (1).md');
+      expect(await storage.readNoteContent('Taken.md'), 'other note');
+      expect(await storage.noteFileExists(name), isFalse);
+    });
+
+    test(
+      'throws NoteFileMissingException and writes nothing if the file is gone',
+      () async {
+        File('${tempDir.path}/Hello.md').writeAsStringSync('other');
+        await expectLater(
+          storage.updateNoteFile(
+            fileName: 'gone.md',
+            title: 'Hello',
+            markdown: 'x',
+          ),
+          throwsA(isA<NoteFileMissingException>()),
+        );
+        final names = tempDir.listSync().map((e) => e.uri.pathSegments.last);
+        expect(names, ['Hello.md']);
       },
     );
   });
 
   group('deleteNoteFile', () {
     test('deletes existing file', () async {
-      final fileName = await storage.writeNoteContent(
+      final fileName = await storage.createNoteFile(
         title: 'To Delete',
         markdown: 'bye',
       );
@@ -151,32 +205,6 @@ void main() {
       await storage.deleteNoteFile(fileName);
       expect(await storage.noteFileExists(fileName), isFalse);
     });
-
-    test(
-      'concurrent writes to same note succeed without ENOENT temp collision',
-      () async {
-        final futures = Future.wait([
-          storage.writeNoteContent(
-            title: 'Concurrent Note',
-            markdown: 'Write 1',
-          ),
-          storage.writeNoteContent(
-            title: 'Concurrent Note',
-            markdown: 'Write 2',
-          ),
-          storage.writeNoteContent(
-            title: 'Concurrent Note',
-            markdown: 'Write 3',
-          ),
-        ]);
-
-        final results = await futures;
-        expect(results.length, 3);
-        for (final name in results) {
-          expect(await storage.noteFileExists(name), isTrue);
-        }
-      },
-    );
   });
 
   group('getFileLastModified', () {
@@ -186,7 +214,7 @@ void main() {
 
     test('returns modified timestamp for existing file', () async {
       final before = DateTime.now().subtract(const Duration(seconds: 1));
-      final fileName = await storage.writeNoteContent(
+      final fileName = await storage.createNoteFile(
         title: 'Timestamp Note',
         markdown: 'Check timestamp',
       );
