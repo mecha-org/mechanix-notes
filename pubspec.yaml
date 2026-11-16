@@ -50,8 +50,8 @@ dependencies:
       ref: master
   flutter_tantivy:
     git:
-      url: https://github.com/DhanishMecha/flutter_tantivy.git
-      ref: main
+      url: https://github.com/ojas-mecha/flutter_tantivy.git
+      ref: feat/title-indexing
   widgets:
     git:
       url: https://github.com/mecha-org/mechanix.dart.git
