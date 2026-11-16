@@ -11,6 +11,28 @@ import 'package:mechanix_notes/features/notes/data/services/indexing_service.dar
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
 import 'package:mechanix_notes/features/notes/data/services/notes_watcher.dart';
 
+/// What changed in the index, so [NoteRepositoryImpl.watchNotes] can patch
+/// its in-memory list instead of re-reading every note on each save.
+sealed class _NoteChange {}
+
+final class _NoteUpserted extends _NoteChange {
+  final NoteMetaData meta;
+
+  /// Ids this entry replaces (old filename on rename, temporary id on first
+  /// save). Part of the same change so the list never shows the note missing.
+  final Set<String> replaces;
+
+  _NoteUpserted(this.meta, {this.replaces = const {}});
+}
+
+final class _NoteRemoved extends _NoteChange {
+  final Set<String> ids;
+  _NoteRemoved(this.ids);
+}
+
+/// Many notes may have changed (disk sync, index rebuild): reload everything.
+final class _NotesReset extends _NoteChange {}
+
 class NoteRepositoryImpl extends NoteRepository {
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
@@ -19,11 +41,15 @@ class NoteRepositoryImpl extends NoteRepository {
   StreamSubscription<NotesWatcherEvent>? _watcherSub;
   Future<void> _watcherQueue = Future.value();
 
-  /// Fires whenever notes are created, updated, deleted or re-synced, so
-  /// [watchNotes] can re-emit. Shared by all instances, because they all
+  /// Describes every create, update, delete or re-sync, so [watchNotes] can
+  /// update its list incrementally. Shared by all instances, because they all
   /// read and write the same Tantivy index.
-  static final StreamController<void> _changes =
-      StreamController<void>.broadcast();
+  static final StreamController<_NoteChange> _changes =
+      StreamController<_NoteChange>.broadcast();
+
+  /// Metadata from the last search, so paging through results does not hit
+  /// the index once per id.
+  Map<String, NoteMetaData> _searchMeta = const {};
 
   /// Fires when a note file is renamed by the app or externally. Shared by
   /// all instances for the same reason as [_changes].
@@ -61,23 +87,27 @@ class NoteRepositoryImpl extends NoteRepository {
     _startWatcher();
   }
 
+  /// Pin status and creation time from an indexed entry ([tantivy.Document]
+  /// or [tantivy.NoteMeta]); unpinned and [fallbackCreatedAt] if not indexed.
   static (bool isPinned, DateTime createdAt) _indexedState(
-    tantivy.Document? doc,
+    bool? isPinned,
+    tantivy.PlatformInt64? createdAt,
     DateTime fallbackCreatedAt,
   ) {
-    if (doc == null) return (false, fallbackCreatedAt);
-    return (
-      doc.isPinned,
-      DateTime.fromMillisecondsSinceEpoch(doc.createdAt.toInt()),
-    );
+    if (isPinned == null || createdAt == null) {
+      return (false, fallbackCreatedAt);
+    }
+    return (isPinned, DateTime.fromMillisecondsSinceEpoch(createdAt.toInt()));
   }
 
   void _startWatcher() {
     if (_watcherSub != null) return;
     _watcherSub = _notesWatcher.events.listen((event) {
-      _watcherQueue = _watcherQueue.then((_) => _handleWatcherEvent(event)).catchError((e) {
-        AppLogger.e('NoteRepository: Error in watcher event queue: $e');
-      });
+      _watcherQueue = _watcherQueue
+          .then((_) => _handleWatcherEvent(event))
+          .catchError((e) {
+            AppLogger.e('NoteRepository: Error in watcher event queue: $e');
+          });
     });
     unawaited(_notesWatcher.start());
   }
@@ -101,8 +131,10 @@ class NoteRepositoryImpl extends NoteRepository {
             fallbackTitle,
           );
 
+          final existing = _indexingService.getDocument(event.fileName);
           final (isPinned, createdAt) = _indexedState(
-            _indexingService.getDocument(event.fileName),
+            existing?.isPinned,
+            existing?.createdAt,
             stat.modified,
           );
 
@@ -118,11 +150,11 @@ class NoteRepositoryImpl extends NoteRepository {
           );
 
           await _indexingService.upsertNote(note);
-          _notifyChanged();
+          _notifyUpserted(note);
 
         case NotesWatcherEventType.delete:
           await _indexingService.deleteNotesBatch([event.fileName]);
-          _notifyChanged();
+          _notifyRemoved([event.fileName]);
 
         case NotesWatcherEventType.move:
           final oldName = event.oldFileName;
@@ -149,7 +181,8 @@ class NoteRepositoryImpl extends NoteRepository {
             );
 
             final (isPinned, createdAt) = _indexedState(
-              priorDoc,
+              priorDoc?.isPinned,
+              priorDoc?.createdAt,
               stat.modified,
             );
 
@@ -164,11 +197,13 @@ class NoteRepositoryImpl extends NoteRepository {
               updatedAt: stat.modified,
             );
             await _indexingService.upsertNote(note);
+            _notifyUpserted(note, replaces: [?oldName]);
+          } else if (oldName != null) {
+            _notifyRemoved([oldName]);
           }
           if (oldName != null && oldName != newName) {
             _renames.add(NoteRenamed(oldId: oldName, newId: newName));
           }
-          _notifyChanged();
       }
     } catch (e) {
       AppLogger.e('NoteRepository: Error handling watcher event: $e');
@@ -247,7 +282,11 @@ class NoteRepositoryImpl extends NoteRepository {
       if (markdown == null) {
         if (doc != null && doc.fileName == null) {
           // Document exists in index without a file on disk (e.g. mocked in unit test)
-          final (isPinned, createdAt) = _indexedState(doc, DateTime.now());
+          final (isPinned, createdAt) = _indexedState(
+            doc.isPinned,
+            doc.createdAt,
+            DateTime.now(),
+          );
           return NoteModel(
             id: doc.id,
             title: doc.title,
@@ -270,7 +309,7 @@ class NoteRepositoryImpl extends NoteRepository {
           unawaited(
             _indexingService
                 .deleteNotesBatch([id])
-                .then((_) => _notifyChanged())
+                .then((_) => _notifyRemoved([id]))
                 .catchError((e) {
                   AppLogger.e('NoteRepository: Purging ghost note failed: $e');
                 }),
@@ -289,7 +328,11 @@ class NoteRepositoryImpl extends NoteRepository {
           (fileName.endsWith('.md')
               ? fileName.substring(0, fileName.length - 3)
               : fileName);
-      final (isPinned, createdAt) = _indexedState(doc, fileModified);
+      final (isPinned, createdAt) = _indexedState(
+        doc?.isPinned,
+        doc?.createdAt,
+        fileModified,
+      );
 
       final note = NoteModel(
         id: doc?.id ?? fileName,
@@ -315,6 +358,7 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
 
+      final removed = <String>{...ids};
       for (final id in ids) {
         final doc = _indexingService.getDocument(id);
         final fileNames = <String>{
@@ -326,10 +370,11 @@ class NoteRepositoryImpl extends NoteRepository {
         for (final fn in fileNames) {
           await _fileStorage.deleteNoteFile(fn);
         }
+        removed.addAll(fileNames);
       }
 
       await _indexingService.deleteNotesBatch(ids);
-      _notifyChanged();
+      _notifyRemoved(removed);
       AppLogger.i('NoteRepository: deleteNotes(${ids.length})');
     } catch (e) {
       AppLogger.e('NoteRepository: deleteNotes failed: $e');
@@ -347,6 +392,7 @@ class NoteRepositoryImpl extends NoteRepository {
           : (markdown.endsWith('\n') ? markdown : '$markdown\n');
 
       final previousFileName = note.fileName;
+      final previousId = note.id;
       final isNew = previousFileName == null || previousFileName.isEmpty;
 
       // Throws NoteFileMissingException if the existing file is gone; the
@@ -374,12 +420,17 @@ class NoteRepositoryImpl extends NoteRepository {
       note.content = markdown;
 
       await _indexingService.upsertNote(note);
+      // The saved note takes the place of a new note's temporary id or a
+      // renamed note's old filename.
+      _notifyUpserted(
+        note,
+        replaces: {previousId, if (isRename) previousFileName},
+      );
       if (isRename) {
         _renames.add(
           NoteRenamed(oldId: previousFileName, newId: savedFileName),
         );
       }
-      _notifyChanged();
       AppLogger.i(
         'NoteRepository: upsertNote($savedFileName) ${note.updatedAt} ${note.title} saved ✓',
       );
@@ -400,6 +451,7 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
       final results = await _indexingService.search(query);
+      _searchMeta = {for (final n in results) n.id: n};
       return results.map((n) => n.id).toList();
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
@@ -412,8 +464,13 @@ class NoteRepositoryImpl extends NoteRepository {
     if (ids.isEmpty) return [];
     try {
       await ensureStoreConnected();
-      // Keep the caller's order (search relevance)
-      return [for (final id in ids) ?_indexingService.getNoteMetaData(id)];
+      // Keep the caller's order (search relevance). Results from the last
+      // search already carry their metadata; only fall back to the index for
+      // ids that did not come from it.
+      return [
+        for (final id in ids)
+          ?(_searchMeta[id] ?? _indexingService.getNoteMetaData(id)),
+      ];
     } catch (e) {
       AppLogger.e('Failed to load notes metadata: $e');
       return [];
@@ -425,7 +482,12 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
       final result = await _indexingService.togglePin(id);
-      _notifyChanged();
+      final meta = _indexingService.getNoteMetaData(id);
+      if (meta != null) {
+        _changes.add(_NoteUpserted(meta));
+      } else {
+        _changes.add(_NotesReset());
+      }
       AppLogger.i('NoteRepository: togglePinNote($id) → $result');
       return result;
     } catch (e) {
@@ -442,7 +504,8 @@ class NoteRepositoryImpl extends NoteRepository {
   @override
   Stream<List<NoteMetaData>> watchNotes() {
     late final StreamController<List<NoteMetaData>> controller;
-    StreamSubscription<void>? changesSub;
+    StreamSubscription<_NoteChange>? changesSub;
+    var cancelled = false;
 
     controller = StreamController<List<NoteMetaData>>(
       onListen: () async {
@@ -461,43 +524,90 @@ class NoteRepositoryImpl extends NoteRepository {
           }
           return;
         }
+        // Cancelled while initializing: don't subscribe to anything.
+        if (cancelled) return;
 
         _startWatcher();
 
-        bool hasPendingChange = false;
-        bool isReading = false;
+        // The list is read from the index once, then kept up to date from
+        // the change events; only a reset (disk sync) reads it again.
+        final cache = <String, NoteMetaData>{};
+        final pending = <_NoteChange>[];
+        var loaded = false;
+        var reloading = false;
+        var reloadAgain = false;
+        var emitScheduled = false;
 
-        Future<void> readAndEmit() async {
-          if (isReading) {
-            hasPendingChange = true;
+        void apply(_NoteChange change) {
+          switch (change) {
+            case _NoteUpserted(:final meta, :final replaces):
+              replaces.forEach(cache.remove);
+              cache[meta.id] = meta;
+            case _NoteRemoved(:final ids):
+              ids.forEach(cache.remove);
+            case _NotesReset():
+              break;
+          }
+        }
+
+        // Several changes in one burst (e.g. rename = remove + upsert)
+        // produce a single emission.
+        void emitSoon() {
+          if (emitScheduled) return;
+          emitScheduled = true;
+          scheduleMicrotask(() {
+            emitScheduled = false;
+            if (!controller.isClosed) {
+              controller.add(_sortedForList(cache.values));
+            }
+          });
+        }
+
+        Future<void> reload() async {
+          if (reloading) {
+            reloadAgain = true;
             return;
           }
-          isReading = true;
+          reloading = true;
           try {
             do {
-              hasPendingChange = false;
-              final notes = await _getAllNotes();
-              if (!controller.isClosed) {
-                controller.add(notes);
-              }
-            } while (hasPendingChange && !controller.isClosed);
+              reloadAgain = false;
+              loaded = false;
+              final all = await _getAllNotes();
+              cache
+                ..clear()
+                ..addEntries(all.map((m) => MapEntry(m.id, m)));
+              loaded = true;
+              // Changes that arrived during the read are applied on top, in
+              // order, so the newest state wins.
+              pending
+                ..forEach(apply)
+                ..clear();
+            } while (reloadAgain && !controller.isClosed);
+            emitSoon();
           } catch (e, s) {
-            if (!controller.isClosed) {
-              controller.addError(e, s);
-            }
+            if (!controller.isClosed) controller.addError(e, s);
           } finally {
-            isReading = false;
+            reloading = false;
           }
         }
 
         // Subscribe before the first read so no change is missed in between
-        changesSub = _changes.stream.listen((_) {
-          unawaited(readAndEmit());
+        changesSub = _changes.stream.listen((change) {
+          if (change is _NotesReset) {
+            unawaited(reload());
+          } else if (!loaded) {
+            pending.add(change);
+          } else {
+            apply(change);
+            emitSoon();
+          }
         });
 
-        await readAndEmit();
+        await reload();
       },
       onCancel: () async {
+        cancelled = true;
         await changesSub?.cancel();
         changesSub = null;
       },
@@ -506,10 +616,20 @@ class NoteRepositoryImpl extends NoteRepository {
     return controller.stream;
   }
 
-  /// Fetches every note metadata item by paging through Tantivy in chunks of 50.
+  /// Same order as the index's `sort_key`: pinned first, then most recently
+  /// updated.
+  static List<NoteMetaData> _sortedForList(Iterable<NoteMetaData> notes) {
+    return notes.toList()..sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+  }
+
+  /// Reads every note's metadata from the index (no note bodies). Only used
+  /// for the initial load and after a reset.
   Future<List<NoteMetaData>> _getAllNotes() async {
     final allNotes = <NoteMetaData>[];
-    const pageSize = 50;
+    const pageSize = 500;
     while (true) {
       final page = await _indexingService.getNotes(
         skip: allNotes.length,
@@ -521,8 +641,18 @@ class NoteRepositoryImpl extends NoteRepository {
     return allNotes;
   }
 
-  void _notifyChanged() {
-    _changes.add(null);
+  void _notifyUpserted(NoteModel note, {Iterable<String> replaces = const []}) {
+    _changes.add(
+      _NoteUpserted(
+        IndexingService.noteModelToMetaData(note),
+        replaces: replaces.where((id) => id != note.id).toSet(),
+      ),
+    );
+  }
+
+  void _notifyRemoved(Iterable<String> ids) {
+    final set = ids.toSet();
+    if (set.isNotEmpty) _changes.add(_NoteRemoved(set));
   }
 
   static (String title, String previewText) _extractTitleAndPreview(
@@ -545,9 +675,9 @@ class NoteRepositoryImpl extends NoteRepository {
       int updatedCount = 0;
       // Snapshot the index BEFORE listing files on disk so notes saved
       // concurrently while listing are never falsely flagged as ghosts.
-      final indexedDocs = await _indexingService.getAllDocuments();
+      final indexedDocs = await _indexingService.getAllMetadata();
       final docsById = {for (final d in indexedDocs) d.id: d};
-      final docsByFileName = <String, tantivy.Document>{
+      final docsByFileName = <String, tantivy.NoteMeta>{
         for (final d in indexedDocs)
           if (d.fileName != null && d.fileName!.isNotEmpty) d.fileName!: d,
       };
@@ -592,7 +722,8 @@ class NoteRepositoryImpl extends NoteRepository {
             );
 
             final (isPinned, createdAt) = _indexedState(
-              existingDoc,
+              existingDoc?.isPinned,
+              existingDoc?.createdAt,
               fileStat.modified,
             );
 
@@ -641,7 +772,7 @@ class NoteRepositoryImpl extends NoteRepository {
         AppLogger.e('NoteRepository: Failed to purge ghost notes: $e');
       }
 
-      if (updatedCount > 0) _notifyChanged();
+      if (updatedCount > 0) _changes.add(_NotesReset());
       return updatedCount;
     } catch (e) {
       AppLogger.e('NoteRepository: syncNotesFromDisk failed: $e');

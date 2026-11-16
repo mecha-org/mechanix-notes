@@ -7,7 +7,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
-  static const int currentSchemaVersion = 2;
+  static const int currentSchemaVersion = 3;
   Future<void>? _initFuture;
   bool _initialized = false;
 
@@ -80,31 +80,6 @@ class IndexingService {
     }
   }
 
-  /// Limits content to the maximum characters and words allowed for indexing.
-  static String truncateContent(String plainText) {
-    String truncatedPlainText = plainText;
-    if (truncatedPlainText.length > Constants.tantivyIndexContentMaxLength) {
-      truncatedPlainText = truncatedPlainText.substring(
-        0,
-        Constants.tantivyIndexContentMaxLength,
-      );
-      AppLogger.d(
-        '[IndexingService] Char limit: ${plainText.length} -> ${truncatedPlainText.length}',
-      );
-    }
-    final wordMatches = RegExp(r'\S+').allMatches(truncatedPlainText);
-    if (wordMatches.length > Constants.tantivyIndexContentMaxWords) {
-      final endOfMaxWords = wordMatches
-          .elementAt(Constants.tantivyIndexContentMaxWords - 1)
-          .end;
-      truncatedPlainText = truncatedPlainText.substring(0, endOfMaxWords);
-      AppLogger.d(
-        '[IndexingService] Word limit: ${wordMatches.length} -> ${Constants.tantivyIndexContentMaxWords}',
-      );
-    }
-    return truncatedPlainText;
-  }
-
   NoteMetaData docToMetaData(tantivy.Document doc) {
     return NoteMetaData(
       id: doc.id,
@@ -117,12 +92,41 @@ class IndexingService {
     );
   }
 
+  NoteMetaData metaToMetaData(tantivy.NoteMeta meta) {
+    return NoteMetaData(
+      id: meta.id,
+      title: meta.title,
+      previewText: meta.previewText,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(meta.createdAt.toInt()),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(meta.updatedAt.toInt()),
+      height: 60.0,
+      isPinned: meta.isPinned,
+    );
+  }
+
+  /// The list entry for [note], built locally so a save never needs to read
+  /// the index back. Static (pure conversion), so it also works when the
+  /// service is mocked.
+  static NoteMetaData noteModelToMetaData(NoteModel note) {
+    return NoteMetaData(
+      id: note.id,
+      title: note.title,
+      previewText: note.previewText,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        note.createdAt.millisecondsSinceEpoch,
+      ),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        note.updatedAt.millisecondsSinceEpoch,
+      ),
+      height: 60.0,
+      isPinned: note.isPinned,
+    );
+  }
+
   tantivy.Document noteModelToDoc(NoteModel note) {
-    final truncatedContent = truncateContent(note.content);
     return tantivy.Document(
       id: note.id,
       title: note.title,
-      content: truncatedContent,
       previewText: note.previewText,
       fileName: note.fileName,
       isPinned: note.isPinned,
@@ -183,11 +187,12 @@ class IndexingService {
       if (!_initialized) {
         await initialize();
       }
-      final docs = await tantivy.getNotes(
+      // Metadata only: the list never needs the note body.
+      final metas = await tantivy.getNotesMetadata(
         skip: BigInt.from(skip),
         take: BigInt.from(take),
       );
-      return docs.map(docToMetaData).toList();
+      return metas.map(metaToMetaData).toList();
     } catch (e) {
       AppLogger.e('[IndexingService] getNotes failed: $e');
       return [];
@@ -242,7 +247,7 @@ class IndexingService {
       final cleanQuery = query.trim();
       if (cleanQuery.isEmpty) return [];
 
-      final results = await tantivy.searchDocuments(
+      final results = await tantivy.searchNotesMetadata(
         query: cleanQuery,
         topK: BigInt.from(limit),
       );
@@ -251,43 +256,26 @@ class IndexingService {
         '[IndexingService] Search: "$cleanQuery" -> ${results.length}',
       );
 
-      return results.map((r) => docToMetaData(r.doc)).toList();
+      return results.map(metaToMetaData).toList();
     } catch (e) {
       AppLogger.e('[IndexingService] Search failed ($query): $e');
       return [];
     }
   }
 
-  /// Fetches every stored document from the Tantivy index, in pages.
-  Future<List<tantivy.Document>> getAllDocuments({int batchSize = 500}) async {
+  /// Fetches the metadata of every indexed note (no note bodies), in pages.
+  Future<List<tantivy.NoteMeta>> getAllMetadata({int batchSize = 500}) async {
     if (!_initialized) {
       await initialize();
     }
-    final all = <tantivy.Document>[];
+    final all = <tantivy.NoteMeta>[];
     while (true) {
-      final batch = await tantivy.getNotes(
+      final batch = await tantivy.getNotesMetadata(
         skip: BigInt.from(all.length),
         take: BigInt.from(batchSize),
       );
       all.addAll(batch);
       if (batch.length < batchSize) return all;
-    }
-  }
-
-  /// Fetches raw documents stored directly in Tantivy index.
-  Future<List<tantivy.Document>> getStoredDocuments({int limit = 45}) async {
-    try {
-      if (!_initialized) {
-        await initialize();
-      }
-      final docs = await tantivy.getNotes(
-        skip: BigInt.zero,
-        take: BigInt.from(limit),
-      );
-      return docs;
-    } catch (e) {
-      AppLogger.e('[IndexingService] getStoredDocuments failed: $e');
-      return [];
     }
   }
 }

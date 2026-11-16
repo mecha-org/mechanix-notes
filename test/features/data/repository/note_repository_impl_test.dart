@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_tantivy/flutter_tantivy.dart' as tantivy;
@@ -46,7 +47,6 @@ NoteModel _makeNote({
 tantivy.Document _makeDoc({
   required String id,
   required String title,
-  String content = 'content',
   String previewText = '',
   String? fileName,
   bool isPinned = false,
@@ -57,7 +57,6 @@ tantivy.Document _makeDoc({
   return tantivy.Document(
     id: id,
     title: title,
-    content: content,
     previewText: previewText,
     fileName: fileName,
     isPinned: isPinned,
@@ -69,6 +68,17 @@ tantivy.Document _makeDoc({
     ),
   );
 }
+
+/// The metadata-only view of [d], as returned by getAllMetadata.
+tantivy.NoteMeta _metaOf(tantivy.Document d) => tantivy.NoteMeta(
+  id: d.id,
+  title: d.title,
+  previewText: d.previewText,
+  fileName: d.fileName,
+  isPinned: d.isPinned,
+  createdAt: d.createdAt,
+  updatedAt: d.updatedAt,
+);
 
 NoteMetaData _makeMetaData({
   required String id,
@@ -145,7 +155,7 @@ void main() {
     ).thenAnswer((_) async => []);
     when(() => mockIndexingService.search(any())).thenAnswer((_) async => []);
     when(
-      () => mockIndexingService.getAllDocuments(),
+      () => mockIndexingService.getAllMetadata(),
     ).thenAnswer((_) async => []);
   });
 
@@ -195,6 +205,156 @@ void main() {
       } finally {
         await sub.cancel();
       }
+    });
+
+    test(
+      'reads the index once, then applies saves, renames and deletes '
+      'without re-reading it',
+      () async {
+        when(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).thenAnswer(
+          (_) async => [
+            _makeMetaData(
+              id: 'Old.md',
+              title: 'Old',
+              updatedAt: DateTime(2026, 1, 1),
+            ),
+          ],
+        );
+
+        final emissions = <List<NoteMetaData>>[];
+        final sub = repository.watchNotes().listen(emissions.add);
+        List<String> ids() => emissions.last.map((n) => n.id).toList();
+
+        try {
+          await pumpEventQueue();
+          expect(ids(), ['Old.md']);
+
+          // New note: appears at the top (most recently updated).
+          final created = await repository.upsertNote(
+            _makeNote(id: 'uuid-1', title: 'Fresh')..content = '# Fresh',
+          );
+          await pumpEventQueue();
+          expect(created, 'Fresh.md');
+          expect(ids(), ['Fresh.md', 'Old.md']);
+
+          // Title change renames the file: one emission, entry replaced.
+          final before = emissions.length;
+          await repository.upsertNote(
+            _makeNote(id: 'Fresh.md', title: 'Renamed', fileName: 'Fresh.md')
+              ..content = '# Renamed',
+          );
+          await pumpEventQueue();
+          expect(emissions.length, before + 1);
+          expect(ids(), ['Renamed.md', 'Old.md']);
+
+          when(
+            () => mockIndexingService.getDocument('Renamed.md'),
+          ).thenReturn(null);
+          await repository.deleteNotes(['Renamed.md']);
+          await pumpEventQueue();
+          expect(ids(), ['Old.md']);
+
+          verify(
+            () => mockIndexingService.getNotes(
+              skip: any(named: 'skip'),
+              take: any(named: 'take'),
+            ),
+          ).called(1);
+        } finally {
+          await sub.cancel();
+        }
+      },
+    );
+
+    test('keeps pinned notes first, matching the index order', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          _makeMetaData(
+            id: 'Pinned.md',
+            title: 'Pinned',
+            isPinned: true,
+            updatedAt: DateTime(2020),
+          ),
+        ],
+      );
+
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      try {
+        await pumpEventQueue();
+        await repository.upsertNote(
+          _makeNote(id: 'n', title: 'Newer')..content = '# Newer',
+        );
+        await pumpEventQueue();
+        expect(emissions.last.map((n) => n.id), ['Pinned.md', 'Newer.md']);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('re-reads the index after a disk sync', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer((_) async => []);
+
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      try {
+        await pumpEventQueue();
+        File('${tempDir.path}/External.md').writeAsStringSync('# External');
+        when(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).thenAnswer(
+          (_) async => [_makeMetaData(id: 'External.md', title: 'External')],
+        );
+
+        expect(await repository.syncNotesFromDisk(), 1);
+        await pumpEventQueue();
+
+        expect(emissions.last.map((n) => n.id), ['External.md']);
+        verify(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).called(2);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('does not subscribe if cancelled while initializing', () async {
+      final init = Completer<void>();
+      when(() => mockIndexingService.initialize()).thenAnswer((_) => init.future);
+
+      final sub = repository.watchNotes().listen((_) {});
+      await pumpEventQueue();
+      await sub.cancel();
+      init.complete();
+      await pumpEventQueue();
+
+      verifyNever(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      );
     });
 
     test('re-throws when indexingService.initialize fails', () async {
@@ -507,8 +667,8 @@ void main() {
           fileName: 'ghost.md',
         );
         when(
-          () => mockIndexingService.getAllDocuments(),
-        ).thenAnswer((_) async => [ghostDoc]);
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [_metaOf(ghostDoc)]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -535,8 +695,8 @@ void main() {
           fileName: 'modified_note.md',
         );
         when(
-          () => mockIndexingService.getAllDocuments(),
-        ).thenAnswer((_) async => [doc]);
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [_metaOf(doc)]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -568,8 +728,8 @@ void main() {
           fileName: 'renamed_note.md',
         );
         when(
-          () => mockIndexingService.getAllDocuments(),
-        ).thenAnswer((_) async => [doc]);
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [_metaOf(doc)]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -649,8 +809,8 @@ void main() {
           fileName: 'unmodified.md',
         );
         when(
-          () => mockIndexingService.getAllDocuments(),
-        ).thenAnswer((_) async => [doc]);
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [_metaOf(doc)]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
