@@ -87,7 +87,6 @@ class IndexingService {
       previewText: doc.previewText,
       createdAt: DateTime.fromMillisecondsSinceEpoch(doc.createdAt.toInt()),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(doc.updatedAt.toInt()),
-      height: 60.0,
       isPinned: doc.isPinned,
     );
   }
@@ -99,7 +98,6 @@ class IndexingService {
       previewText: meta.previewText,
       createdAt: DateTime.fromMillisecondsSinceEpoch(meta.createdAt.toInt()),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(meta.updatedAt.toInt()),
-      height: 60.0,
       isPinned: meta.isPinned,
     );
   }
@@ -118,7 +116,6 @@ class IndexingService {
       updatedAt: DateTime.fromMillisecondsSinceEpoch(
         note.updatedAt.millisecondsSinceEpoch,
       ),
-      height: 60.0,
       isPinned: note.isPinned,
     );
   }

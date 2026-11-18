@@ -135,6 +135,35 @@ class _EditorContentState extends State<EditorContent> {
               componentBuilders: MarkdownEditorComponentBuilders(
                 taskToggleBuilder: (context, taskContext) =>
                     _MechanixTaskToggle(taskContext: taskContext),
+                contextMenuBuilder: (context, editableText) {
+                  final anchors = editableText.contextMenuAnchors;
+                  return TextSelectionToolbar(
+                    anchorAbove: anchors.primaryAnchor,
+                    anchorBelow:
+                        anchors.secondaryAnchor ?? anchors.primaryAnchor,
+                    children: [
+                      for (final item in editableText.contextMenuButtonItems)
+                        TextSelectionToolbarTextButton(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          onPressed: item.onPressed,
+                          child: Text(
+                            item.label ??
+                                switch (item.type) {
+                                  ContextMenuButtonType.cut => 'Cut',
+                                  ContextMenuButtonType.copy => 'Copy',
+                                  ContextMenuButtonType.paste => 'Paste',
+                                  ContextMenuButtonType.selectAll =>
+                                    'Select all',
+                                  _ => 'Action',
+                                },
+                          ),
+                        ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
