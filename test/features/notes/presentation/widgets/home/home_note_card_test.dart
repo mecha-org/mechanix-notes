@@ -34,7 +34,6 @@ void main() {
     previewText: 'Preview text for test note',
     createdAt: DateTime(2026, 9, 9, 9, 0),
     updatedAt: DateTime(2026, 9, 9, 10, 0),
-    height: 60.0,
   );
 
   Widget buildWidget({VoidCallback? onDelete}) {

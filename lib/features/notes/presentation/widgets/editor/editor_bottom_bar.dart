@@ -102,7 +102,7 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
     final text = controller.text;
 
     final doc = controller.document;
-    final innermost = _findInnermostBlock(doc.blocks, clampedCaret);
+    final innermost = _findInnermostBlock(text, doc.blocks, clampedCaret);
 
     bool isH1 = false;
     bool isH2 = false;
@@ -129,12 +129,14 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
       isHeading = true;
     }
 
-    final isChecklist = innermost?.type == MarkdownBlockType.taskListItem ||
+    final isChecklist =
+        innermost?.type == MarkdownBlockType.taskListItem ||
         currentLine.trimLeft().startsWith('- [ ] ') ||
         currentLine.trimLeft().startsWith('- [x] ') ||
         currentLine.trimLeft().startsWith('- [X] ');
 
-    final isCode = (innermost != null &&
+    final isCode =
+        (innermost != null &&
             (innermost.type == MarkdownBlockType.fencedCode ||
                 innermost.type == MarkdownBlockType.indentedCode)) ||
         currentLine.trim().startsWith('```');
@@ -392,12 +394,21 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
   };
 
   static MarkdownBlockNode? _findInnermostBlock(
+    String text,
     List<MarkdownBlockNode> blocks,
     int caret,
   ) {
     for (final block in blocks) {
-      if (block.range.start <= caret && caret <= block.range.end) {
-        final inner = _findInnermostBlock(block.children, caret);
+      // A block's range includes its trailing newline; a caret just past it
+      // is on the next line, not in this block.
+      var end = block.range.end;
+      if (end > block.range.start &&
+          end <= text.length &&
+          text[end - 1] == '\n') {
+        end--;
+      }
+      if (block.range.start <= caret && caret <= end) {
+        final inner = _findInnermostBlock(text, block.children, caret);
         return inner ?? block;
       }
     }
@@ -457,13 +468,7 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
         final nextMask = _isStyleType(node.type)
             ? (ancestorMask | _maskFor(node.type))
             : ancestorMask;
-        visitNodes(
-          node.children,
-          node,
-          nextMask,
-          outerStart,
-          outerEnd,
-        );
+        visitNodes(node.children, node, nextMask, outerStart, outerEnd);
       }
     }
 
@@ -550,8 +555,9 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
       final overlaps =
           math.min(node.range.end, end) > math.max(node.range.start, start);
       if (!overlaps) return;
-      commonMask =
-          commonMask == null ? ancestorMask : (commonMask! & ancestorMask);
+      commonMask = commonMask == null
+          ? ancestorMask
+          : (commonMask! & ancestorMask);
     });
     if (commonMask == null || commonMask == 0) return <MarkdownInlineType>{};
     return {

@@ -21,7 +21,6 @@ NoteMetaData makeNote({required String id, String title = 'Note'}) =>
       id: id,
       title: title,
       updatedAt: DateTime(2024, 6, 1),
-      height: 0,
       createdAt: DateTime(2024, 1, 1),
       previewText: 'Preview $id',
     );

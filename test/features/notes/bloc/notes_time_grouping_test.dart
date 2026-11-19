@@ -35,7 +35,6 @@ void main() {
         previewText: 'Preview $id',
         updatedAt: updatedAt,
         createdAt: updatedAt,
-        height: 200,
         isPinned: isPinned,
       );
     }

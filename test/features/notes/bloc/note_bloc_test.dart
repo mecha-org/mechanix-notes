@@ -116,7 +116,6 @@ NoteMetaData note(String id, DateTime updatedAt, {bool pinned = false}) =>
       previewText: 'Preview $id',
       createdAt: updatedAt,
       updatedAt: updatedAt,
-      height: 0,
       isPinned: pinned,
     );
 

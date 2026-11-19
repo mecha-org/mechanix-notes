@@ -70,7 +70,6 @@ void main() {
     previewText: 'Today started off with one of my new-found favourite bre...',
     createdAt: DateTime(2026, 9, 9, 9, 0),
     updatedAt: DateTime(2026, 9, 9, 10, 0),
-    height: 60.0,
   );
 
   final note2 = NoteMetaData(
@@ -79,7 +78,6 @@ void main() {
     previewText: 'Characters: Alex, Sam and Jordan discussing the script...',
     createdAt: DateTime(2026, 8, 21, 13, 0),
     updatedAt: DateTime(2026, 8, 21, 14, 0),
-    height: 60.0,
   );
 
   final note3 = NoteMetaData(
@@ -88,7 +86,6 @@ void main() {
     previewText: 'Recipe ingredients: onions, tomatoes, spices...',
     createdAt: DateTime(2026, 8, 21, 14, 0),
     updatedAt: DateTime(2026, 8, 21, 15, 0),
-    height: 60.0,
   );
 
   final note4 = NoteMetaData(
@@ -97,7 +94,6 @@ void main() {
     previewText: 'Travel with family- rollercoaster ride irl!! So I...',
     createdAt: DateTime(2026, 8, 9, 8, 0),
     updatedAt: DateTime(2026, 8, 9, 9, 0),
-    height: 60.0,
   );
 
   group('HomeListView with Grouped Notes', () {
@@ -165,7 +161,6 @@ void main() {
         previewText: 'This note is pinned',
         createdAt: DateTime(2026, 9, 9, 9, 0),
         updatedAt: DateTime(2026, 9, 9, 10, 0),
-        height: 60.0,
         isPinned: true,
       );
 
@@ -280,7 +275,6 @@ void main() {
       previewText: '',
       createdAt: DateTime(2026, 9, 9),
       updatedAt: DateTime(2026, 9, 9),
-      height: 0,
     );
 
     testWidgets('note card and group header render at homeTileHeight', (
