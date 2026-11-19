@@ -84,7 +84,6 @@ NoteMetaData _makeMetaData({
   required String id,
   required String title,
   String previewText = '',
-  double height = 200,
   DateTime? createdAt,
   DateTime? updatedAt,
   bool isPinned = false,
@@ -94,7 +93,6 @@ NoteMetaData _makeMetaData({
     id: id,
     title: title,
     previewText: previewText,
-    height: height,
     createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
@@ -207,69 +205,66 @@ void main() {
       }
     });
 
-    test(
-      'reads the index once, then applies saves, renames and deletes '
-      'without re-reading it',
-      () async {
+    test('reads the index once, then applies saves, renames and deletes '
+        'without re-reading it', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          _makeMetaData(
+            id: 'Old.md',
+            title: 'Old',
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      List<String> ids() => emissions.last.map((n) => n.id).toList();
+
+      try {
+        await pumpEventQueue();
+        expect(ids(), ['Old.md']);
+
+        // New note: appears at the top (most recently updated).
+        final created = await repository.upsertNote(
+          _makeNote(id: 'uuid-1', title: 'Fresh')..content = '# Fresh',
+        );
+        await pumpEventQueue();
+        expect(created, 'Fresh.md');
+        expect(ids(), ['Fresh.md', 'Old.md']);
+
+        // Title change renames the file: one emission, entry replaced.
+        final before = emissions.length;
+        await repository.upsertNote(
+          _makeNote(id: 'Fresh.md', title: 'Renamed', fileName: 'Fresh.md')
+            ..content = '# Renamed',
+        );
+        await pumpEventQueue();
+        expect(emissions.length, before + 1);
+        expect(ids(), ['Renamed.md', 'Old.md']);
+
         when(
+          () => mockIndexingService.getDocument('Renamed.md'),
+        ).thenReturn(null);
+        await repository.deleteNotes(['Renamed.md']);
+        await pumpEventQueue();
+        expect(ids(), ['Old.md']);
+
+        verify(
           () => mockIndexingService.getNotes(
             skip: any(named: 'skip'),
             take: any(named: 'take'),
           ),
-        ).thenAnswer(
-          (_) async => [
-            _makeMetaData(
-              id: 'Old.md',
-              title: 'Old',
-              updatedAt: DateTime(2026, 1, 1),
-            ),
-          ],
-        );
-
-        final emissions = <List<NoteMetaData>>[];
-        final sub = repository.watchNotes().listen(emissions.add);
-        List<String> ids() => emissions.last.map((n) => n.id).toList();
-
-        try {
-          await pumpEventQueue();
-          expect(ids(), ['Old.md']);
-
-          // New note: appears at the top (most recently updated).
-          final created = await repository.upsertNote(
-            _makeNote(id: 'uuid-1', title: 'Fresh')..content = '# Fresh',
-          );
-          await pumpEventQueue();
-          expect(created, 'Fresh.md');
-          expect(ids(), ['Fresh.md', 'Old.md']);
-
-          // Title change renames the file: one emission, entry replaced.
-          final before = emissions.length;
-          await repository.upsertNote(
-            _makeNote(id: 'Fresh.md', title: 'Renamed', fileName: 'Fresh.md')
-              ..content = '# Renamed',
-          );
-          await pumpEventQueue();
-          expect(emissions.length, before + 1);
-          expect(ids(), ['Renamed.md', 'Old.md']);
-
-          when(
-            () => mockIndexingService.getDocument('Renamed.md'),
-          ).thenReturn(null);
-          await repository.deleteNotes(['Renamed.md']);
-          await pumpEventQueue();
-          expect(ids(), ['Old.md']);
-
-          verify(
-            () => mockIndexingService.getNotes(
-              skip: any(named: 'skip'),
-              take: any(named: 'take'),
-            ),
-          ).called(1);
-        } finally {
-          await sub.cancel();
-        }
-      },
-    );
+        ).called(1);
+      } finally {
+        await sub.cancel();
+      }
+    });
 
     test('keeps pinned notes first, matching the index order', () async {
       when(
@@ -341,7 +336,9 @@ void main() {
 
     test('does not subscribe if cancelled while initializing', () async {
       final init = Completer<void>();
-      when(() => mockIndexingService.initialize()).thenAnswer((_) => init.future);
+      when(
+        () => mockIndexingService.initialize(),
+      ).thenAnswer((_) => init.future);
 
       final sub = repository.watchNotes().listen((_) {});
       await pumpEventQueue();
@@ -449,14 +446,8 @@ void main() {
       when(() => mockIndexingService.getDocument('1')).thenReturn(doc1);
       when(() => mockIndexingService.getDocument('2')).thenReturn(doc2);
 
-      await fileStorage.createNoteFile(
-        title: 'Note 1',
-        markdown: 'content 1',
-      );
-      await fileStorage.createNoteFile(
-        title: 'Note 2',
-        markdown: 'content 2',
-      );
+      await fileStorage.createNoteFile(title: 'Note 1', markdown: 'content 1');
+      await fileStorage.createNoteFile(title: 'Note 2', markdown: 'content 2');
 
       await repository.deleteNotes(['1', '2']);
 
@@ -491,34 +482,31 @@ void main() {
       },
     );
 
-    test(
-      'upsertNote on a title change renames the file, returns the new id '
-      'and emits NoteRenamed',
-      () async {
-        final created = await repository.upsertNote(
-          _makeNote(id: 'uuid-1', title: 'Foo')..content = '# Foo',
-        );
-        expect(created, 'Foo.md');
+    test('upsertNote on a title change renames the file, returns the new id '
+        'and emits NoteRenamed', () async {
+      final created = await repository.upsertNote(
+        _makeNote(id: 'uuid-1', title: 'Foo')..content = '# Foo',
+      );
+      expect(created, 'Foo.md');
 
-        final renamed = expectLater(
-          repository.noteRenames,
-          emits(
-            isA<NoteRenamed>()
-                .having((r) => r.oldId, 'oldId', 'Foo.md')
-                .having((r) => r.newId, 'newId', 'Bar.md'),
-          ),
-        );
-        final updated = await repository.upsertNote(
-          _makeNote(id: 'Foo.md', title: 'Bar', fileName: 'Foo.md')
-            ..content = '# Bar',
-        );
-        await renamed;
+      final renamed = expectLater(
+        repository.noteRenames,
+        emits(
+          isA<NoteRenamed>()
+              .having((r) => r.oldId, 'oldId', 'Foo.md')
+              .having((r) => r.newId, 'newId', 'Bar.md'),
+        ),
+      );
+      final updated = await repository.upsertNote(
+        _makeNote(id: 'Foo.md', title: 'Bar', fileName: 'Foo.md')
+          ..content = '# Bar',
+      );
+      await renamed;
 
-        expect(updated, 'Bar.md');
-        final names = tempDir.listSync().map((e) => e.uri.pathSegments.last);
-        expect(names, ['Bar.md']);
-      },
-    );
+      expect(updated, 'Bar.md');
+      final names = tempDir.listSync().map((e) => e.uri.pathSegments.last);
+      expect(names, ['Bar.md']);
+    });
 
     test(
       'upsertNote throws NoteFileMissingException instead of writing a copy',
@@ -678,6 +666,57 @@ void main() {
         ).called(1);
       },
     );
+
+    test(
+      're-indexes unchanged files whose stored title has Markdown',
+      () async {
+        final file = File('${tempDir.path}/stress.md');
+        await file.writeAsString('# Markdown **Stress** Test\nBody\n');
+        final stat = await file.stat();
+
+        final doc = _makeDoc(
+          id: 'stress.md',
+          title: 'Markdown **Stress** Test',
+          updatedAt: stat.modified,
+          fileName: 'stress.md',
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [_metaOf(doc)]);
+
+        expect(await repository.syncNotesFromDisk(), equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>().having(
+                (n) => n.title,
+                'title',
+                'Markdown Stress Test',
+              ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test('leaves unchanged files with a clean title alone', () async {
+      final file = File('${tempDir.path}/clean.md');
+      await file.writeAsString('# Markdown Stress Test\nBody\n');
+      final stat = await file.stat();
+
+      final doc = _makeDoc(
+        id: 'clean.md',
+        title: 'Markdown Stress Test',
+        updatedAt: stat.modified,
+        fileName: 'clean.md',
+      );
+      when(
+        () => mockIndexingService.getAllMetadata(),
+      ).thenAnswer((_) async => [_metaOf(doc)]);
+
+      expect(await repository.syncNotesFromDisk(), equals(0));
+      verifyNever(() => mockIndexingService.upsertNote(any()));
+    });
 
     test(
       're-indexes files whose modified time is newer than indexed updatedAt',

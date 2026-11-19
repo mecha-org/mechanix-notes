@@ -703,13 +703,16 @@ class NoteRepositoryImpl extends NoteRepository {
                 )
               : null;
 
-          // Re-index if missing from Tantivy, using legacy ID, or modified externally
+          // Re-index if missing from Tantivy, using legacy ID, modified
+          // externally, or its stored title still carries Markdown markers
+          // (titles indexed before H1 formatting was stripped).
           final needsReindex =
               existingDoc == null ||
               existingDoc.id != fileName ||
               fileStat.modified.isAfter(
                 indexedUpdatedAt!.add(const Duration(seconds: 1)),
-              );
+              ) ||
+              markdownToPlainText(existingDoc.title) != existingDoc.title;
 
           if (needsReindex) {
             final rawContent = await entity.readAsString();

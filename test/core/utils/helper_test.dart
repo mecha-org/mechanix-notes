@@ -90,8 +90,23 @@ void main() {
   });
 
   group('extractTitleAndPreviewFromMarkdown Tests', () {
-    test('extracts H1 title and produces clean plain preview text without markdown tokens', () {
-      const input = '''
+    for (final c in const [
+      ('# Markdown **Stress** Test', 'Markdown Stress Test'),
+      ('# ***Bold Italic*** Title', 'Bold Italic Title'),
+      ('# *Italic* and ~~strike~~', 'Italic and strike'),
+      ('# Title with `code` and ==mark==', 'Title with code and mark'),
+      ('# [Linked](https://example.com) title', 'Linked title'),
+    ]) {
+      test('H1 title strips inline formatting: ${c.$1}', () {
+        final (title, _) = extractTitleAndPreviewFromMarkdown('${c.$1}\nBody');
+        expect(title, c.$2);
+      });
+    }
+
+    test(
+      'extracts H1 title and produces clean plain preview text without markdown tokens',
+      () {
+        const input = '''
 # Full Feature Showcase
 
 This note demonstrates all formatting features supported by **Mechanix Notes** and Obsidian.
@@ -107,18 +122,19 @@ You can format text with:
 <!-- mechanix:id=test-id -->
 ''';
 
-      final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
+        final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
 
-      expect(title, equals('Full Feature Showcase'));
-      expect(preview, isNot(contains('**')));
-      expect(preview, isNot(contains('~~')));
-      expect(preview, isNot(contains('`')));
-      expect(preview, isNot(contains('<!--')));
-      expect(preview, isNot(contains('https://example.com')));
-      expect(preview, contains('Mechanix Notes and Obsidian'));
-      expect(preview, contains('Bold text for emphasis'));
-      expect(preview, contains('Italicized text for subtleties'));
-    });
+        expect(title, equals('Full Feature Showcase'));
+        expect(preview, isNot(contains('**')));
+        expect(preview, isNot(contains('~~')));
+        expect(preview, isNot(contains('`')));
+        expect(preview, isNot(contains('<!--')));
+        expect(preview, isNot(contains('https://example.com')));
+        expect(preview, contains('Mechanix Notes and Obsidian'));
+        expect(preview, contains('Bold text for emphasis'));
+        expect(preview, contains('Italicized text for subtleties'));
+      },
+    );
 
     test('list-only note sets empty title and clean list preview', () {
       const input = '''
@@ -143,6 +159,15 @@ You can format text with:
       final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
       expect(title, equals('Only One Line'));
       expect(preview, equals('Only One Line'));
+    });
+
+    test('single line note ignores fallback title', () {
+      final (title, preview) = extractTitleAndPreviewFromMarkdown(
+        ' \nbody text',
+        fallbackTitle: 'Old Title',
+      );
+      expect(title, equals('body text'));
+      expect(preview, equals('body text'));
     });
   });
 }

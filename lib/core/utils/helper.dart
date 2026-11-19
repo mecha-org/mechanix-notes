@@ -115,6 +115,9 @@ String markdownToPlainText(String markdown) {
   String markdown, {
   String fallbackTitle = '',
 }) {
+  // A fallback (e.g. a previously stored title) may predate formatting being
+  // stripped; clean it so every branch returns a plain-text title.
+  fallbackTitle = markdownToPlainText(fallbackTitle).trim();
   final cleanMarkdown = markdown.replaceAll(_htmlCommentRegex, '').trim();
   if (cleanMarkdown.isEmpty || cleanMarkdown == '#') {
     return (fallbackTitle, '');
@@ -126,9 +129,11 @@ String markdownToPlainText(String markdown) {
       firstContentLine.startsWith('#') && !firstContentLine.startsWith('##');
 
   if (isH1) {
-    var headingTitle = firstContentLine
-        .replaceFirst(RegExp(r'^#\s*'), '')
-        .trim();
+    // Strip inline formatting (`**bold**`, `*italic*`, links, ...) so the
+    // stored title is plain text, like the non-heading branches below.
+    var headingTitle = markdownToPlainText(
+      firstContentLine.replaceFirst(RegExp(r'^#\s*'), ''),
+    ).trim();
     if (headingTitle.length > Constants.noteTitleMaxLength) {
       headingTitle = headingTitle
           .substring(0, Constants.noteTitleMaxLength)
@@ -178,12 +183,6 @@ String markdownToPlainText(String markdown) {
   }
 
   final singleLine = lines.isNotEmpty ? lines.first : '';
-  if (fallbackTitle.isNotEmpty && fallbackTitle != singleLine) {
-    final preview = singleLine.length > Constants.notePreviewTextMaxLength
-        ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
-        : singleLine;
-    return (fallbackTitle, preview);
-  }
   var title = singleLine;
   if (title.length > Constants.noteTitleMaxLength) {
     title = title.substring(0, Constants.noteTitleMaxLength).trim();
