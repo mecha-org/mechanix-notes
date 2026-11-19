@@ -25,6 +25,9 @@ void main() {
 
   setUp(() {
     mockRepository = MockNoteRepository();
+    when(
+      () => mockRepository.noteRemovals,
+    ).thenAnswer((_) => const Stream.empty());
     mockSearchBloc = MockSearchBloc();
   });
 

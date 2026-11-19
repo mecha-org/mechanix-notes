@@ -61,15 +61,6 @@ tantivy.Document _makeDoc({
   );
 }
 
-/// The metadata-only view of [d], as returned by getAllMetadata.
-tantivy.NoteMeta _metaOf(tantivy.Document d) => tantivy.NoteMeta(
-  id: d.id,
-  title: d.title,
-  previewText: d.previewText,
-  isPinned: d.isPinned,
-  updatedAt: d.updatedAt,
-);
-
 NoteMetaData _makeMetaData({
   required String id,
   required String title,
@@ -669,7 +660,7 @@ void main() {
         );
         when(
           () => mockIndexingService.getAllMetadata(),
-        ).thenAnswer((_) async => [_metaOf(ghostDoc)]);
+        ).thenAnswer((_) async => [ghostDoc]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -694,7 +685,7 @@ void main() {
         );
         when(
           () => mockIndexingService.getAllMetadata(),
-        ).thenAnswer((_) async => [_metaOf(doc)]);
+        ).thenAnswer((_) async => [doc]);
 
         expect(await repository.syncNotesFromDisk(), equals(1));
         verify(
@@ -723,7 +714,7 @@ void main() {
       );
       when(
         () => mockIndexingService.getAllMetadata(),
-      ).thenAnswer((_) async => [_metaOf(doc)]);
+      ).thenAnswer((_) async => [doc]);
 
       expect(await repository.syncNotesFromDisk(), equals(0));
       verifyNever(() => mockIndexingService.upsertNote(any()));
@@ -745,7 +736,7 @@ void main() {
         );
         when(
           () => mockIndexingService.getAllMetadata(),
-        ).thenAnswer((_) async => [_metaOf(doc)]);
+        ).thenAnswer((_) async => [doc]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -777,7 +768,7 @@ void main() {
         );
         when(
           () => mockIndexingService.getAllMetadata(),
-        ).thenAnswer((_) async => [_metaOf(doc)]);
+        ).thenAnswer((_) async => [doc]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 
@@ -856,7 +847,7 @@ void main() {
         );
         when(
           () => mockIndexingService.getAllMetadata(),
-        ).thenAnswer((_) async => [_metaOf(doc)]);
+        ).thenAnswer((_) async => [doc]);
 
         final updatedCount = await repository.syncNotesFromDisk();
 

@@ -58,6 +58,11 @@ class NoteRepositoryImpl extends NoteRepository {
   @override
   Stream<NoteRenamed> get noteRenames => _renames.stream;
 
+  @override
+  Stream<Set<String>> get noteRemovals => _changes.stream
+      .where((c) => c is _NoteRemoved)
+      .map((c) => (c as _NoteRemoved).ids);
+
   NoteRepositoryImpl({
     IndexingService? indexingService,
     NoteFileStorage? fileStorage,

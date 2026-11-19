@@ -9,6 +9,10 @@ abstract class NoteRepository {
   Future<void> deleteNotes(List<String> ids);
   Future<String> upsertNote(NoteModel note);
   Stream<NoteRenamed> get noteRenames;
+
+  /// Emits the ids of notes once they have been removed from the index
+  /// (deleted in the app or on disk).
+  Stream<Set<String>> get noteRemovals;
   Future<List<String>> searchNoteIds(String query);
   Future<List<NoteMetaData>> getNotesMetaData(List<String> ids);
   Future<bool> togglePinNote(String id);

@@ -90,16 +90,6 @@ class IndexingService {
     );
   }
 
-  NoteMetaData metaToMetaData(tantivy.NoteMeta meta) {
-    return NoteMetaData(
-      id: meta.id,
-      title: meta.title,
-      previewText: meta.previewText,
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(meta.updatedAt.toInt()),
-      isPinned: meta.isPinned,
-    );
-  }
-
   /// The list entry for [note], built locally so a save never needs to read
   /// the index back. Static (pure conversion), so it also works when the
   /// service is mocked.
@@ -175,12 +165,11 @@ class IndexingService {
       if (!_initialized) {
         await initialize();
       }
-      // Metadata only: the list never needs the note body.
-      final metas = await tantivy.getNotesMetadata(
+      final docs = await tantivy.getNotes(
         skip: BigInt.from(skip),
         take: BigInt.from(take),
       );
-      return metas.map(metaToMetaData).toList();
+      return docs.map(docToMetaData).toList();
     } catch (e) {
       AppLogger.e('[IndexingService] getNotes failed: $e');
       return [];
@@ -235,7 +224,7 @@ class IndexingService {
       final cleanQuery = query.trim();
       if (cleanQuery.isEmpty) return [];
 
-      final results = await tantivy.searchNotesMetadata(
+      final results = await tantivy.searchDocuments(
         query: cleanQuery,
         topK: BigInt.from(limit),
       );
@@ -244,21 +233,21 @@ class IndexingService {
         '[IndexingService] Search: "$cleanQuery" -> ${results.length}',
       );
 
-      return results.map(metaToMetaData).toList();
+      return results.map((r) => docToMetaData(r.doc)).toList();
     } catch (e) {
       AppLogger.e('[IndexingService] Search failed ($query): $e');
       return [];
     }
   }
 
-  /// Fetches the metadata of every indexed note (no note bodies), in pages.
-  Future<List<tantivy.NoteMeta>> getAllMetadata({int batchSize = 500}) async {
+  /// Fetches every indexed note, in pages.
+  Future<List<tantivy.Document>> getAllMetadata({int batchSize = 500}) async {
     if (!_initialized) {
       await initialize();
     }
-    final all = <tantivy.NoteMeta>[];
+    final all = <tantivy.Document>[];
     while (true) {
-      final batch = await tantivy.getNotesMetadata(
+      final batch = await tantivy.getNotes(
         skip: BigInt.from(all.length),
         take: BigInt.from(batchSize),
       );

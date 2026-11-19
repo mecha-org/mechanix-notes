@@ -82,6 +82,9 @@ class FakeNoteRepository implements NoteRepository {
   Stream<NoteRenamed> get noteRenames => const Stream.empty();
 
   @override
+  Stream<Set<String>> get noteRemovals => const Stream.empty();
+
+  @override
   Future<List<String>> searchNoteIds(String query) async => [];
 
   @override
