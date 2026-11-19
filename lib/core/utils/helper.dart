@@ -182,13 +182,11 @@ String markdownToPlainText(String markdown) {
     return (title.isNotEmpty ? title : fallbackTitle, preview);
   }
 
-  final singleLine = lines.isNotEmpty ? lines.first : '';
-  var title = singleLine;
+  // The first line is always the title, with or without `#`, so a single
+  // line is the title only and leaves the preview empty (like `# hello`).
+  var title = lines.isNotEmpty ? lines.first : '';
   if (title.length > Constants.noteTitleMaxLength) {
     title = title.substring(0, Constants.noteTitleMaxLength).trim();
   }
-  final preview = singleLine.length > Constants.notePreviewTextMaxLength
-      ? singleLine.substring(0, Constants.notePreviewTextMaxLength)
-      : singleLine;
-  return (title.isNotEmpty ? title : fallbackTitle, preview);
+  return (title.isNotEmpty ? title : fallbackTitle, '');
 }

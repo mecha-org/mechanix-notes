@@ -129,12 +129,59 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                     autofocus: autofocus,
                     textInputAction: TextInputAction.search,
                     autocorrect: false,
+                    enableInteractiveSelection: true,
                     onChanged: onQueryChanged,
                     onSubmitted: onSubmitted,
                     cursorColor: colorScheme.primary,
                     style: textTheme.headlineSmall?.copyWith(
                       color: colorScheme.onSurface,
                     ),
+                    contextMenuBuilder: (context, editableTextState) {
+                      final List<ContextMenuButtonItem> buttonItems =
+                          editableTextState.contextMenuButtonItems;
+
+                      // Add Paste button manually if Flutter hid it
+                      final hasPaste = buttonItems.any(
+                        (item) => item.type == ContextMenuButtonType.paste,
+                      );
+                      if (!hasPaste) {
+                        buttonItems.add(
+                          ContextMenuButtonItem(
+                            type: ContextMenuButtonType.paste,
+                            onPressed: () {
+                              editableTextState.pasteText(
+                                SelectionChangedCause.toolbar,
+                              );
+                            },
+                          ),
+                        );
+                      }
+
+                      // Same menu as the note editor's, with 16px labels.
+                      final anchors = editableTextState.contextMenuAnchors;
+                      return TextSelectionToolbar(
+                        anchorAbove: anchors.primaryAnchor,
+                        anchorBelow:
+                            anchors.secondaryAnchor ?? anchors.primaryAnchor,
+                        children: [
+                          for (final item in buttonItems)
+                            TextSelectionToolbarTextButton(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
+                              ),
+                              onPressed: item.onPressed,
+                              child: Text(
+                                AdaptiveTextSelectionToolbar.getButtonLabel(
+                                  context,
+                                  item,
+                                ),
+                                style: const TextStyle(fontSize: 16),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                     decoration: InputDecoration(
                       isDense: true,
                       border: InputBorder.none,

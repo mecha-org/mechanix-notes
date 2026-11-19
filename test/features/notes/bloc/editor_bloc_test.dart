@@ -399,9 +399,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -409,7 +407,8 @@ void main() {
         isNewNote: true,
       ),
       act: (bloc) {
-        final longText = 'A' * (Constants.notePreviewTextMaxLength + 50);
+        final longText =
+            'Title\n${'A' * (Constants.notePreviewTextMaxLength + 50)}';
         bloc.add(
           EditorSaveRequested(content: kSomeMarkdown, plainText: longText),
         );
@@ -429,9 +428,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -439,7 +436,7 @@ void main() {
         isNewNote: true,
       ),
       act: (bloc) {
-        final exactText = 'A' * Constants.notePreviewTextMaxLength;
+        final exactText = 'Title\n${'A' * Constants.notePreviewTextMaxLength}';
         bloc.add(
           EditorSaveRequested(content: kSomeMarkdown, plainText: exactText),
         );
@@ -459,9 +456,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -469,7 +464,8 @@ void main() {
         isNewNote: true,
       ),
       act: (bloc) {
-        final justOver = 'A' * (Constants.notePreviewTextMaxLength + 1);
+        final justOver =
+            'Title\n${'A' * (Constants.notePreviewTextMaxLength + 1)}';
         bloc.add(
           EditorSaveRequested(content: kSomeMarkdown, plainText: justOver),
         );
@@ -571,9 +567,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -716,9 +710,7 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => original);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -745,9 +737,7 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => original);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1080,9 +1070,7 @@ void main() {
         when(
           () => repository.getNoteById(kTestNoteId),
         ).thenAnswer((_) async => original);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1109,9 +1097,7 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(
-          () => repository.upsertNote(captureAny()),
-        ).thenAnswer(savedId);
+        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -1119,7 +1105,8 @@ void main() {
         isNewNote: true,
       ),
       act: (bloc) {
-        final longText = 'B' * (Constants.notePreviewTextMaxLength + 50);
+        final longText =
+            'Title\n${'B' * (Constants.notePreviewTextMaxLength + 50)}';
         bloc.add(
           EditorAutoSaveRequested(content: kSomeMarkdown, plainText: longText),
         );
@@ -1439,7 +1426,7 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'single line note uses that line for title and previewText',
+      'single line note uses that line as title with empty previewText',
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
@@ -1459,7 +1446,7 @@ void main() {
         ).captured;
         final note = captured.first as NoteModel;
         expect(note.title, 'Single Line Title Only');
-        expect(note.previewText, 'Single Line Title Only');
+        expect(note.previewText, isEmpty);
       },
     );
     blocTest<EditorBloc, EditorState>(
@@ -1492,7 +1479,8 @@ void main() {
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(kTestNoteId)).thenAnswer(
-          (_) async => makeNote(title: 'Old Title', content: '# Old Title\nBody'),
+          (_) async =>
+              makeNote(title: 'Old Title', content: '# Old Title\nBody'),
         );
         when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
@@ -1504,12 +1492,8 @@ void main() {
         markdownContent: '# Old Title\nBody',
         isNewNote: false,
       ),
-      act: (bloc) => bloc.add(
-        EditorSaveRequested(
-          content: '# \nBody',
-          plainText: 'Body',
-        ),
-      ),
+      act: (bloc) =>
+          bloc.add(EditorSaveRequested(content: '# \nBody', plainText: 'Body')),
       expect: () => [
         isA<EditorLoaded>().having((s) => s.isSaving, 'isSaving', true),
         isA<EditorSaveSuccess>(),
@@ -1654,8 +1638,12 @@ void main() {
       build: buildBloc,
       seed: () => newNote,
       act: (bloc) {
-        bloc.add(EditorAutoSaveRequested(content: '# Hello\na', plainText: 'a'));
-        bloc.add(EditorAutoSaveRequested(content: '# Hello\nab', plainText: 'ab'));
+        bloc.add(
+          EditorAutoSaveRequested(content: '# Hello\na', plainText: 'a'),
+        );
+        bloc.add(
+          EditorAutoSaveRequested(content: '# Hello\nab', plainText: 'ab'),
+        );
       },
       verify: (bloc) {
         expect(savedFileNames, [null, 'Hello.md']);
@@ -1715,8 +1703,9 @@ void main() {
         lastSavedContent: '# Foo\n',
         lastSavedTitle: 'Foo',
       ),
-      act: (bloc) =>
-          bloc.add(EditorSaveRequested(content: '# Foo\nnew', plainText: 'new')),
+      act: (bloc) => bloc.add(
+        EditorSaveRequested(content: '# Foo\nnew', plainText: 'new'),
+      ),
       verify: (bloc) {
         expect(savedFileNames, ['Foo.md', null]);
         expect(bloc.state, const EditorSaveSuccess('Foo.md'));

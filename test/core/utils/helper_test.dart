@@ -154,11 +154,20 @@ You can format text with:
       expect(preview, contains('Second task with important note'));
     });
 
-    test('single line note uses that line for both title and preview', () {
+    test('single line note uses that line as title with empty preview', () {
       const input = 'Only One Line';
       final (title, preview) = extractTitleAndPreviewFromMarkdown(input);
       expect(title, equals('Only One Line'));
-      expect(preview, equals('Only One Line'));
+      expect(preview, isEmpty);
+    });
+
+    test('first line is the title with or without #', () {
+      expect(extractTitleAndPreviewFromMarkdown('# hello'), ('hello', ''));
+      expect(extractTitleAndPreviewFromMarkdown('hello'), ('hello', ''));
+      expect(extractTitleAndPreviewFromMarkdown('hello\nworld'), (
+        'hello',
+        'world',
+      ));
     });
 
     test('single line note ignores fallback title', () {
@@ -167,7 +176,7 @@ You can format text with:
         fallbackTitle: 'Old Title',
       );
       expect(title, equals('body text'));
-      expect(preview, equals('body text'));
+      expect(preview, isEmpty);
     });
   });
 }

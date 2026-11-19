@@ -135,6 +135,8 @@ class _EditorContentState extends State<EditorContent> {
               componentBuilders: MarkdownEditorComponentBuilders(
                 taskToggleBuilder: (context, taskContext) =>
                     _MechanixTaskToggle(taskContext: taskContext),
+                selectionHandleBuilder: (context, handle) =>
+                    _AndroidSelectionHandle(kind: handle.kind),
                 contextMenuBuilder: (context, editableText) {
                   final anchors = editableText.contextMenuAnchors;
                   return TextSelectionToolbar(
@@ -159,6 +161,7 @@ class _EditorContentState extends State<EditorContent> {
                                     'Select all',
                                   _ => 'Action',
                                 },
+                            style: const TextStyle(fontSize: 16),
                           ),
                         ),
                     ],
@@ -224,6 +227,40 @@ class _MechanixTaskToggle extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
         onChanged: taskContext.enabled ? (_) => taskContext.onToggle() : null,
       ),
+    );
+  }
+}
+
+/// Android (Material) selection handle: the teardrop whose point touches the
+/// text, in the theme's selection-handle colour (primary by default).
+///
+/// The editor reserves a 22px box centred under the selection end for every
+/// handle, while Android hangs the start handle to the left of the text and
+/// the end handle to the right; shifting by half the handle's width puts the
+/// point exactly on the text. Touches still land inside the editor's 48px
+/// target around the box.
+class _AndroidSelectionHandle extends StatelessWidget {
+  const _AndroidSelectionHandle({required this.kind});
+
+  final MarkdownSelectionHandleKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = switch (kind) {
+      MarkdownSelectionHandleKind.start => TextSelectionHandleType.left,
+      MarkdownSelectionHandleKind.end => TextSelectionHandleType.right,
+      MarkdownSelectionHandleKind.collapsed =>
+        TextSelectionHandleType.collapsed,
+    };
+    final size = materialTextSelectionControls.getHandleSize(0);
+    final shift = switch (kind) {
+      MarkdownSelectionHandleKind.start => -size.width / 2,
+      MarkdownSelectionHandleKind.end => size.width / 2,
+      MarkdownSelectionHandleKind.collapsed => 0.0,
+    };
+    return Transform.translate(
+      offset: Offset(shift, 0),
+      child: materialTextSelectionControls.buildHandle(context, type, 0),
     );
   }
 }
