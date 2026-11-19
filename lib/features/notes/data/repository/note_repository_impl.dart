@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter_tantivy/flutter_tantivy.dart' as tantivy;
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
@@ -87,19 +86,6 @@ class NoteRepositoryImpl extends NoteRepository {
     _startWatcher();
   }
 
-  /// Pin status and creation time from an indexed entry ([tantivy.Document]
-  /// or [tantivy.NoteMeta]); unpinned and [fallbackCreatedAt] if not indexed.
-  static (bool isPinned, DateTime createdAt) _indexedState(
-    bool? isPinned,
-    tantivy.PlatformInt64? createdAt,
-    DateTime fallbackCreatedAt,
-  ) {
-    if (isPinned == null || createdAt == null) {
-      return (false, fallbackCreatedAt);
-    }
-    return (isPinned, DateTime.fromMillisecondsSinceEpoch(createdAt.toInt()));
-  }
-
   void _startWatcher() {
     if (_watcherSub != null) return;
     _watcherSub = _notesWatcher.events.listen((event) {
@@ -132,11 +118,6 @@ class NoteRepositoryImpl extends NoteRepository {
           );
 
           final existing = _indexingService.getDocument(event.fileName);
-          final (isPinned, createdAt) = _indexedState(
-            existing?.isPinned,
-            existing?.createdAt,
-            stat.modified,
-          );
 
           final note = NoteModel(
             id: event.fileName,
@@ -144,8 +125,7 @@ class NoteRepositoryImpl extends NoteRepository {
             content: rawContent,
             previewText: previewText,
             fileName: event.fileName,
-            isPinned: isPinned,
-            createdAt: createdAt,
+            isPinned: existing?.isPinned ?? false,
             updatedAt: stat.modified,
           );
 
@@ -180,20 +160,13 @@ class NoteRepositoryImpl extends NoteRepository {
               fallbackTitle,
             );
 
-            final (isPinned, createdAt) = _indexedState(
-              priorDoc?.isPinned,
-              priorDoc?.createdAt,
-              stat.modified,
-            );
-
             final note = NoteModel(
               id: newName,
               title: title,
               content: rawContent,
               previewText: previewText,
               fileName: newName,
-              isPinned: isPinned,
-              createdAt: createdAt,
+              isPinned: priorDoc?.isPinned ?? false,
               updatedAt: stat.modified,
             );
             await _indexingService.upsertNote(note);
@@ -245,66 +218,15 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
 
+      // A note's id is its filename.
       final doc = _indexingService.getDocument(id);
+      final markdown = await _fileStorage.readNoteContent(id);
 
-      // 1. Try reading from disk by fileName directly, doc.fileName, or id
-      String? fileName;
-      String? markdown;
-
-      final candidates = <String>[
-        if (doc?.fileName != null && doc!.fileName!.isNotEmpty) doc.fileName!,
-        if (id.endsWith('.md')) id,
-        '$id.md',
-        id,
-      ];
-
-      for (final candidate in candidates) {
-        if (await _fileStorage.noteFileExists(candidate)) {
-          markdown = await _fileStorage.readNoteContent(candidate);
-          fileName = candidate;
-          break;
-        }
-      }
-
-      // 2. Fallback: try resolving by title (e.g. if saved under title directly)
-      if (markdown == null && doc != null) {
-        final titleFileName =
-            '${NoteFileStorage.sanitizeFileName(doc.title)}.md';
-        if (await _fileStorage.noteFileExists(titleFileName)) {
-          markdown = await _fileStorage.readNoteContent(titleFileName);
-          if (markdown != null) {
-            fileName = titleFileName;
-          }
-        }
-      }
-
-      // If no file exists on disk:
       if (markdown == null) {
-        if (doc != null && doc.fileName == null) {
-          // Document exists in index without a file on disk (e.g. mocked in unit test)
-          final (isPinned, createdAt) = _indexedState(
-            doc.isPinned,
-            doc.createdAt,
-            DateTime.now(),
-          );
-          return NoteModel(
-            id: doc.id,
-            title: doc.title,
-            content: '',
-            previewText: doc.previewText,
-            fileName: doc.fileName,
-            isPinned: isPinned,
-            createdAt: createdAt,
-            updatedAt: DateTime.fromMillisecondsSinceEpoch(
-              doc.updatedAt.toInt(),
-            ),
-          );
-        }
-
-        if (doc != null && doc.fileName != null) {
-          // File confirmed missing from disk -> purge ghost note from Tantivy on access
+        if (doc != null) {
+          // File missing from disk -> purge ghost note from Tantivy on access
           AppLogger.i(
-            'NoteRepository: Note $id (${doc.fileName}) missing on disk. Purging ghost note from Tantivy...',
+            'NoteRepository: Note $id missing on disk. Purging ghost note from Tantivy...',
           );
           unawaited(
             _indexingService
@@ -319,29 +241,18 @@ class NoteRepositoryImpl extends NoteRepository {
         return null;
       }
 
-      fileName ??= (id.endsWith('.md') ? id : '$id.md');
       final fileModified =
-          (await _fileStorage.getFileLastModified(fileName)) ?? DateTime.now();
-
-      final title =
-          doc?.title ??
-          (fileName.endsWith('.md')
-              ? fileName.substring(0, fileName.length - 3)
-              : fileName);
-      final (isPinned, createdAt) = _indexedState(
-        doc?.isPinned,
-        doc?.createdAt,
-        fileModified,
-      );
+          (await _fileStorage.getFileLastModified(id)) ?? DateTime.now();
 
       final note = NoteModel(
-        id: doc?.id ?? fileName,
-        title: title,
+        id: id,
+        title:
+            doc?.title ??
+            (id.endsWith('.md') ? id.substring(0, id.length - 3) : id),
         content: markdown,
         previewText: doc?.previewText ?? '',
-        fileName: fileName,
-        isPinned: isPinned,
-        createdAt: createdAt,
+        fileName: id,
+        isPinned: doc?.isPinned ?? false,
         updatedAt: fileModified,
       );
 
@@ -358,23 +269,13 @@ class NoteRepositoryImpl extends NoteRepository {
     try {
       await ensureStoreConnected();
 
-      final removed = <String>{...ids};
+      // A note's id is its filename.
       for (final id in ids) {
-        final doc = _indexingService.getDocument(id);
-        final fileNames = <String>{
-          id,
-          if (id.endsWith('.md')) id else '$id.md',
-          if (doc?.fileName != null && doc!.fileName!.isNotEmpty) doc.fileName!,
-        };
-
-        for (final fn in fileNames) {
-          await _fileStorage.deleteNoteFile(fn);
-        }
-        removed.addAll(fileNames);
+        await _fileStorage.deleteNoteFile(id);
       }
 
       await _indexingService.deleteNotesBatch(ids);
-      _notifyRemoved(removed);
+      _notifyRemoved(ids);
       AppLogger.i('NoteRepository: deleteNotes(${ids.length})');
     } catch (e) {
       AppLogger.e('NoteRepository: deleteNotes failed: $e');
@@ -677,10 +578,6 @@ class NoteRepositoryImpl extends NoteRepository {
       // concurrently while listing are never falsely flagged as ghosts.
       final indexedDocs = await _indexingService.getAllMetadata();
       final docsById = {for (final d in indexedDocs) d.id: d};
-      final docsByFileName = <String, tantivy.NoteMeta>{
-        for (final d in indexedDocs)
-          if (d.fileName != null && d.fileName!.isNotEmpty) d.fileName!: d,
-      };
 
       final entities = await dir.list().toList();
       final discoveredNoteIds = <String>{};
@@ -695,7 +592,7 @@ class NoteRepositoryImpl extends NoteRepository {
 
         try {
           final fileStat = await entity.stat();
-          final existingDoc = docsById[fileName] ?? docsByFileName[fileName];
+          final existingDoc = docsById[fileName];
 
           final indexedUpdatedAt = existingDoc != null
               ? DateTime.fromMillisecondsSinceEpoch(
@@ -703,12 +600,11 @@ class NoteRepositoryImpl extends NoteRepository {
                 )
               : null;
 
-          // Re-index if missing from Tantivy, using legacy ID, modified
-          // externally, or its stored title still carries Markdown markers
-          // (titles indexed before H1 formatting was stripped).
+          // Re-index if missing from Tantivy, modified externally, or its
+          // stored title still carries Markdown markers (titles indexed
+          // before H1 formatting was stripped).
           final needsReindex =
               existingDoc == null ||
-              existingDoc.id != fileName ||
               fileStat.modified.isAfter(
                 indexedUpdatedAt!.add(const Duration(seconds: 1)),
               ) ||
@@ -724,21 +620,14 @@ class NoteRepositoryImpl extends NoteRepository {
               existingDoc?.title ?? fallbackTitle,
             );
 
-            final (isPinned, createdAt) = _indexedState(
-              existingDoc?.isPinned,
-              existingDoc?.createdAt,
-              fileStat.modified,
-            );
-
             final note = NoteModel(
               id: fileName,
               title: title,
               content: rawContent,
               previewText: previewText,
               fileName: fileName,
-              createdAt: createdAt,
               updatedAt: fileStat.modified,
-              isPinned: isPinned,
+              isPinned: existingDoc?.isPinned ?? false,
             );
 
             notesToUpsert.add(note);

@@ -68,7 +68,6 @@ void main() {
     id: 'n1',
     title: 'Daily Journal',
     previewText: 'Today started off with one of my new-found favourite bre...',
-    createdAt: DateTime(2026, 9, 9, 9, 0),
     updatedAt: DateTime(2026, 9, 9, 10, 0),
   );
 
@@ -76,7 +75,6 @@ void main() {
     id: 'n2',
     title: 'Skit dialogues',
     previewText: 'Characters: Alex, Sam and Jordan discussing the script...',
-    createdAt: DateTime(2026, 8, 21, 13, 0),
     updatedAt: DateTime(2026, 8, 21, 14, 0),
   );
 
@@ -84,7 +82,6 @@ void main() {
     id: 'n3',
     title: 'Culinary- curry',
     previewText: 'Recipe ingredients: onions, tomatoes, spices...',
-    createdAt: DateTime(2026, 8, 21, 14, 0),
     updatedAt: DateTime(2026, 8, 21, 15, 0),
   );
 
@@ -92,7 +89,6 @@ void main() {
     id: 'n4',
     title: 'Travel with family',
     previewText: 'Travel with family- rollercoaster ride irl!! So I...',
-    createdAt: DateTime(2026, 8, 9, 8, 0),
     updatedAt: DateTime(2026, 8, 9, 9, 0),
   );
 
@@ -159,7 +155,6 @@ void main() {
         id: 'p1',
         title: 'Important Note',
         previewText: 'This note is pinned',
-        createdAt: DateTime(2026, 9, 9, 9, 0),
         updatedAt: DateTime(2026, 9, 9, 10, 0),
         isPinned: true,
       );
@@ -273,7 +268,6 @@ void main() {
       id: id,
       title: 'Note $id',
       previewText: '',
-      createdAt: DateTime(2026, 9, 9),
       updatedAt: DateTime(2026, 9, 9),
     );
 

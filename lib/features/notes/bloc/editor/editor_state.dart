@@ -18,7 +18,6 @@ final class EditorLoaded extends EditorState {
   final String lastSavedContent;
   final String lastSavedTitle;
   final bool lastSavedIsPinned;
-  final DateTime? createdAt;
   final bool isContentLoading;
   final bool isSaving;
   final bool isNewNote;
@@ -32,7 +31,6 @@ final class EditorLoaded extends EditorState {
     this.lastSavedContent = '',
     this.lastSavedTitle = '',
     this.lastSavedIsPinned = false,
-    this.createdAt,
     this.isContentLoading = false,
     this.isSaving = false,
     this.isNewNote = false,
@@ -47,7 +45,6 @@ final class EditorLoaded extends EditorState {
     String? lastSavedContent,
     String? lastSavedTitle,
     bool? lastSavedIsPinned,
-    DateTime? createdAt,
     bool? isContentLoading,
     bool? isSaving,
     bool? isNewNote,
@@ -61,7 +58,6 @@ final class EditorLoaded extends EditorState {
       lastSavedContent: lastSavedContent ?? this.lastSavedContent,
       lastSavedTitle: lastSavedTitle ?? this.lastSavedTitle,
       lastSavedIsPinned: lastSavedIsPinned ?? this.lastSavedIsPinned,
-      createdAt: createdAt ?? this.createdAt,
       isContentLoading: isContentLoading ?? this.isContentLoading,
       isSaving: isSaving ?? this.isSaving,
       isNewNote: isNewNote ?? this.isNewNote,
@@ -78,7 +74,6 @@ final class EditorLoaded extends EditorState {
     lastSavedContent,
     lastSavedTitle,
     lastSavedIsPinned,
-    createdAt,
     isContentLoading,
     isSaving,
     isNewNote,

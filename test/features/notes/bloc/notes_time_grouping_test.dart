@@ -34,7 +34,6 @@ void main() {
         title: 'Note $id',
         previewText: 'Preview $id',
         updatedAt: updatedAt,
-        createdAt: updatedAt,
         isPinned: isPinned,
       );
     }

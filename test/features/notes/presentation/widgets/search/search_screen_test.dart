@@ -63,7 +63,6 @@ void main() {
       title: title,
       previewText: preview,
       updatedAt: updatedAt ?? DateTime(2026, 10, 1),
-      createdAt: DateTime(2026, 10, 1),
     );
   }
 

@@ -2,7 +2,6 @@ class NoteModel {
   String id;
   String title;
   String content;
-  DateTime createdAt;
   DateTime updatedAt;
   String previewText;
   bool isPinned;
@@ -12,7 +11,6 @@ class NoteModel {
     required this.id,
     required this.title,
     required this.content,
-    required this.createdAt,
     required this.updatedAt,
     required this.previewText,
     this.isPinned = false,

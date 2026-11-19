@@ -26,7 +26,6 @@ NoteModel _makeNote({
   required String id,
   required String title,
   String previewText = '',
-  DateTime? createdAt,
   DateTime? updatedAt,
   bool isPinned = false,
   String? fileName,
@@ -37,7 +36,6 @@ NoteModel _makeNote({
     title: title,
     content: 'content',
     previewText: previewText,
-    createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
     fileName: fileName,
@@ -48,9 +46,7 @@ tantivy.Document _makeDoc({
   required String id,
   required String title,
   String previewText = '',
-  String? fileName,
   bool isPinned = false,
-  DateTime? createdAt,
   DateTime? updatedAt,
 }) {
   final now = DateTime.now();
@@ -58,11 +54,7 @@ tantivy.Document _makeDoc({
     id: id,
     title: title,
     previewText: previewText,
-    fileName: fileName,
     isPinned: isPinned,
-    createdAt: tantivy.PlatformInt64Util.from(
-      (createdAt ?? now).millisecondsSinceEpoch,
-    ),
     updatedAt: tantivy.PlatformInt64Util.from(
       (updatedAt ?? now).millisecondsSinceEpoch,
     ),
@@ -74,9 +66,7 @@ tantivy.NoteMeta _metaOf(tantivy.Document d) => tantivy.NoteMeta(
   id: d.id,
   title: d.title,
   previewText: d.previewText,
-  fileName: d.fileName,
   isPinned: d.isPinned,
-  createdAt: d.createdAt,
   updatedAt: d.updatedAt,
 );
 
@@ -84,7 +74,6 @@ NoteMetaData _makeMetaData({
   required String id,
   required String title,
   String previewText = '',
-  DateTime? createdAt,
   DateTime? updatedAt,
   bool isPinned = false,
 }) {
@@ -93,7 +82,6 @@ NoteMetaData _makeMetaData({
     id: id,
     title: title,
     previewText: previewText,
-    createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
   );
@@ -115,7 +103,6 @@ void main() {
         id: '',
         title: '',
         content: '',
-        createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
         previewText: '',
       ),
@@ -416,15 +403,40 @@ void main() {
     });
 
     test('returns NoteModel by id correctly', () async {
-      final doc = _makeDoc(id: 'solo', title: 'Solo Note');
-      when(() => mockIndexingService.getDocument('solo')).thenReturn(doc);
+      final fileName = await fileStorage.createNoteFile(
+        title: 'Solo Note',
+        markdown: '# Solo Note\nbody',
+      );
+      final doc = _makeDoc(id: fileName, title: 'Solo Note', isPinned: true);
+      when(() => mockIndexingService.getDocument(fileName)).thenReturn(doc);
 
-      final result = await repository.getNoteById('solo');
+      final result = await repository.getNoteById(fileName);
 
       expect(result, isNotNull);
-      expect(result!.id, equals('solo'));
+      expect(result!.id, equals('Solo Note.md'));
+      expect(result.fileName, equals('Solo Note.md'));
       expect(result.title, equals('Solo Note'));
+      expect(result.content, equals('# Solo Note\nbody'));
+      expect(result.isPinned, isTrue);
     });
+
+    test(
+      'returns null and purges the index entry when file is missing',
+      () async {
+        final doc = _makeDoc(id: 'orphan.md', title: 'Orphan');
+        when(
+          () => mockIndexingService.getDocument('orphan.md'),
+        ).thenReturn(doc);
+
+        final result = await repository.getNoteById('orphan.md');
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result, isNull);
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['orphan.md']),
+        ).called(1);
+      },
+    );
 
     test('returns null when document not found in Tantivy', () async {
       when(() => mockIndexingService.getDocument('missing')).thenReturn(null);
@@ -441,17 +453,20 @@ void main() {
 
   group('deleteNotes & upsertNote', () {
     test('deleteNotes calls deleteNotesBatch and deletes files', () async {
-      final doc1 = _makeDoc(id: '1', title: 'Note 1', fileName: 'Note 1.md');
-      final doc2 = _makeDoc(id: '2', title: 'Note 2', fileName: 'Note 2.md');
-      when(() => mockIndexingService.getDocument('1')).thenReturn(doc1);
-      when(() => mockIndexingService.getDocument('2')).thenReturn(doc2);
+      final id1 = await fileStorage.createNoteFile(
+        title: 'Note 1',
+        markdown: 'content 1',
+      );
+      final id2 = await fileStorage.createNoteFile(
+        title: 'Note 2',
+        markdown: 'content 2',
+      );
 
-      await fileStorage.createNoteFile(title: 'Note 1', markdown: 'content 1');
-      await fileStorage.createNoteFile(title: 'Note 2', markdown: 'content 2');
+      await repository.deleteNotes([id1, id2]);
 
-      await repository.deleteNotes(['1', '2']);
-
-      verify(() => mockIndexingService.deleteNotesBatch(['1', '2'])).called(1);
+      verify(
+        () => mockIndexingService.deleteNotesBatch(['Note 1.md', 'Note 2.md']),
+      ).called(1);
       expect(await fileStorage.noteFileExists('Note 1.md'), isFalse);
       expect(await fileStorage.noteFileExists('Note 2.md'), isFalse);
     });
@@ -536,7 +551,6 @@ void main() {
         final doc = _makeDoc(
           id: 'Open Test.md',
           title: 'Open Test',
-          fileName: 'Open Test.md',
         );
         when(
           () => mockIndexingService.getDocument('Open Test.md'),
@@ -652,7 +666,6 @@ void main() {
         final ghostDoc = _makeDoc(
           id: 'ghost-1',
           title: 'Ghost Note',
-          fileName: 'ghost.md',
         );
         when(
           () => mockIndexingService.getAllMetadata(),
@@ -678,7 +691,6 @@ void main() {
           id: 'stress.md',
           title: 'Markdown **Stress** Test',
           updatedAt: stat.modified,
-          fileName: 'stress.md',
         );
         when(
           () => mockIndexingService.getAllMetadata(),
@@ -708,7 +720,6 @@ void main() {
         id: 'clean.md',
         title: 'Markdown Stress Test',
         updatedAt: stat.modified,
-        fileName: 'clean.md',
       );
       when(
         () => mockIndexingService.getAllMetadata(),
@@ -731,7 +742,6 @@ void main() {
           id: 'modified_note.md',
           title: 'Old Title',
           updatedAt: oldUpdatedAt,
-          fileName: 'modified_note.md',
         );
         when(
           () => mockIndexingService.getAllMetadata(),
@@ -764,7 +774,6 @@ void main() {
           id: 'legacy-uuid-1',
           title: 'Note 1',
           updatedAt: fileModified,
-          fileName: 'renamed_note.md',
         );
         when(
           () => mockIndexingService.getAllMetadata(),
@@ -794,7 +803,6 @@ void main() {
         final doc = _makeDoc(
           id: 'ghost-note',
           title: 'Ghost Title',
-          fileName: 'missing_on_disk.md',
         );
         when(
           () => mockIndexingService.getDocument('ghost-note'),
@@ -845,7 +853,6 @@ void main() {
           id: 'unmodified.md',
           title: 'Unmodified',
           updatedAt: stat.modified,
-          fileName: 'unmodified.md',
         );
         when(
           () => mockIndexingService.getAllMetadata(),

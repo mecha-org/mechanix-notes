@@ -7,7 +7,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
-  static const int currentSchemaVersion = 3;
+  static const int currentSchemaVersion = 4;
   Future<void>? _initFuture;
   bool _initialized = false;
 
@@ -85,7 +85,6 @@ class IndexingService {
       id: doc.id,
       title: doc.title,
       previewText: doc.previewText,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(doc.createdAt.toInt()),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(doc.updatedAt.toInt()),
       isPinned: doc.isPinned,
     );
@@ -96,7 +95,6 @@ class IndexingService {
       id: meta.id,
       title: meta.title,
       previewText: meta.previewText,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(meta.createdAt.toInt()),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(meta.updatedAt.toInt()),
       isPinned: meta.isPinned,
     );
@@ -110,9 +108,6 @@ class IndexingService {
       id: note.id,
       title: note.title,
       previewText: note.previewText,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(
-        note.createdAt.millisecondsSinceEpoch,
-      ),
       updatedAt: DateTime.fromMillisecondsSinceEpoch(
         note.updatedAt.millisecondsSinceEpoch,
       ),
@@ -125,11 +120,7 @@ class IndexingService {
       id: note.id,
       title: note.title,
       previewText: note.previewText,
-      fileName: note.fileName,
       isPinned: note.isPinned,
-      createdAt: tantivy.PlatformInt64Util.from(
-        note.createdAt.millisecondsSinceEpoch,
-      ),
       updatedAt: tantivy.PlatformInt64Util.from(
         note.updatedAt.millisecondsSinceEpoch,
       ),

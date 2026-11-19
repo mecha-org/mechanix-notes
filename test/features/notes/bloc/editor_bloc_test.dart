@@ -29,7 +29,6 @@ NoteModel makeNote({
   String title = kTestTitle,
   String content = kSomeMarkdown,
   String plainText = kSomePlainText,
-  DateTime? createdAt,
   DateTime? updatedAt,
   bool isPinned = false,
 }) {
@@ -42,7 +41,6 @@ NoteModel makeNote({
     title: title,
     content: content,
     previewText: previewText,
-    createdAt: createdAt ?? now,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
   );
@@ -703,60 +701,6 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'preserves original createdAt when updating',
-      build: buildBloc,
-      setUp: () {
-        final original = makeNote(createdAt: DateTime(2020, 6, 15));
-        when(
-          () => repository.getNoteById(kTestNoteId),
-        ).thenAnswer((_) async => original);
-        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: 'Different Title',
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(
-        EditorSaveRequested(content: kSomeMarkdown, plainText: kSomePlainText),
-      ),
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final saved = captured.first as NoteModel;
-        expect(saved.createdAt, DateTime(2020, 6, 15));
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
-      'updatedAt is newer than createdAt after update',
-      build: buildBloc,
-      setUp: () {
-        final original = makeNote(createdAt: DateTime(2020, 1, 1));
-        when(
-          () => repository.getNoteById(kTestNoteId),
-        ).thenAnswer((_) async => original);
-        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: 'Updated',
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(
-        EditorSaveRequested(content: kSomeMarkdown, plainText: kSomePlainText),
-      ),
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final saved = captured.first as NoteModel;
-        expect(saved.updatedAt.isAfter(saved.createdAt), isTrue);
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
       'emits EditorFailure(failedToSaveNote) when upsertNote throws',
       build: buildBloc,
       setUp: () {
@@ -1063,36 +1007,6 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'auto-save preserves original createdAt for existing note',
-      build: buildBloc,
-      setUp: () {
-        final original = makeNote(createdAt: DateTime(2021, 3, 10));
-        when(
-          () => repository.getNoteById(kTestNoteId),
-        ).thenAnswer((_) async => original);
-        when(() => repository.upsertNote(captureAny())).thenAnswer(savedId);
-      },
-      seed: () => const EditorLoaded(
-        noteId: kTestNoteId,
-        title: 'Changed Title',
-        isNewNote: false,
-      ),
-      act: (bloc) => bloc.add(
-        EditorAutoSaveRequested(
-          content: kSomeMarkdown,
-          plainText: kSomePlainText,
-        ),
-      ),
-      verify: (_) {
-        final captured = verify(
-          () => repository.upsertNote(captureAny()),
-        ).captured;
-        final saved = captured.first as NoteModel;
-        expect(saved.createdAt, DateTime(2021, 3, 10));
-      },
-    );
-
-    blocTest<EditorBloc, EditorState>(
       'previewText truncated at 40 chars during auto-save',
       build: buildBloc,
       setUp: () {
@@ -1203,13 +1117,12 @@ void main() {
       setUp: () {
         when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
-      seed: () => EditorLoaded(
+      seed: () => const EditorLoaded(
         noteId: kTestNoteId,
         title: kTestTitle,
         markdownContent: '# Initial',
         lastSavedContent: '# Initial',
         lastSavedTitle: kTestTitle,
-        createdAt: DateTime(2025, 5, 20),
         isNewNote: false,
       ),
       act: (bloc) => bloc.add(
@@ -1227,13 +1140,12 @@ void main() {
     blocTest<EditorBloc, EditorState>(
       'skips auto-save entirely with zero repository calls when content matches lastSavedContent',
       build: buildBloc,
-      seed: () => EditorLoaded(
+      seed: () => const EditorLoaded(
         noteId: kTestNoteId,
         title: kTestTitle,
         markdownContent: '# Initial',
         lastSavedContent: '# Initial',
         lastSavedTitle: kTestTitle,
-        createdAt: DateTime(2025, 5, 20),
         isNewNote: false,
       ),
       act: (bloc) => bloc.add(
