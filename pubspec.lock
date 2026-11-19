@@ -424,7 +424,7 @@ packages:
     description:
       path: "."
       ref: "feat/pre-release"
-      resolved-ref: a644820334cb7eeaefbbea01123b99513dc0b7be
+      resolved-ref: "100d44e72fc844bb7fa8659dbcb0139686771c6c"
       url: "https://gitlab.com/ojas-mecha/live_markdown_editor.git"
     source: git
     version: "0.11.0"
