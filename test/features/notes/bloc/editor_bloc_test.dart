@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:bloc_test/bloc_test.dart';
 import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
@@ -333,11 +334,10 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'saves new note when title is non-empty even if body is blank',
+      'discards new note whose content was cleared even if a title was set',
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
@@ -346,11 +346,8 @@ void main() {
       ),
       act: (bloc) =>
           bloc.add(EditorSaveRequested(content: kEmptyMarkdown, plainText: '')),
-      expect: () => [
-        isA<EditorLoaded>().having((s) => s.isSaving, 'isSaving', true),
-        isA<EditorSaveSuccess>().having((s) => s.noteId, 'noteId', kTestNoteId),
-      ],
-      verify: (_) => verify(() => repository.upsertNote(any())).called(1),
+      expect: () => [isA<EditorDiscarded>()],
+      verify: (_) => verifyNever(() => repository.upsertNote(any())),
     );
 
     blocTest<EditorBloc, EditorState>(
@@ -781,6 +778,30 @@ void main() {
       },
     );
 
+    for (final cleared in ['', '# ', '#', '  \n\n']) {
+      blocTest<EditorBloc, EditorState>(
+        'emits EditorDeleteRequest when an existing titled note is cleared to ${jsonEncode(cleared)}',
+        build: buildBloc,
+        seed: () => const EditorLoaded(
+          noteId: kTestNoteId,
+          title: kTestTitle,
+          markdownContent: kSomeMarkdown,
+          lastSavedContent: kSomeMarkdown,
+          lastSavedTitle: kTestTitle,
+          isNewNote: false,
+        ),
+        act: (bloc) => bloc.add(EditorSaveRequested(content: cleared)),
+        expect: () => [
+          isA<EditorDeleteRequest>().having(
+            (s) => s.noteId,
+            'noteId',
+            kTestNoteId,
+          ),
+        ],
+        verify: (_) => verifyNever(() => repository.upsertNote(any())),
+      );
+    }
+
     blocTest<EditorBloc, EditorState>(
       'emits EditorDeleteRequest when existing note is saved with empty content',
       build: buildBloc,
@@ -1036,27 +1057,39 @@ void main() {
     );
 
     blocTest<EditorBloc, EditorState>(
-      'auto-saves new note with non-empty title but empty body',
+      'skips auto-save for new note whose content was cleared even if a title was set',
       build: buildBloc,
       setUp: () {
         when(() => repository.getNoteById(any())).thenAnswer((_) async => null);
-        when(() => repository.upsertNote(any())).thenAnswer(savedId);
       },
       seed: () => const EditorLoaded(
         noteId: kTestNoteId,
-        title: kTestTitle, // title present
+        title: kTestTitle,
         isNewNote: true,
       ),
       act: (bloc) => bloc.add(
-        EditorAutoSaveRequested(
-          content: kEmptyMarkdown,
-          plainText:
-              '', // empty body — but title is non-empty so skip guard doesn't fire
-        ),
+        EditorAutoSaveRequested(content: kEmptyMarkdown, plainText: ''),
       ),
-      // The skip guard is: isNewNote && title.trim().isEmpty && plainText.trim().isEmpty
-      // title is non-empty → guard is false → save proceeds
-      verify: (_) => verify(() => repository.upsertNote(any())).called(1),
+      expect: () => <EditorState>[],
+      verify: (_) => verifyNever(() => repository.upsertNote(any())),
+    );
+
+    blocTest<EditorBloc, EditorState>(
+      'skips auto-save when an existing titled note is cleared (no rename to untitled)',
+      build: buildBloc,
+      seed: () => const EditorLoaded(
+        noteId: kTestNoteId,
+        title: kTestTitle,
+        markdownContent: kSomeMarkdown,
+        lastSavedContent: kSomeMarkdown,
+        lastSavedTitle: kTestTitle,
+        isNewNote: false,
+      ),
+      act: (bloc) => bloc.add(
+        EditorAutoSaveRequested(content: kEmptyMarkdown, plainText: ''),
+      ),
+      expect: () => <EditorState>[],
+      verify: (_) => verifyNever(() => repository.upsertNote(any())),
     );
 
     blocTest<EditorBloc, EditorState>(

@@ -53,6 +53,7 @@ tantivy.Document _makeDoc({
   return tantivy.Document(
     id: id,
     title: title,
+    content: '',
     previewText: previewText,
     isPinned: isPinned,
     updatedAt: tantivy.PlatformInt64Util.from(

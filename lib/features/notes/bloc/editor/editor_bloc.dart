@@ -137,8 +137,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
     try {
       final markdown = event.content;
-      final plainText = (event.plainText ?? markdownToPlainText(markdown))
-          .trim();
+      final plainText = _plainTextOf(markdown, event.plainText);
 
       NoteModel? existing;
       if (current.lastSavedContent.isEmpty) {
@@ -214,6 +213,13 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
     }
   }
 
+  /// Plain text of [markdown], with a lone `#` (an untyped heading) counted
+  /// as empty so a note cleared down to it is treated as empty.
+  static String _plainTextOf(String markdown, String? plainText) {
+    if (markdown.trim() == '#') return '';
+    return (plainText ?? markdownToPlainText(markdown)).trim();
+  }
+
   (String title, String previewText) _extractTitleAndPreview(
     String currentTitle,
     String plainText, {
@@ -221,9 +227,11 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
   }) {
     final trimmed = plainText.trim();
     if (trimmed.isEmpty) {
+      // The title is derived from the content, so a cleared note has no title
+      // left: return '' so the save path treats it as empty and deletes it.
       final hasNoContent =
           content == null || content.trim().isEmpty || content.trim() == '#';
-      return (hasNoContent && currentTitle.isEmpty ? '' : currentTitle, '');
+      return (hasNoContent ? '' : currentTitle, '');
     }
 
     if (content != null && content.isNotEmpty) {
@@ -280,8 +288,7 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
 
     try {
       final markdown = event.content;
-      final plainText = (event.plainText ?? markdownToPlainText(markdown))
-          .trim();
+      final plainText = _plainTextOf(markdown, event.plainText);
 
       NoteModel? existing;
       if (current.lastSavedContent.isEmpty) {
@@ -318,8 +325,10 @@ class EditorBloc extends Bloc<EditorEvent, EditorState> {
         }
       }
 
-      // Don't auto-save if new and empty
-      if (current.isNewNote && note.title.trim().isEmpty && plainText.isEmpty) {
+      // Don't auto-save an empty note. A new one is discarded on close and an
+      // existing one is deleted on close; saving it here would rename the
+      // existing file to the default untitled name first.
+      if (note.title.trim().isEmpty && plainText.isEmpty) {
         return;
       }
 

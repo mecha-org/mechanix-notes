@@ -7,7 +7,7 @@ import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
-  static const int currentSchemaVersion = 4;
+  static const int currentSchemaVersion = 5;
   Future<void>? _initFuture;
   bool _initialized = false;
 
@@ -109,6 +109,7 @@ class IndexingService {
     return tantivy.Document(
       id: note.id,
       title: note.title,
+      content: note.content,
       previewText: note.previewText,
       isPinned: note.isPinned,
       updatedAt: tantivy.PlatformInt64Util.from(
