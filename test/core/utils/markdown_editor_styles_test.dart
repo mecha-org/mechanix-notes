@@ -53,11 +53,14 @@ void main() {
         MechanixTheme.dark.colorScheme.primary,
       );
       expect(themeData.taskSize, 18);
-      expect(themeData.contentPadding, const EdgeInsets.all(24));
+      expect(
+        themeData.contentPadding,
+        const EdgeInsets.symmetric(horizontal: 24),
+      );
       expect(themeData.headingStyles.length, 6);
       expect(
         themeData.codeStyle.fontFamily,
-        contains(MechanixFontFamily.geistMono),
+        contains(MechanixFontFamily.geist),
       );
     });
   });

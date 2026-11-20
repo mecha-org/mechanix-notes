@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_bloc.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
@@ -22,6 +22,7 @@ class FakeNoteRepository implements NoteRepository {
   Object? watchError;
   Object? deleteError;
   int watchCount = 0;
+  int syncCount = 0;
   final List<List<String>> deletedBatches = [];
 
   FakeNoteRepository([Iterable<NoteMetaData> notes = const []]) {
@@ -75,7 +76,13 @@ class FakeNoteRepository implements NoteRepository {
   Future<NoteModel?> getNoteById(String id) async => null;
 
   @override
-  Future<void> upsertNote(NoteModel note) async {}
+  Future<String> upsertNote(NoteModel note) async => note.id;
+
+  @override
+  Stream<NoteRenamed> get noteRenames => const Stream.empty();
+
+  @override
+  Stream<Set<String>> get noteRemovals => const Stream.empty();
 
   @override
   Future<List<String>> searchNoteIds(String query) async => [];
@@ -84,7 +91,19 @@ class FakeNoteRepository implements NoteRepository {
   Future<List<NoteMetaData>> getNotesMetaData(List<String> ids) async => [];
 
   @override
-  Future<void> close() async {}
+  Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45}) async =>
+      sorted.take(limit).toList();
+
+  @override
+  Future<int> syncNotesFromDisk() async {
+    syncCount++;
+    return 0;
+  }
+
+  @override
+  Future<void> close() async {
+    await _changes.close();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -98,9 +117,7 @@ NoteMetaData note(String id, DateTime updatedAt, {bool pinned = false}) =>
       id: id,
       title: 'Note $id',
       previewText: 'Preview $id',
-      createdAt: updatedAt,
       updatedAt: updatedAt,
-      height: 0,
       isPinned: pinned,
     );
 
@@ -147,6 +164,14 @@ void main() {
       expect(repo.watchCount, 1);
       expect(bloc.state.isLoading, isFalse);
       expectInSync(bloc, repo);
+    });
+
+    test('triggers syncNotesFromDisk in the background on creation', () async {
+      repo = FakeNoteRepository(notesSpacedBy3h(2));
+      bloc = buildBloc(repo);
+      await pumpEventQueue();
+
+      expect(repo.syncCount, 1);
     });
 
     test('emits an empty, loaded state when there are no notes', () async {

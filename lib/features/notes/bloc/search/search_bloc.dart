@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
@@ -8,6 +10,11 @@ import 'package:mechanix_notes/features/notes/data/repository/note_repository.da
 
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
   final NoteRepository noteRepository;
+  late final StreamSubscription<Set<String>> _removalsSub;
+
+  /// Ids removed while a search was in flight; that search may have read the
+  /// index before the removal and must not show them.
+  final Set<String> _removedDuringSearch = {};
 
   SearchBloc({required this.noteRepository}) : super(const SearchState()) {
     on<SearchQueryChanged>(_onSearchQueryChanged, transformer: restartable());
@@ -16,6 +23,19 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
       transformer: droppable(),
     );
     on<ClearSearch>(_onClearSearch);
+    on<SearchNotesRemoved>(_onNotesRemoved);
+
+    // A note deleted from the editor is removed from the index after the
+    // editor has already popped, so the re-run search can still return it.
+    _removalsSub = noteRepository.noteRemovals.listen(
+      (ids) => add(SearchNotesRemoved(ids: ids)),
+    );
+  }
+
+  @override
+  Future<void> close() async {
+    await _removalsSub.cancel();
+    return super.close();
   }
 
   Future<void> _onSearchQueryChanged(
@@ -37,9 +57,15 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     );
     AppLogger.i("Searching notes for query: $query");
 
+    _removedDuringSearch.clear();
     try {
-      final ids = await noteRepository.searchNoteIds(query);
-      final firstPage = await noteRepository.getNotesMetaData(_pageIds(ids, 0));
+      var ids = await noteRepository.searchNoteIds(query);
+      var firstPage = await noteRepository.getNotesMetaData(_pageIds(ids, 0));
+      if (_removedDuringSearch.isNotEmpty) {
+        bool kept(String id) => !_removedDuringSearch.contains(id);
+        ids = ids.where(kept).toList();
+        firstPage = firstPage.where((n) => kept(n.id)).toList();
+      }
 
       AppLogger.i("Found ${ids.length} matching notes");
 
@@ -48,7 +74,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
           status: SearchStatus.success,
           results: firstPage,
           resultIds: ids,
-          hasMore: ids.length > Constants.pageSize,
+          hasMore: ids.length > firstPage.length,
           currentPage: 0,
           isLoadingMore: false,
         ),
@@ -68,7 +94,9 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     AppLogger.i("Loading more search results");
     final ids = state.resultIds;
     final nextPage = state.currentPage + 1;
-    final pageIds = _pageIds(ids, nextPage);
+    // Offset by what is loaded, not by page number: removals shift the ids.
+    final loaded = state.results.length;
+    final pageIds = ids.skip(loaded).take(Constants.pageSize).toList();
 
     if (pageIds.isEmpty) {
       emit(state.copyWith(hasMore: false));
@@ -86,7 +114,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
         state.copyWith(
           results: [...state.results, ...newBatch],
           isLoadingMore: false,
-          hasMore: (nextPage + 1) * Constants.pageSize < ids.length,
+          hasMore: loaded + pageIds.length < ids.length,
           currentPage: nextPage,
         ),
       );
@@ -101,6 +129,27 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
   static List<String> _pageIds(List<String> ids, int page) =>
       ids.skip(page * Constants.pageSize).take(Constants.pageSize).toList();
+
+  void _onNotesRemoved(SearchNotesRemoved event, Emitter<SearchState> emit) {
+    final ids = event.ids;
+    _removedDuringSearch.addAll(ids);
+    if (!state.resultIds.any(ids.contains)) return;
+
+    final remainingIds = state.resultIds
+        .where((id) => !ids.contains(id))
+        .toList();
+    final remainingResults = state.results
+        .where((n) => !ids.contains(n.id))
+        .toList();
+
+    emit(
+      state.copyWith(
+        results: remainingResults,
+        resultIds: remainingIds,
+        hasMore: remainingResults.length < remainingIds.length,
+      ),
+    );
+  }
 
   void _onClearSearch(ClearSearch event, Emitter<SearchState> emit) {
     emit(const SearchState());

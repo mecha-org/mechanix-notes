@@ -190,6 +190,238 @@ void main() {
       );
     });
 
+    for (final c in const [
+      ('notes_text_bold_button', '**'),
+      ('notes_text_italic_button', '*'),
+      ('notes_text_strikethrough_button', '~~'),
+    ]) {
+      testWidgets('${c.$1} with no selection toggles active/inactive', (
+        tester,
+      ) async {
+        controller.value = const TextEditingValue(
+          text: 'Hi ',
+          selection: TextSelection.collapsed(offset: 3),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        final btn = find.byKey(Key(c.$1));
+        expect(tester.widget<MechanixIconButton>(btn).isSelected, isFalse);
+
+        // First tap: inserts empty pair and becomes active.
+        await tester.tap(btn);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'Hi ${c.$2}${c.$2}');
+        expect(tester.widget<MechanixIconButton>(btn).isSelected, isTrue);
+
+        // Second tap: removes the empty pair and becomes inactive.
+        await tester.tap(btn);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'Hi ');
+        expect(controller.selection, const TextSelection.collapsed(offset: 3));
+        expect(tester.widget<MechanixIconButton>(btn).isSelected, isFalse);
+      });
+
+      testWidgets('${c.$1} inside formatted text steps out of it', (
+        tester,
+      ) async {
+        final text = '${c.$2}abc${c.$2}';
+        controller.value = TextEditingValue(
+          text: text,
+          selection: TextSelection.collapsed(offset: c.$2.length + 3),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        final btn = find.byKey(Key(c.$1));
+        expect(tester.widget<MechanixIconButton>(btn).isSelected, isTrue);
+
+        await tester.tap(btn);
+        await tester.pumpAndSettle();
+        expect(controller.text, text);
+        expect(controller.selection.baseOffset, text.length);
+        expect(tester.widget<MechanixIconButton>(btn).isSelected, isFalse);
+      });
+    }
+
+    group('style state follows the caret (contentStart < caret <= end)', () {
+      final boldKey = find.byKey(const Key('notes_text_bold_button'));
+      final italicKey = find.byKey(const Key('notes_text_italic_button'));
+      final strikeKey = find.byKey(
+        const Key('notes_text_strikethrough_button'),
+      );
+
+      Future<({bool bold, bool italic, bool strike})> stateAt(
+        WidgetTester tester,
+        String text,
+        TextSelection selection,
+      ) async {
+        controller.value = TextEditingValue(text: text, selection: selection);
+        await tester.pump();
+        return (
+          bold: tester.widget<MechanixIconButton>(boldKey).isSelected == true,
+          italic:
+              tester.widget<MechanixIconButton>(italicKey).isSelected == true,
+          strike:
+              tester.widget<MechanixIconButton>(strikeKey).isSelected == true,
+        );
+      }
+
+      // (text, first active caret, last active caret, bold, italic, strike)
+      const cases = [
+        ('***word***', 4, 7, true, true, false),
+        ('**word**', 3, 6, true, false, false),
+        ('*word*', 2, 5, false, true, false),
+        ('~~word~~', 3, 6, false, false, true),
+        ('a ***word*** b', 6, 9, true, true, false),
+      ];
+
+      for (final c in cases) {
+        testWidgets('${c.$1}: active only at ${c.$2}..${c.$3}', (tester) async {
+          await tester.pumpWidget(buildTestWidget());
+          for (var caret = 0; caret <= c.$1.length; caret++) {
+            final on = caret >= c.$2 && caret <= c.$3;
+            final s = await stateAt(
+              tester,
+              c.$1,
+              TextSelection.collapsed(offset: caret),
+            );
+            expect(s.bold, on && c.$4, reason: 'bold at $caret');
+            expect(s.italic, on && c.$5, reason: 'italic at $caret');
+            expect(s.strike, on && c.$6, reason: 'strike at $caret');
+          }
+        });
+      }
+
+      for (final prefix in const [
+        '# ',
+        '## ',
+        '### ',
+        '#### ',
+        '##### ',
+        '###### ',
+        '- ',
+        '1. ',
+        '- [ ] ',
+        '> ',
+      ]) {
+        testWidgets('"$prefix***word***" follows the same rule', (
+          tester,
+        ) async {
+          await tester.pumpWidget(buildTestWidget());
+          final text = '$prefix***word***';
+          final p = prefix.length;
+          for (var caret = 0; caret <= text.length; caret++) {
+            final on = caret >= p + 4 && caret <= p + 7;
+            final s = await stateAt(
+              tester,
+              text,
+              TextSelection.collapsed(offset: caret),
+            );
+            expect(s.bold, on, reason: 'bold at $caret');
+            expect(s.italic, on, reason: 'italic at $caret');
+          }
+        });
+      }
+
+      testWidgets('partial overlap: each style follows its own letters', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        // **ab *cd* ef**  bold letters 2..12, italic letters 6..8
+        const text = '**ab *cd* ef**';
+        for (var caret = 0; caret <= text.length; caret++) {
+          final s = await stateAt(
+            tester,
+            text,
+            TextSelection.collapsed(offset: caret),
+          );
+          expect(s.bold, caret >= 3 && caret <= 12, reason: 'bold at $caret');
+          expect(
+            s.italic,
+            caret >= 7 && caret <= 8,
+            reason: 'italic at $caret',
+          );
+        }
+      });
+
+      testWidgets('empty pair stays armed: **|**, *|*, ***|***, ~~|~~', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        var s = await stateAt(
+          tester,
+          'x ****',
+          const TextSelection.collapsed(offset: 4),
+        );
+        expect((s.bold, s.italic), (true, false));
+        s = await stateAt(
+          tester,
+          'x **',
+          const TextSelection.collapsed(offset: 3),
+        );
+        expect((s.bold, s.italic), (false, true));
+        s = await stateAt(
+          tester,
+          'x ******',
+          const TextSelection.collapsed(offset: 5),
+        );
+        expect((s.bold, s.italic), (true, true));
+        s = await stateAt(
+          tester,
+          'x ~~~~',
+          const TextSelection.collapsed(offset: 4),
+        );
+        expect(s.strike, isTrue);
+      });
+
+      testWidgets('selection: on only when every selected letter has it', (
+        tester,
+      ) async {
+        await tester.pumpWidget(buildTestWidget());
+        const text = 'a ***word*** b';
+        // Just the word.
+        var s = await stateAt(
+          tester,
+          text,
+          const TextSelection(baseOffset: 5, extentOffset: 9),
+        );
+        expect((s.bold, s.italic), (true, true));
+        // Word with its markers: markers are ignored.
+        s = await stateAt(
+          tester,
+          text,
+          const TextSelection(baseOffset: 2, extentOffset: 12),
+        );
+        expect((s.bold, s.italic), (true, true));
+        // Includes the plain `a`.
+        s = await stateAt(
+          tester,
+          text,
+          const TextSelection(baseOffset: 0, extentOffset: 12),
+        );
+        expect((s.bold, s.italic), (false, false));
+        // Only markers selected: no letters, nothing on.
+        s = await stateAt(
+          tester,
+          text,
+          const TextSelection(baseOffset: 2, extentOffset: 5),
+        );
+        expect((s.bold, s.italic), (false, false));
+      });
+    });
+
+    testWidgets('***bold** more* keeps italic-only area before bold', (
+      tester,
+    ) async {
+      const text = '***bold** more*';
+      controller.value = const TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: 12),
+      );
+      await tester.pumpWidget(buildTestWidget());
+      final bold = find.byKey(const Key('notes_text_bold_button'));
+      final italic = find.byKey(const Key('notes_text_italic_button'));
+      expect(tester.widget<MechanixIconButton>(bold).isSelected, isFalse);
+      expect(tester.widget<MechanixIconButton>(italic).isSelected, isTrue);
+    });
+
     testWidgets('tapping Checklist button toggles checklist format', (
       tester,
     ) async {
@@ -275,5 +507,60 @@ void main() {
         );
       },
     );
+
+    testWidgets('H2 line has H2 active and Body inactive', (tester) async {
+      controller.value = const TextEditingValue(
+        text: '## Subheading',
+        selection: TextSelection.collapsed(offset: 5),
+      );
+
+      await tester.pumpWidget(buildTestWidget());
+
+      final h1Finder = find.byKey(const Key('notes_text_contextual_button'));
+      final h2Finder = find.byKey(const Key('notes_text_h2_button'));
+      final bodyFinder = find.byKey(const Key('notes_text_body_button'));
+
+      expect(tester.widget<MechanixIconButton>(h1Finder).isSelected, isFalse);
+      expect(tester.widget<MechanixIconButton>(h2Finder).isSelected, isTrue);
+      expect(tester.widget<MechanixIconButton>(bodyFinder).isSelected, isFalse);
+    });
+
+    testWidgets('H3 through H6 lines map to H2 active and Body inactive', (
+      tester,
+    ) async {
+      for (final prefix in const [
+        '### ',
+        '#### ',
+        '##### ',
+        '###### ',
+      ]) {
+        controller.value = TextEditingValue(
+          text: '${prefix}Title',
+          selection: TextSelection.collapsed(offset: prefix.length + 2),
+        );
+
+        await tester.pumpWidget(buildTestWidget());
+
+        final h1Finder = find.byKey(const Key('notes_text_contextual_button'));
+        final h2Finder = find.byKey(const Key('notes_text_h2_button'));
+        final bodyFinder = find.byKey(const Key('notes_text_body_button'));
+
+        expect(
+          tester.widget<MechanixIconButton>(h1Finder).isSelected,
+          isFalse,
+          reason: 'H1 at $prefix',
+        );
+        expect(
+          tester.widget<MechanixIconButton>(h2Finder).isSelected,
+          isTrue,
+          reason: 'H2 at $prefix',
+        );
+        expect(
+          tester.widget<MechanixIconButton>(bodyFinder).isSelected,
+          isFalse,
+          reason: 'Body at $prefix',
+        );
+      }
+    });
   });
 }

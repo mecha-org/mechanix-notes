@@ -49,6 +49,7 @@ void main() {
 
   Widget buildTestWidget({required List<dynamic> groupedNotes}) {
     return MaterialApp(
+      theme: MechanixTheme.dark,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: BlocProvider<NotesBloc>.value(
@@ -67,36 +68,28 @@ void main() {
     id: 'n1',
     title: 'Daily Journal',
     previewText: 'Today started off with one of my new-found favourite bre...',
-    createdAt: DateTime(2026, 9, 9, 9, 0),
     updatedAt: DateTime(2026, 9, 9, 10, 0),
-    height: 60.0,
   );
 
   final note2 = NoteMetaData(
     id: 'n2',
     title: 'Skit dialogues',
-    previewText: 'Skit dialogues',
-    createdAt: DateTime(2026, 8, 21, 13, 0),
+    previewText: 'Characters: Alex, Sam and Jordan discussing the script...',
     updatedAt: DateTime(2026, 8, 21, 14, 0),
-    height: 60.0,
   );
 
   final note3 = NoteMetaData(
     id: 'n3',
     title: 'Culinary- curry',
-    previewText: 'Culinary- curry',
-    createdAt: DateTime(2026, 8, 21, 14, 0),
+    previewText: 'Recipe ingredients: onions, tomatoes, spices...',
     updatedAt: DateTime(2026, 8, 21, 15, 0),
-    height: 60.0,
   );
 
   final note4 = NoteMetaData(
     id: 'n4',
     title: 'Travel with family',
     previewText: 'Travel with family- rollercoaster ride irl!! So I...',
-    createdAt: DateTime(2026, 8, 9, 8, 0),
     updatedAt: DateTime(2026, 8, 9, 9, 0),
-    height: 60.0,
   );
 
   group('HomeListView with Grouped Notes', () {
@@ -162,9 +155,7 @@ void main() {
         id: 'p1',
         title: 'Important Note',
         previewText: 'This note is pinned',
-        createdAt: DateTime(2026, 9, 9, 9, 0),
         updatedAt: DateTime(2026, 9, 9, 10, 0),
-        height: 60.0,
         isPinned: true,
       );
 
@@ -198,7 +189,10 @@ void main() {
           matching: find.byType(MechanixListTile),
         ),
       );
-      expect(noteCardTile.leadingWidgets.first, isA<ImageIcon>());
+      expect(
+        (noteCardTile.leadingWidgets.first as Container).child,
+        isA<ImageIcon>(),
+      );
       expect(noteCardTile.trailingWidgets, isEmpty);
     });
 
@@ -274,9 +268,7 @@ void main() {
       id: id,
       title: 'Note $id',
       previewText: '',
-      createdAt: DateTime(2026, 9, 9),
       updatedAt: DateTime(2026, 9, 9),
-      height: 0,
     );
 
     testWidgets('note card and group header render at homeTileHeight', (

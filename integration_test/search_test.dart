@@ -79,7 +79,9 @@ void main() {
       expect(find.text('Other Note $suffix'), findsNothing);
     });
 
-    testWidgets('finds a note by body preview text', (tester) async {
+    testWidgets('does not match body text (only titles are indexed)', (
+      tester,
+    ) async {
       app.main([]);
       await tester.pumpAndSettle();
 
@@ -94,9 +96,9 @@ void main() {
       );
 
       await IntegrationTestHelper.openSearch(tester);
-      await IntegrationTestHelper.enterSearchQuery(tester, 'BodySnippet');
+      await IntegrationTestHelper.enterSearchQuery(tester, bodySnippet);
 
-      expect(find.text(title), findsOneWidget);
+      expect(find.text('No notes found'), findsOneWidget);
     });
 
     testWidgets('search is case insensitive', (tester) async {

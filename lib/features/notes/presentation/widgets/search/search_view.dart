@@ -109,6 +109,15 @@ class _SearchViewState extends State<SearchView> {
     }
   }
 
+  void _onBack() {
+    _debounceTimer?.cancel();
+    if (widget.onClose != null) {
+      widget.onClose!();
+    } else if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  }
+
   void _onSearchIconTap() {
     setState(() {
       _isSearchActive = true;
@@ -140,7 +149,7 @@ class _SearchViewState extends State<SearchView> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: _searchController.text.isEmpty && widget.onClose == null,
       onPopInvokedWithResult: (didPop, _) {
         if (didPop) return;
         if (_searchController.text.isNotEmpty) {
@@ -162,6 +171,7 @@ class _SearchViewState extends State<SearchView> {
               onSubmitted: _onSubmitted,
               onClear: _onClear,
               onClose: _onClose,
+              onBack: _onBack,
               onSearchIconTap: _onSearchIconTap,
             ),
             Expanded(

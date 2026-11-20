@@ -21,6 +21,7 @@ void main() {
 
     setUp(() {
       repository = MockNoteRepository();
+      when(() => repository.syncNotesFromDisk()).thenAnswer((_) async => 0);
     });
 
     NoteMetaData createNote({
@@ -33,8 +34,6 @@ void main() {
         title: 'Note $id',
         previewText: 'Preview $id',
         updatedAt: updatedAt,
-        createdAt: updatedAt,
-        height: 200,
         isPinned: isPinned,
       );
     }
