@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mechanix_notes/core/utils/icons.dart';
+import 'package:mechanix_notes/features/notes/presentation/widgets/search/arrow_key_selection.dart';
 import 'package:mechanix_notes/l10n/notes_localizations.dart';
 import 'package:widgets/widgets.dart';
 
@@ -123,77 +124,97 @@ class SearchAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: TextField(
+                  child: ArrowKeySelection(
                     controller: controller,
-                    focusNode: focusNode,
-                    autofocus: autofocus,
-                    textInputAction: TextInputAction.search,
-                    autocorrect: false,
-                    enableInteractiveSelection: true,
-                    onChanged: onQueryChanged,
-                    onSubmitted: onSubmitted,
-                    cursorColor: colorScheme.primary,
-                    style: textTheme.headlineSmall?.copyWith(
-                      color: colorScheme.onSurface,
-                    ),
-                    contextMenuBuilder: (context, editableTextState) {
-                      final List<ContextMenuButtonItem> buttonItems =
-                          editableTextState.contextMenuButtonItems;
-
-                      // Add Paste button manually if Flutter hid it
-                      final hasPaste = buttonItems.any(
-                        (item) => item.type == ContextMenuButtonType.paste,
-                      );
-                      if (!hasPaste) {
-                        buttonItems.add(
-                          ContextMenuButtonItem(
-                            type: ContextMenuButtonType.paste,
-                            onPressed: () {
-                              editableTextState.pasteText(
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      autofocus: autofocus,
+                      textInputAction: TextInputAction.search,
+                      autocorrect: false,
+                      enableInteractiveSelection: true,
+                      onChanged: onQueryChanged,
+                      onSubmitted: onSubmitted,
+                      cursorColor: colorScheme.primary,
+                      style: textTheme.headlineSmall?.copyWith(
+                        color: colorScheme.onSurface,
+                      ),
+                      contextMenuBuilder: (context, editableTextState) {
+                        // Fixed menu: Cut / Copy (when text is selected),
+                        // Paste and Select all, instead of Flutter's
+                        // platform-dependent defaults.
+                        final value = editableTextState.textEditingValue;
+                        final hasSelection =
+                            value.selection.isValid &&
+                            !value.selection.isCollapsed;
+                        final buttonItems = <ContextMenuButtonItem>[
+                          if (hasSelection) ...[
+                            ContextMenuButtonItem(
+                              type: ContextMenuButtonType.cut,
+                              onPressed: () => editableTextState.cutSelection(
                                 SelectionChangedCause.toolbar,
-                              );
-                            },
-                          ),
-                        );
-                      }
-
-                      // Same menu as the note editor's, with 16px labels.
-                      final anchors = editableTextState.contextMenuAnchors;
-                      return TextSelectionToolbar(
-                        anchorAbove: anchors.primaryAnchor,
-                        anchorBelow:
-                            anchors.secondaryAnchor ?? anchors.primaryAnchor,
-                        children: [
-                          for (final item in buttonItems)
-                            TextSelectionToolbarTextButton(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 10,
-                              ),
-                              onPressed: item.onPressed,
-                              child: Text(
-                                AdaptiveTextSelectionToolbar.getButtonLabel(
-                                  context,
-                                  item,
-                                ),
-                                style: const TextStyle(fontSize: 16),
                               ),
                             ),
-                        ],
-                      );
-                    },
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      errorBorder: InputBorder.none,
-                      disabledBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero,
-                      fillColor: Colors.transparent,
-                      hintText: effectiveSearchHint,
-                      hintStyle: textTheme.headlineSmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
+                            ContextMenuButtonItem(
+                              type: ContextMenuButtonType.copy,
+                              onPressed: () => editableTextState.copySelection(
+                                SelectionChangedCause.toolbar,
+                              ),
+                            ),
+                          ],
+                          ContextMenuButtonItem(
+                            type: ContextMenuButtonType.paste,
+                            onPressed: () => editableTextState.pasteText(
+                              SelectionChangedCause.toolbar,
+                            ),
+                          ),
+                          if (value.text.isNotEmpty)
+                            ContextMenuButtonItem(
+                              type: ContextMenuButtonType.selectAll,
+                              onPressed: () => editableTextState.selectAll(
+                                SelectionChangedCause.toolbar,
+                              ),
+                            ),
+                        ];
+
+                        // Same menu as the note editor's, with 16px labels.
+                        final anchors = editableTextState.contextMenuAnchors;
+                        return TextSelectionToolbar(
+                          anchorAbove: anchors.primaryAnchor,
+                          anchorBelow:
+                              anchors.secondaryAnchor ?? anchors.primaryAnchor,
+                          children: [
+                            for (final item in buttonItems)
+                              TextSelectionToolbarTextButton(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                onPressed: item.onPressed,
+                                child: Text(
+                                  AdaptiveTextSelectionToolbar.getButtonLabel(
+                                    context,
+                                    item,
+                                  ),
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                      decoration: InputDecoration(
+                        isDense: true,
+                        border: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        errorBorder: InputBorder.none,
+                        disabledBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        fillColor: Colors.transparent,
+                        hintText: effectiveSearchHint,
+                        hintStyle: textTheme.headlineSmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   ),

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mechanix_notes/core/utils/app_routes.dart';
 import 'package:mechanix_notes/features/notes/bloc/search/search_bloc.dart';
@@ -160,30 +161,34 @@ class _SearchViewState extends State<SearchView> {
           Navigator.of(context).pop();
         }
       },
-      child: SafeArea(
-        child: Column(
-          children: [
-            SearchAppBar(
-              isSearchActive: _isSearchActive,
-              controller: _searchController,
-              focusNode: _focusNode,
-              onQueryChanged: _onQueryChanged,
-              onSubmitted: _onSubmitted,
-              onClear: _onClear,
-              onClose: _onClose,
-              onBack: _onBack,
-              onSearchIconTap: _onSearchIconTap,
-            ),
-            Expanded(
-              child: _isSearchActive
-                  ? SearchList(
-                      query: _searchController.text,
-                      emptyMessage: widget.emptyMessage,
-                      onResultSelected: _handleResultSelected,
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ],
+      // Esc always goes straight back, even with a query typed.
+      child: CallbackShortcuts(
+        bindings: {const SingleActivator(LogicalKeyboardKey.escape): _onBack},
+        child: SafeArea(
+          child: Column(
+            children: [
+              SearchAppBar(
+                isSearchActive: _isSearchActive,
+                controller: _searchController,
+                focusNode: _focusNode,
+                onQueryChanged: _onQueryChanged,
+                onSubmitted: _onSubmitted,
+                onClear: _onClear,
+                onClose: _onClose,
+                onBack: _onBack,
+                onSearchIconTap: _onSearchIconTap,
+              ),
+              Expanded(
+                child: _isSearchActive
+                    ? SearchList(
+                        query: _searchController.text,
+                        emptyMessage: widget.emptyMessage,
+                        onResultSelected: _handleResultSelected,
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
         ),
       ),
     );
