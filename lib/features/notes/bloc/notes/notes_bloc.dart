@@ -1,7 +1,9 @@
+import 'dart:async';
+
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/enums.dart';
 import 'package:mechanix_notes/features/notes/bloc/notes/notes_event.dart';
@@ -24,12 +26,21 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
     on<SelectAllNotes>(_selectAllNotes);
     on<ClearSelection>(_clearSelection);
     on<TogglePinNote>(_togglePinNote);
+    on<SyncNotesFromDisk>(_onSyncNotesFromDisk);
 
     add(LoadNotes());
   }
 
   Future<void> _loadNotes(LoadNotes event, Emitter<NotesState> emit) async {
     emit(state.copyWith(isLoading: true));
+
+    // Reconcile the index with the notes folder in the background so that
+    unawaited(
+      noteRepository.syncNotesFromDisk().catchError((e) {
+        AppLogger.d("NotesBloc: Background disk sync error: $e");
+        return 0;
+      }),
+    );
 
     await emit.forEach<List<NoteMetaData>>(
       noteRepository.watchNotes(),
@@ -45,9 +56,11 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       },
       onError: (e, _) {
         AppLogger.e("Error loading notes: $e");
+        final isLocked = e is ObjectBoxException ||
+            e.toString().toLowerCase().contains('lock');
         return state.copyWith(
           isLoading: false,
-          error: e is ObjectBoxException
+          error: isLocked
               ? ErrorCategory.appAlreadyRunning
               : ErrorCategory.failedToLoadNotes,
         );
@@ -179,5 +192,18 @@ class NotesBloc extends Bloc<NotesEvent, NotesState> {
       _ when daysAgo <= 30 => const TimeGroup(TimeCategory.lastMonth),
       _ => TimeGroup(TimeCategory.custom, monthYear.format(updated)),
     };
+  }
+
+  /// Re-syncs the index with the notes folder. [watchNotes] then emits the
+  /// updated list, so there is no need to reload.
+  Future<void> _onSyncNotesFromDisk(
+    SyncNotesFromDisk event,
+    Emitter<NotesState> emit,
+  ) async {
+    try {
+      await noteRepository.syncNotesFromDisk();
+    } catch (e) {
+      AppLogger.e("NotesBloc: Disk sync failed: $e");
+    }
   }
 }

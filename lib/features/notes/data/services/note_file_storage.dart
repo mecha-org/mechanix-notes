@@ -1,11 +1,12 @@
 import 'dart:io';
 
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
-import 'package:path/path.dart' as p;
 
 class NoteFileStorage {
   static int _tempCounter = 0;
+  static final Map<String, DateTime> _recentSelfWrites = {};
   final Directory _directory;
 
   NoteFileStorage({Directory? notesDirectory})
@@ -13,24 +14,44 @@ class NoteFileStorage {
 
   Directory get directory => _directory;
 
+  /// Checks whether a modification event on [fileName] with [modifiedTime]
+  /// was initiated by this app's own save routine.
+  static bool isRecentSelfWrite(String fileName, DateTime modifiedTime) {
+    final recorded = _recentSelfWrites[fileName];
+    if (recorded == null) return false;
+    final diff = modifiedTime.difference(recorded).abs();
+    if (diff <= const Duration(seconds: 2)) return true;
+    _recentSelfWrites.remove(fileName);
+    return false;
+  }
+
+  /// Records an app-initiated write or rename for self-write echo suppression.
+  static void recordSelfWrite(String fileName, DateTime modifiedTime) {
+    _recentSelfWrites[fileName] = modifiedTime;
+    final now = DateTime.now();
+    _recentSelfWrites.removeWhere(
+      (_, time) => now.difference(time) > const Duration(seconds: 10),
+    );
+  }
+
   static Directory _resolveDefaultDirectory() {
     final customDocs = Platform.environment['DOCUMENTS_DIR'];
     if (customDocs != null && customDocs.isNotEmpty) {
-      return Directory(p.join(customDocs, Constants.notesSubDir));
+      return Directory('$customDocs/${Constants.notesSubDir}');
     }
 
     final xdgDocs = Platform.environment['XDG_DOCUMENTS_DIR'];
     if (xdgDocs != null && xdgDocs.isNotEmpty) {
-      return Directory(p.join(xdgDocs, Constants.notesSubDir));
+      return Directory('$xdgDocs/${Constants.notesSubDir}');
     }
 
     final home = Platform.environment['HOME'];
     if (home != null && home.isNotEmpty) {
-      return Directory(p.join(home, 'Documents', Constants.notesSubDir));
+      return Directory('$home/Documents/${Constants.notesSubDir}');
     }
 
     return Directory(
-      p.join(Directory.current.path, 'Documents', Constants.notesSubDir),
+      '${Directory.current.path}/Documents/${Constants.notesSubDir}',
     );
   }
 
@@ -64,113 +85,135 @@ class NoteFileStorage {
     // Remove leading and trailing dots, spaces, underscores
     sanitized = sanitized.replaceAll(RegExp(r'^[._\s]+|[._\s]+$'), '');
 
-    // Limit length to 100 characters to prevent filesystem limits
-    if (sanitized.length > 100) {
-      sanitized = sanitized.substring(0, 100).trim();
-    }
-
     if (sanitized.isEmpty) {
       return Constants.defaultNoteFileName;
+    }
+
+    // Limit filename length to 100 characters to remain safely below Linux NAME_MAX (255 bytes)
+    if (sanitized.length > 100) {
+      sanitized = sanitized.substring(0, 100).trim();
     }
 
     return sanitized;
   }
 
-  /// Resolves a unique filename for a note.
-  /// If [currentFileName] matches the base title, it is retained.
-  /// If a collision exists, increments with `(1)`, `(2)`, etc.
-  Future<String> resolveFileName({
-    required String title,
-    String? currentFileName,
-  }) async {
+  static bool isFileNameForTitle(String fileName, String title) {
     final baseName = sanitizeFileName(title);
+    final currentBase = fileName.endsWith('.md')
+        ? fileName.substring(0, fileName.length - 3)
+        : fileName;
+    return currentBase == baseName ||
+        RegExp(
+          '^${RegExp.escape(baseName)} \\(\\d+\\)\$',
+        ).hasMatch(currentBase);
+  }
 
-    // If currentFileName already belongs to this note and starts with baseName
-    if (currentFileName != null && currentFileName.isNotEmpty) {
-      final currentBase = p.withoutExtension(currentFileName);
-      // Exactly matches baseName or is a numbered variant of baseName (e.g. "Title (1)")
-      final isExactMatch = currentBase == baseName;
-      final isNumberedMatch = RegExp(
-        '^${RegExp.escape(baseName)} \\(\\d+\\)\$',
-      ).hasMatch(currentBase);
+  /// Creates a new note file named after [title] and returns its filename.
+  Future<String> createNoteFile({
+    required String title,
+    required String markdown,
+  }) async {
+    await ensureDirectoryExists();
+    final fileName = await _reserveFileName(title);
+    try {
+      await _writeAtomic(fileName, markdown);
+    } catch (_) {
+      await _releaseReservation(fileName);
+      rethrow;
+    }
+    return fileName;
+  }
 
-      if (isExactMatch || isNumberedMatch) {
-        return currentFileName;
-      }
+  Future<String> updateNoteFile({
+    required String fileName,
+    required String title,
+    required String markdown,
+  }) async {
+    await ensureDirectoryExists();
+    final oldFile = File('${_directory.path}/$fileName');
+    if (!await oldFile.exists()) {
+      throw NoteFileMissingException(fileName);
     }
 
-    // Try baseName.md
-    final initialCandidate = '$baseName.md';
-    if (initialCandidate == currentFileName) {
-      return initialCandidate;
+    if (isFileNameForTitle(fileName, title)) {
+      await _writeAtomic(fileName, markdown);
+      return fileName;
     }
 
-    if (!await noteFileExists(initialCandidate)) {
-      return initialCandidate;
+    final targetFileName = await _reserveFileName(title);
+    final targetPath = '${_directory.path}/$targetFileName';
+    try {
+      await oldFile.rename(targetPath);
+      AppLogger.i(
+        '[NoteFileStorage] Renamed note: $fileName -> $targetFileName',
+      );
+    } catch (e) {
+      AppLogger.d(
+        '[NoteFileStorage] Rename failed ($e), writing new file instead',
+      );
     }
 
-    // If initialCandidate exists and does not belong to this note, try numbered variants
-    var counter = 1;
-    while (true) {
-      final candidate = '$baseName ($counter).md';
-      if (candidate == currentFileName) {
+    try {
+      await _writeAtomic(targetFileName, markdown);
+    } catch (_) {
+      // Only drop the reservation if the old file was not moved onto it.
+      if (await oldFile.exists()) await _releaseReservation(targetFileName);
+      rethrow;
+    }
+
+    if (await oldFile.exists()) {
+      await oldFile.delete();
+      AppLogger.i('[NoteFileStorage] Renamed note: removed old file $fileName');
+    }
+    return targetFileName;
+  }
+
+  Future<String> _reserveFileName(String title) async {
+    final baseName = sanitizeFileName(title);
+    for (var counter = 0; ; counter++) {
+      final candidate = counter == 0
+          ? '$baseName.md'
+          : '$baseName ($counter).md';
+      try {
+        await File('${_directory.path}/$candidate').create(exclusive: true);
         return candidate;
+      } on FileSystemException {
+        if (await noteFileExists(candidate)) continue; // taken, try next
+        rethrow;
       }
-      if (!await noteFileExists(candidate)) {
-        return candidate;
-      }
-      counter++;
     }
   }
 
-  /// Writes note Markdown content atomically using a temporary file and atomic rename.
-  /// If [currentFileName] is provided and differs from the newly resolved filename,
-  /// the old file is safely deleted.
-  Future<String> writeNoteContent({
-    required String title,
-    required String markdown,
-    String? currentFileName,
-  }) async {
-    await ensureDirectoryExists();
+  /// Removes a reserved name that never received content.
+  Future<void> _releaseReservation(String fileName) async {
+    try {
+      final file = File('${_directory.path}/$fileName');
+      if (await file.exists() && await file.length() == 0) {
+        await file.delete();
+      }
+    } catch (_) {}
+  }
 
-    final targetFileName = await resolveFileName(
-      title: title,
-      currentFileName: currentFileName,
-    );
-
-    final targetPath = p.join(_directory.path, targetFileName);
+  /// Writes [markdown] to [fileName] via a temp file and an atomic rename,
+  Future<void> _writeAtomic(String fileName, String markdown) async {
+    final targetPath = '${_directory.path}/$fileName';
     final uniqueSuffix =
         '${DateTime.now().microsecondsSinceEpoch}_${++_tempCounter}';
-    final tempPath = p.join(
-      _directory.path,
-      '..tmp_${p.withoutExtension(targetFileName)}_$uniqueSuffix.md',
+    final baseName = fileName.endsWith('.md')
+        ? fileName.substring(0, fileName.length - 3)
+        : fileName;
+    final tempFile = File(
+      '${_directory.path}/..tmp_${baseName}_$uniqueSuffix.md',
     );
-
-    final tempFile = File(tempPath);
     try {
-      // 1. Atomic write: write to temp file and flush
       await tempFile.writeAsString(markdown, flush: true);
-
-      // 2. Atomic rename
       await tempFile.rename(targetPath);
+      AppLogger.i('[NoteFileStorage] Saved note to $fileName');
 
-      AppLogger.i('[NoteFileStorage] Saved note to $targetFileName');
-
-      // 3. Clean up previous file if filename changed (due to title rename)
-      if (currentFileName != null &&
-          currentFileName.isNotEmpty &&
-          currentFileName != targetFileName) {
-        await deleteNoteFile(currentFileName);
-        AppLogger.i(
-          '[NoteFileStorage] Renamed note: removed old file $currentFileName',
-        );
-      }
-
-      return targetFileName;
+      final stat = await File(targetPath).stat();
+      recordSelfWrite(fileName, stat.modified);
     } catch (e) {
-      AppLogger.e(
-        '[NoteFileStorage] Failed to write note to $targetFileName: $e',
-      );
+      AppLogger.e('[NoteFileStorage] Failed to write note to $fileName: $e');
       if (await tempFile.exists()) {
         try {
           await tempFile.delete();
@@ -184,7 +227,7 @@ class NoteFileStorage {
   /// Returns null if the file does not exist.
   Future<String?> readNoteContent(String fileName) async {
     try {
-      final file = File(p.join(_directory.path, fileName));
+      final file = File('${_directory.path}/$fileName');
       if (!await file.exists()) {
         AppLogger.d('[NoteFileStorage] File not found: $fileName');
         return null;
@@ -199,13 +242,13 @@ class NoteFileStorage {
   /// Safely deletes the given [fileName] and any leftover temporary file.
   Future<void> deleteNoteFile(String fileName) async {
     try {
-      final file = File(p.join(_directory.path, fileName));
+      final file = File('${_directory.path}/$fileName');
       if (await file.exists()) {
         await file.delete();
         AppLogger.i('[NoteFileStorage] Deleted file: $fileName');
       }
 
-      final tempFile = File(p.join(_directory.path, '..tmp_$fileName'));
+      final tempFile = File('${_directory.path}/..tmp_$fileName');
       if (await tempFile.exists()) {
         await tempFile.delete();
       }
@@ -216,7 +259,23 @@ class NoteFileStorage {
 
   /// Checks if a note file with [fileName] exists.
   Future<bool> noteFileExists(String fileName) async {
-    final file = File(p.join(_directory.path, fileName));
+    final file = File('${_directory.path}/$fileName');
     return await file.exists();
+  }
+
+  /// Returns the last modified timestamp of the given [fileName], or null if the file does not exist.
+  Future<DateTime?> getFileLastModified(String fileName) async {
+    try {
+      final file = File('${_directory.path}/$fileName');
+      if (await file.exists()) {
+        final stat = await file.stat();
+        return stat.modified;
+      }
+    } catch (e) {
+      AppLogger.e(
+        '[NoteFileStorage] Failed to get modified time for $fileName: $e',
+      );
+    }
+    return null;
   }
 }

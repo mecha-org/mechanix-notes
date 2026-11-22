@@ -1,65 +1,85 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
 import 'package:mechanix_notes/core/utils/app_logger.dart';
-import 'package:mechanix_notes/core/utils/constants.dart';
+import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
-import 'package:mechanix_notes/features/notes/data/services/note_tag_helper.dart';
-import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
+import 'package:mechanix_notes/features/notes/data/services/notes_watcher.dart';
+
+/// What changed in the index, so [NoteRepositoryImpl.watchNotes] can patch
+/// its in-memory list instead of re-reading every note on each save.
+sealed class _NoteChange {}
+
+final class _NoteUpserted extends _NoteChange {
+  final NoteMetaData meta;
+
+  /// Ids this entry replaces (old filename on rename, temporary id on first
+  /// save). Part of the same change so the list never shows the note missing.
+  final Set<String> replaces;
+
+  _NoteUpserted(this.meta, {this.replaces = const {}});
+}
+
+final class _NoteRemoved extends _NoteChange {
+  final Set<String> ids;
+  _NoteRemoved(this.ids);
+}
+
+/// Many notes may have changed (disk sync, index rebuild): reload everything.
+final class _NotesReset extends _NoteChange {}
 
 class NoteRepositoryImpl extends NoteRepository {
-  static Store? _sharedStore;
-
-  Store? _store;
-  Box<NoteModel>? _box;
   final IndexingService _indexingService;
   final NoteFileStorage _fileStorage;
+  final NotesWatcher _notesWatcher;
+
+  StreamSubscription<NotesWatcherEvent>? _watcherSub;
+  Future<void> _watcherQueue = Future.value();
+
+  /// Describes every create, update, delete or re-sync, so [watchNotes] can
+  /// update its list incrementally. Shared by all instances, because they all
+  /// read and write the same Tantivy index.
+  static final StreamController<_NoteChange> _changes =
+      StreamController<_NoteChange>.broadcast();
+
+  /// Metadata from the last search, so paging through results does not hit
+  /// the index once per id.
+  Map<String, NoteMetaData> _searchMeta = const {};
+
+  /// Fires when a note file is renamed by the app or externally. Shared by
+  /// all instances for the same reason as [_changes].
+  static final StreamController<NoteRenamed> _renames =
+      StreamController<NoteRenamed>.broadcast();
+
+  @override
+  Stream<NoteRenamed> get noteRenames => _renames.stream;
+
+  @override
+  Stream<Set<String>> get noteRemovals => _changes.stream
+      .where((c) => c is _NoteRemoved)
+      .map((c) => (c as _NoteRemoved).ids);
 
   NoteRepositoryImpl({
-    Store? store,
     IndexingService? indexingService,
     NoteFileStorage? fileStorage,
-  }) : _store = store,
-       _indexingService = indexingService ?? IndexingService(),
-       _fileStorage = fileStorage ?? NoteFileStorage();
-
-  Box<NoteModel> get box {
-    if (_box == null) {
-      throw StateError(
-        "Box is not initialized. Call ensureStoreConnected() first.",
-      );
-    }
-    return _box!;
-  }
+    NotesWatcher? notesWatcher,
+  }) : _indexingService = indexingService ?? IndexingService(),
+       _fileStorage = fileStorage ?? NoteFileStorage(),
+       _notesWatcher =
+           notesWatcher ??
+           NotesWatcher(
+             notesDirectory: (fileStorage ?? NoteFileStorage()).directory,
+           );
 
   Future<void> ensureStoreConnected() async {
-    if (_store != null && !_store!.isClosed()) return;
-
-    if (_sharedStore != null && !_sharedStore!.isClosed()) {
-      _store = _sharedStore;
-      _box = _store!.box<NoteModel>();
-      return;
-    }
-
-    try {
-      await _initializeStore();
-    } catch (e) {
-      AppLogger.e('Failed to open ObjectBox store: $e');
-      if (e is FileSystemException && e.message.contains('lock failed')) {
-        throw ObjectBoxException("Failed to open ObjectBox store: $e");
-      }
-      rethrow;
-    }
-
     try {
       await _indexingService.initialize();
     } catch (e) {
-      AppLogger.e('Failed to initialize Tantivy: $e');
+      AppLogger.e('Failed to initialize Tantivy store: $e');
     }
 
     try {
@@ -67,126 +87,179 @@ class NoteRepositoryImpl extends NoteRepository {
     } catch (e) {
       AppLogger.e('Failed to initialize note file directory: $e');
     }
+
+    _startWatcher();
   }
 
-  Future<void> _initializeStore() async {
+  void _startWatcher() {
+    if (_watcherSub != null) return;
+    _watcherSub = _notesWatcher.events.listen((event) {
+      _watcherQueue = _watcherQueue
+          .then((_) => _handleWatcherEvent(event))
+          .catchError((e) {
+            AppLogger.e('NoteRepository: Error in watcher event queue: $e');
+          });
+    });
+    unawaited(_notesWatcher.start());
+  }
+
+  Future<void> _handleWatcherEvent(NotesWatcherEvent event) async {
     try {
-      final home = Platform.environment['HOME'];
-      final appDir = Directory('$home${Constants.notesDbPath}');
-      final exists = await appDir.exists();
+      AppLogger.i('NoteRepository: Handling watcher event $event');
+      switch (event.type) {
+        case NotesWatcherEventType.create:
+        case NotesWatcherEventType.modify:
+          final file = File(event.fullPath);
+          if (!await file.exists()) return;
+          final stat = await file.stat();
+          final rawContent = await file.readAsString();
 
-      if (!exists) {
-        await appDir.create(recursive: true);
+          final fallbackTitle = event.fileName.endsWith('.md')
+              ? event.fileName.substring(0, event.fileName.length - 3)
+              : event.fileName;
+          final (title, previewText) = _extractTitleAndPreview(
+            rawContent,
+            fallbackTitle,
+          );
+
+          final existing = _indexingService.getDocument(event.fileName);
+
+          final note = NoteModel(
+            id: event.fileName,
+            title: title,
+            content: rawContent,
+            previewText: previewText,
+            fileName: event.fileName,
+            isPinned: existing?.isPinned ?? false,
+            updatedAt: stat.modified,
+          );
+
+          await _indexingService.upsertNote(note);
+          _notifyUpserted(note);
+
+        case NotesWatcherEventType.delete:
+          await _indexingService.deleteNotesBatch([event.fileName]);
+          _notifyRemoved([event.fileName]);
+
+        case NotesWatcherEventType.move:
+          final oldName = event.oldFileName;
+          final newName = event.fileName;
+          final priorDoc =
+              (oldName != null
+                  ? _indexingService.getDocument(oldName)
+                  : null) ??
+              _indexingService.getDocument(newName);
+          if (oldName != null) {
+            await _indexingService.deleteNotesBatch([oldName]);
+          }
+
+          final file = File(event.fullPath);
+          if (await file.exists()) {
+            final stat = await file.stat();
+            final rawContent = await file.readAsString();
+            final fallbackTitle = newName.endsWith('.md')
+                ? newName.substring(0, newName.length - 3)
+                : newName;
+            final (title, previewText) = _extractTitleAndPreview(
+              rawContent,
+              fallbackTitle,
+            );
+
+            final note = NoteModel(
+              id: newName,
+              title: title,
+              content: rawContent,
+              previewText: previewText,
+              fileName: newName,
+              isPinned: priorDoc?.isPinned ?? false,
+              updatedAt: stat.modified,
+            );
+            await _indexingService.upsertNote(note);
+            _notifyUpserted(note, replaces: [?oldName]);
+          } else if (oldName != null) {
+            _notifyRemoved([oldName]);
+          }
+          if (oldName != null && oldName != newName) {
+            _renames.add(NoteRenamed(oldId: oldName, newId: newName));
+          }
       }
-
-      if (_sharedStore != null && !_sharedStore!.isClosed()) {
-        _store = _sharedStore;
-      } else {
-        _sharedStore = await openStore(
-          maxDBSizeInKB: Constants.maxDBSizeInKB,
-          directory: appDir.path,
-        );
-        _store = _sharedStore;
-      }
-
-      _box = _store!.box<NoteModel>();
-
-      AppLogger.i('[NoteRepository] ObjectBox store opened at ${appDir.path}');
     } catch (e) {
-      AppLogger.e('Failed to initialize ObjectBox store: $e');
-      rethrow;
+      AppLogger.e('NoteRepository: Error handling watcher event: $e');
     }
   }
 
-  static NoteMetaData _toMetaData(NoteModel note) => NoteMetaData(
-    id: note.id,
-    height: note.height,
-    title: note.title,
-    createdAt: note.createdAt,
-    updatedAt: note.updatedAt,
-    previewText: note.previewText,
-    isPinned: note.isPinned,
-  );
+  Future<List<NoteMetaData>> getNotes(int skip, int take) async {
+    try {
+      await ensureStoreConnected();
+      final notes = await _indexingService.getNotes(skip: skip, take: take);
 
-  @override
-  Stream<List<NoteMetaData>> watchNotes() async* {
-    await ensureStoreConnected();
-    final queryBuilder = box.query()
-      ..order(NoteModel_.isPinned, flags: Order.descending)
-      ..order(NoteModel_.updatedAt, flags: Order.descending);
-    yield* queryBuilder
-        .watch(triggerImmediately: true)
-        .asyncMap((query) async {
-          final notes = await query.findAsync();
-          return notes.map(_toMetaData).toList();
-        });
+      if (notes.isEmpty) {
+        AppLogger.i("No notes found");
+        return [];
+      }
+
+      AppLogger.i(
+        "Fetched notes page (skip: $skip, take: $take) → page size: ${notes.length}",
+      );
+      return notes;
+    } catch (e) {
+      AppLogger.e('Failed to fetch notes: $e');
+      return [];
+    }
+  }
+
+  Future<NoteMetaData?> getNoteMetaData(String id) async {
+    try {
+      await ensureStoreConnected();
+      return _indexingService.getNoteMetaData(id);
+    } catch (e) {
+      AppLogger.e('Failed to fetch note metadata by id: $e');
+      return null;
+    }
   }
 
   @override
   Future<NoteModel?> getNoteById(String id) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(id)).build();
-      final note = query.findFirst();
-      query.close();
-      if (note == null) {
+
+      // A note's id is its filename.
+      final doc = _indexingService.getDocument(id);
+      final markdown = await _fileStorage.readNoteContent(id);
+
+      if (markdown == null) {
+        if (doc != null) {
+          // File missing from disk -> purge ghost note from Tantivy on access
+          AppLogger.i(
+            'NoteRepository: Note $id missing on disk. Purging ghost note from Tantivy...',
+          );
+          unawaited(
+            _indexingService
+                .deleteNotesBatch([id])
+                .then((_) => _notifyRemoved([id]))
+                .catchError((e) {
+                  AppLogger.e('NoteRepository: Purging ghost note failed: $e');
+                }),
+          );
+        }
         AppLogger.i('NoteRepository: getNoteById($id) → not found');
         return null;
       }
 
-      // 1. Try reading using fileName
-      String? markdown;
-      final fileToRead = note.fileName;
-      if (fileToRead != null && fileToRead.isNotEmpty) {
-        markdown = await _fileStorage.readNoteContent(fileToRead);
-      }
+      final fileModified =
+          (await _fileStorage.getFileLastModified(id)) ?? DateTime.now();
 
-      // 2. Fallback: try resolving by title (e.g. if saved under title directly)
-      if (markdown == null) {
-        final titleFileName =
-            '${NoteFileStorage.sanitizeFileName(note.title)}.md';
-        if (await _fileStorage.noteFileExists(titleFileName)) {
-          markdown = await _fileStorage.readNoteContent(titleFileName);
-          if (markdown != null) {
-            note.fileName = titleFileName;
-            box.put(note);
-          }
-        }
-      }
-
-      // 3. Fallback: Auto-heal by searching directory for embedded tag <!-- mechanix:id=id -->
-      if (markdown == null) {
-        final matchingFile = await _findNoteFileByIdTag(note.id);
-        if (matchingFile != null) {
-          markdown = matchingFile.content;
-          note.fileName = matchingFile.fileName;
-          final cleanContent = NoteTagHelper.stripTag(markdown);
-          final lines = cleanContent
-              .split('\n')
-              .map((l) => l.trim())
-              .where((l) => l.isNotEmpty)
-              .toList();
-          if (lines.isNotEmpty) {
-            final firstLineTitle = lines.first
-                .replaceAll(RegExp(r'^#+\s*'), '')
-                .trim();
-            if (firstLineTitle.isNotEmpty) {
-              note.title = firstLineTitle;
-            }
-          }
-          box.put(note);
-          AppLogger.i(
-            'NoteRepository: Auto-healed note ${note.id} to filename ${matchingFile.fileName}',
-          );
-        }
-      }
-
-      // 4. Return note with clean (stripped) content for editor and UI
-      if (markdown != null) {
-        note.content = NoteTagHelper.stripTag(markdown);
-      } else if (note.fileName != null) {
-        note.content = '';
-      }
+      final note = NoteModel(
+        id: id,
+        title:
+            doc?.title ??
+            (id.endsWith('.md') ? id.substring(0, id.length - 3) : id),
+        content: markdown,
+        previewText: doc?.previewText ?? '',
+        fileName: id,
+        isPinned: doc?.isPinned ?? false,
+        updatedAt: fileModified,
+      );
 
       AppLogger.i('NoteRepository: getNoteById($id) → found');
       return note;
@@ -196,79 +269,18 @@ class NoteRepositoryImpl extends NoteRepository {
     }
   }
 
-  /// Reads at most [maxBytes] from the end of [file] and decodes as UTF-8. without reading entire file contents into memory.
-  Future<String?> _readTailString(File file, [int maxBytes = 1024]) async {
-    RandomAccessFile? raf;
-    try {
-      final length = await file.length();
-      if (length == 0) return '';
-      raf = await file.open(mode: FileMode.read);
-      final readLength = length < maxBytes ? length : maxBytes;
-      await raf.setPosition(length - readLength);
-      final bytes = await raf.read(readLength);
-      return utf8.decode(bytes, allowMalformed: true);
-    } catch (e) {
-      return null;
-    } finally {
-      await raf?.close();
-    }
-  }
-
-  /// Scans the notes directory for a .md file containing an embedded tag matching [noteId].
-  Future<({String fileName, String content})?> _findNoteFileByIdTag(
-    String noteId,
-  ) async {
-    try {
-      final dir = _fileStorage.directory;
-      if (!await dir.exists()) return null;
-
-      final entities = await dir.list().toList();
-      for (final entity in entities) {
-        if (entity is File && entity.path.endsWith('.md')) {
-          final fileName = entity.uri.pathSegments.last;
-          if (fileName.startsWith('..tmp_')) continue;
-
-          final tail = await _readTailString(entity);
-          if (tail != null && tail.contains('mechanix:id')) {
-            final extractedId = NoteTagHelper.extractId(tail);
-            if (extractedId == noteId) {
-              final content = await entity.readAsString();
-              return (fileName: fileName, content: content);
-            }
-          }
-        }
-      }
-    } catch (e) {
-      AppLogger.e(
-        'NoteRepository: _findNoteFileByIdTag failed for $noteId: $e',
-      );
-    }
-    return null;
-  }
-
   @override
   Future<void> deleteNotes(List<String> ids) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.oneOf(ids)).build();
-      final notesToDelete = query.find();
-      query.close();
 
-      for (final note in notesToDelete) {
-        final fileToDelete = note.fileName;
-        if (fileToDelete != null && fileToDelete.isNotEmpty) {
-          await _fileStorage.deleteNoteFile(fileToDelete);
-        } else {
-          final titleFileName =
-              '${NoteFileStorage.sanitizeFileName(note.title)}.md';
-          await _fileStorage.deleteNoteFile(titleFileName);
-        }
+      // A note's id is its filename.
+      for (final id in ids) {
+        await _fileStorage.deleteNoteFile(id);
       }
 
-      if (notesToDelete.isNotEmpty) {
-        box.removeMany(notesToDelete.map((n) => n.obxId).toList());
-      }
       await _indexingService.deleteNotesBatch(ids);
+      _notifyRemoved(ids);
       AppLogger.i('NoteRepository: deleteNotes(${ids.length})');
     } catch (e) {
       AppLogger.e('NoteRepository: deleteNotes failed: $e');
@@ -276,51 +288,63 @@ class NoteRepositoryImpl extends NoteRepository {
   }
 
   @override
-  Future<void> upsertNote(NoteModel note) async {
+  Future<String> upsertNote(NoteModel note) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(note.id)).build();
-      final existing = query.findFirst();
-      query.close();
-      if (existing != null) {
-        note.obxId = existing.obxId;
+
+      final markdown = note.content;
+      final fileMarkdown = markdown.isEmpty
+          ? ''
+          : (markdown.endsWith('\n') ? markdown : '$markdown\n');
+
+      final previousFileName = note.fileName;
+      final previousId = note.id;
+      final isNew = previousFileName == null || previousFileName.isEmpty;
+
+      // Throws NoteFileMissingException if the existing file is gone; the
+      // caller decides whether to re-create it.
+      final savedFileName = isNew
+          ? await _fileStorage.createNoteFile(
+              title: note.title,
+              markdown: fileMarkdown,
+            )
+          : await _fileStorage.updateNoteFile(
+              fileName: previousFileName,
+              title: note.title,
+              markdown: fileMarkdown,
+            );
+
+      final isRename = !isNew && previousFileName != savedFileName;
+      if (isRename) {
+        await _indexingService.deleteNotesBatch(
+          {previousFileName, note.id}.toList(),
+        );
       }
 
-      final currentFileName = existing?.fileName;
-
-      final cleanMarkdown = NoteTagHelper.stripTag(note.content);
-      final taggedMarkdown = NoteTagHelper.appendTag(cleanMarkdown, note.id);
-      final savedFileName = await _fileStorage.writeNoteContent(
-        title: note.title,
-        markdown: taggedMarkdown,
-        currentFileName: currentFileName,
-      );
-
-      // Store fileName in ObjectBox; content and plain text live only in the
-      // .md file and the search index, so keep them out of the database
-      final plainText = note.plainText;
+      note.id = savedFileName;
       note.fileName = savedFileName;
-      note.content = '';
-      note.plainText = '';
-      box.put(note);
+      note.content = markdown;
 
-      // Restore clean markdown and plain text in in-memory note instance
-      note.content = cleanMarkdown;
-      note.plainText = plainText;
-
-      await _indexingService.upsertNote(note.id, note.title, note.plainText);
-      AppLogger.i(
-        'NoteRepository: upsertNote(${note.id}) ${note.updatedAt} ${note.title} saved to $savedFileName ✓',
+      await _indexingService.upsertNote(note);
+      // The saved note takes the place of a new note's temporary id or a
+      // renamed note's old filename.
+      _notifyUpserted(
+        note,
+        replaces: {previousId, if (isRename) previousFileName},
       );
-    } on DbFullException {
-      rethrow;
+      if (isRename) {
+        _renames.add(
+          NoteRenamed(oldId: previousFileName, newId: savedFileName),
+        );
+      }
+      AppLogger.i(
+        'NoteRepository: upsertNote($savedFileName) ${note.updatedAt} ${note.title} saved ✓',
+      );
+      return savedFileName;
     } on FileSystemException catch (e) {
       AppLogger.e(
         'NoteRepository: upsertNote failed due to filesystem error: $e',
       );
-      if (e.osError?.errorCode == 28) {
-        throw DbFullException('Storage is full: $e', 1018);
-      }
       rethrow;
     } catch (e) {
       AppLogger.e('NoteRepository: upsertNote failed: $e');
@@ -332,9 +356,9 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<List<String>> searchNoteIds(String query) async {
     try {
       await ensureStoreConnected();
-      final ids = await _indexingService.search(query);
-      AppLogger.i("Found ${ids.length} matching note ids via IndexingService");
-      return ids;
+      final results = await _indexingService.search(query);
+      _searchMeta = {for (final n in results) n.id: n};
+      return results.map((n) => n.id).toList();
     } catch (e) {
       AppLogger.e('Failed to search notes: $e');
       return [];
@@ -346,15 +370,12 @@ class NoteRepositoryImpl extends NoteRepository {
     if (ids.isEmpty) return [];
     try {
       await ensureStoreConnected();
-      final q = box.query(NoteModel_.id.oneOf(ids)).build();
-      final dbNotes = await q.findAsync();
-      q.close();
-
-      // Restore the caller's order (search relevance); oneOf does not keep it
-      final notesMap = {for (var note in dbNotes) note.id: note};
+      // Keep the caller's order (search relevance). Results from the last
+      // search already carry their metadata; only fall back to the index for
+      // ids that did not come from it.
       return [
         for (final id in ids)
-          if (notesMap[id] case final note?) _toMetaData(note),
+          ?(_searchMeta[id] ?? _indexingService.getNoteMetaData(id)),
       ];
     } catch (e) {
       AppLogger.e('Failed to load notes metadata: $e');
@@ -366,17 +387,15 @@ class NoteRepositoryImpl extends NoteRepository {
   Future<bool> togglePinNote(String id) async {
     try {
       await ensureStoreConnected();
-      final query = box.query(NoteModel_.id.equals(id)).build();
-      final note = query.findFirst();
-      query.close();
-
-      if (note != null) {
-        note.isPinned = !note.isPinned;
-        box.put(note);
-        AppLogger.i('NoteRepository: togglePinNote($id) → ${note.isPinned}');
-        return note.isPinned;
+      final result = await _indexingService.togglePin(id);
+      final meta = _indexingService.getNoteMetaData(id);
+      if (meta != null) {
+        _changes.add(_NoteUpserted(meta));
+      } else {
+        _changes.add(_NotesReset());
       }
-      return false;
+      AppLogger.i('NoteRepository: togglePinNote($id) → $result');
+      return result;
     } catch (e) {
       AppLogger.e('NoteRepository: togglePinNote failed: $e');
       return false;
@@ -384,12 +403,285 @@ class NoteRepositoryImpl extends NoteRepository {
   }
 
   @override
-  Future<void> close() async {
-    if (_sharedStore != null && !_sharedStore!.isClosed()) {
-      _sharedStore!.close();
-      _sharedStore = null;
+  Future<List<NoteMetaData>> getNotesFromTantivy({int limit = 45}) async {
+    return getNotes(0, limit);
+  }
+
+  @override
+  Stream<List<NoteMetaData>> watchNotes() {
+    late final StreamController<List<NoteMetaData>> controller;
+    StreamSubscription<_NoteChange>? changesSub;
+    var cancelled = false;
+
+    controller = StreamController<List<NoteMetaData>>(
+      onListen: () async {
+        try {
+          await _fileStorage.ensureDirectoryExists();
+        } catch (e) {
+          AppLogger.e('Failed to initialize note file directory: $e');
+        }
+
+        try {
+          await _indexingService.initialize();
+        } catch (e, s) {
+          if (!controller.isClosed) {
+            controller.addError(e, s);
+            await controller.close();
+          }
+          return;
+        }
+        // Cancelled while initializing: don't subscribe to anything.
+        if (cancelled) return;
+
+        _startWatcher();
+
+        // The list is read from the index once, then kept up to date from
+        // the change events; only a reset (disk sync) reads it again.
+        final cache = <String, NoteMetaData>{};
+        final pending = <_NoteChange>[];
+        var loaded = false;
+        var reloading = false;
+        var reloadAgain = false;
+        var emitScheduled = false;
+
+        void apply(_NoteChange change) {
+          switch (change) {
+            case _NoteUpserted(:final meta, :final replaces):
+              replaces.forEach(cache.remove);
+              cache[meta.id] = meta;
+            case _NoteRemoved(:final ids):
+              ids.forEach(cache.remove);
+            case _NotesReset():
+              break;
+          }
+        }
+
+        // Several changes in one burst (e.g. rename = remove + upsert)
+        // produce a single emission.
+        void emitSoon() {
+          if (emitScheduled) return;
+          emitScheduled = true;
+          scheduleMicrotask(() {
+            emitScheduled = false;
+            if (!controller.isClosed) {
+              controller.add(_sortedForList(cache.values));
+            }
+          });
+        }
+
+        Future<void> reload() async {
+          if (reloading) {
+            reloadAgain = true;
+            return;
+          }
+          reloading = true;
+          try {
+            do {
+              reloadAgain = false;
+              loaded = false;
+              final all = await _getAllNotes();
+              cache
+                ..clear()
+                ..addEntries(all.map((m) => MapEntry(m.id, m)));
+              loaded = true;
+              // Changes that arrived during the read are applied on top, in
+              // order, so the newest state wins.
+              pending
+                ..forEach(apply)
+                ..clear();
+            } while (reloadAgain && !controller.isClosed);
+            emitSoon();
+          } catch (e, s) {
+            if (!controller.isClosed) controller.addError(e, s);
+          } finally {
+            reloading = false;
+          }
+        }
+
+        // Subscribe before the first read so no change is missed in between
+        changesSub = _changes.stream.listen((change) {
+          if (change is _NotesReset) {
+            unawaited(reload());
+          } else if (!loaded) {
+            pending.add(change);
+          } else {
+            apply(change);
+            emitSoon();
+          }
+        });
+
+        await reload();
+      },
+      onCancel: () async {
+        cancelled = true;
+        await changesSub?.cancel();
+        changesSub = null;
+      },
+    );
+
+    return controller.stream;
+  }
+
+  /// Same order as the index's `sort_key`: pinned first, then most recently
+  /// updated.
+  static List<NoteMetaData> _sortedForList(Iterable<NoteMetaData> notes) {
+    return notes.toList()..sort((a, b) {
+      if (a.isPinned != b.isPinned) return a.isPinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+  }
+
+  /// Reads every note's metadata from the index (no note bodies). Only used
+  /// for the initial load and after a reset.
+  Future<List<NoteMetaData>> _getAllNotes() async {
+    final allNotes = <NoteMetaData>[];
+    const pageSize = 500;
+    while (true) {
+      final page = await _indexingService.getNotes(
+        skip: allNotes.length,
+        take: pageSize,
+      );
+      allNotes.addAll(page);
+      if (page.length < pageSize) break;
     }
-    _store = null;
-    _box = null;
+    return allNotes;
+  }
+
+  void _notifyUpserted(NoteModel note, {Iterable<String> replaces = const []}) {
+    _changes.add(
+      _NoteUpserted(
+        IndexingService.noteModelToMetaData(note),
+        replaces: replaces.where((id) => id != note.id).toSet(),
+      ),
+    );
+  }
+
+  void _notifyRemoved(Iterable<String> ids) {
+    final set = ids.toSet();
+    if (set.isNotEmpty) _changes.add(_NoteRemoved(set));
+  }
+
+  static (String title, String previewText) _extractTitleAndPreview(
+    String markdown,
+    String defaultTitle,
+  ) {
+    return extractTitleAndPreviewFromMarkdown(
+      markdown,
+      fallbackTitle: defaultTitle,
+    );
+  }
+
+  @override
+  Future<int> syncNotesFromDisk() async {
+    try {
+      await ensureStoreConnected();
+      final dir = _fileStorage.directory;
+      if (!await dir.exists()) return 0;
+
+      int updatedCount = 0;
+      // Snapshot the index BEFORE listing files on disk so notes saved
+      // concurrently while listing are never falsely flagged as ghosts.
+      final indexedDocs = await _indexingService.getAllMetadata();
+      final docsById = {for (final d in indexedDocs) d.id: d};
+
+      final entities = await dir.list().toList();
+      final discoveredNoteIds = <String>{};
+      final notesToUpsert = <NoteModel>[];
+
+      for (final entity in entities) {
+        if (entity is! File || !NotesWatcher.isTrackedFile(entity.path)) {
+          continue;
+        }
+        final fileName = entity.uri.pathSegments.last;
+        discoveredNoteIds.add(fileName);
+
+        try {
+          final fileStat = await entity.stat();
+          final existingDoc = docsById[fileName];
+
+          final indexedUpdatedAt = existingDoc != null
+              ? DateTime.fromMillisecondsSinceEpoch(
+                  existingDoc.updatedAt.toInt(),
+                )
+              : null;
+
+          // Re-index if missing from Tantivy, modified externally, or its
+          // stored title still carries Markdown markers (titles indexed
+          // before H1 formatting was stripped).
+          final needsReindex =
+              existingDoc == null ||
+              fileStat.modified.isAfter(
+                indexedUpdatedAt!.add(const Duration(seconds: 1)),
+              ) ||
+              markdownToPlainText(existingDoc.title) != existingDoc.title;
+
+          if (needsReindex) {
+            final rawContent = await entity.readAsString();
+            final fallbackTitle = fileName.endsWith('.md')
+                ? fileName.substring(0, fileName.length - 3)
+                : fileName;
+            final (title, previewText) = _extractTitleAndPreview(
+              rawContent,
+              existingDoc?.title ?? fallbackTitle,
+            );
+
+            final note = NoteModel(
+              id: fileName,
+              title: title,
+              content: rawContent,
+              previewText: previewText,
+              fileName: fileName,
+              updatedAt: fileStat.modified,
+              isPinned: existingDoc?.isPinned ?? false,
+            );
+
+            notesToUpsert.add(note);
+            AppLogger.i(
+              'NoteRepository: Reconciled $fileName for Tantivy indexing',
+            );
+          }
+        } catch (e) {
+          AppLogger.e('NoteRepository: Failed to sync $fileName: $e');
+        }
+      }
+
+      if (notesToUpsert.length == 1) {
+        await _indexingService.upsertNote(notesToUpsert.first);
+        updatedCount += 1;
+      } else if (notesToUpsert.length > 1) {
+        await _indexingService.upsertNotesBatch(notesToUpsert);
+        updatedCount += notesToUpsert.length;
+      }
+
+      // Purge ghost notes from Tantivy whose files were deleted on disk
+      try {
+        final ghostIds = docsById.keys
+            .where((id) => !discoveredNoteIds.contains(id))
+            .toList();
+        if (ghostIds.isNotEmpty) {
+          await _indexingService.deleteNotesBatch(ghostIds);
+          updatedCount += ghostIds.length;
+          AppLogger.i(
+            'NoteRepository: Purged ${ghostIds.length} ghost notes from Tantivy',
+          );
+        }
+      } catch (e) {
+        AppLogger.e('NoteRepository: Failed to purge ghost notes: $e');
+      }
+
+      if (updatedCount > 0) _changes.add(_NotesReset());
+      return updatedCount;
+    } catch (e) {
+      AppLogger.e('NoteRepository: syncNotesFromDisk failed: $e');
+      return 0;
+    }
+  }
+
+  @override
+  Future<void> close() async {
+    await _watcherSub?.cancel();
+    _watcherSub = null;
+    await _watcherQueue;
+    await _notesWatcher.dispose();
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:live_markdown_editor/live_markdown_editor.dart';
 import 'package:mechanix_notes/core/utils/markdown_editor_styles.dart';
@@ -94,6 +95,21 @@ class _EditorContentState extends State<EditorContent> {
     super.dispose();
   }
 
+  /// Ctrl+B / Ctrl+I (or Cmd on macOS keyboards) wrap the selection, or
+  /// insert an empty pair at the caret, with bold / italic markers.
+  Map<ShortcutActivator, VoidCallback> _formattingShortcuts(
+    MarkdownEditorController controller,
+  ) {
+    void bold() => controller.execute(MarkdownCommand.bold);
+    void italic() => controller.execute(MarkdownCommand.italic);
+    return {
+      const SingleActivator(LogicalKeyboardKey.keyB, control: true): bold,
+      const SingleActivator(LogicalKeyboardKey.keyB, meta: true): bold,
+      const SingleActivator(LogicalKeyboardKey.keyI, control: true): italic,
+      const SingleActivator(LogicalKeyboardKey.keyI, meta: true): italic,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = MarkdownControllerProvider.of(context);
@@ -103,20 +119,55 @@ class _EditorContentState extends State<EditorContent> {
     return RepaintBoundary(
       child: Stack(
         children: [
-          LiveMarkdownEditor(
-            controller: provider.controller,
-            focusNode: provider.focusNode,
-            scrollController: _scrollController,
-            theme: theme,
-            behavior: const MarkdownEditingBehavior(
-              autoPair: true,
-              wrapSelection: true,
-              smartLists: true,
-              autoCloseFences: true,
-            ),
-            componentBuilders: MarkdownEditorComponentBuilders(
-              taskToggleBuilder: (context, taskContext) =>
-                  _MechanixTaskToggle(taskContext: taskContext),
+          CallbackShortcuts(
+            bindings: _formattingShortcuts(provider.controller),
+            child: LiveMarkdownEditor(
+              controller: provider.controller,
+              focusNode: provider.focusNode,
+              scrollController: _scrollController,
+              theme: theme,
+              behavior: const MarkdownEditingBehavior(
+                autoPair: true,
+                wrapSelection: true,
+                smartLists: true,
+                autoCloseFences: true,
+              ),
+              componentBuilders: MarkdownEditorComponentBuilders(
+                taskToggleBuilder: (context, taskContext) =>
+                    _MechanixTaskToggle(taskContext: taskContext),
+                selectionHandleBuilder: (context, handle) =>
+                    _AndroidSelectionHandle(kind: handle.kind),
+                contextMenuBuilder: (context, editableText) {
+                  final anchors = editableText.contextMenuAnchors;
+                  return TextSelectionToolbar(
+                    anchorAbove: anchors.primaryAnchor,
+                    anchorBelow:
+                        anchors.secondaryAnchor ?? anchors.primaryAnchor,
+                    children: [
+                      for (final item in editableText.contextMenuButtonItems)
+                        TextSelectionToolbarTextButton(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          onPressed: item.onPressed,
+                          child: Text(
+                            item.label ??
+                                switch (item.type) {
+                                  ContextMenuButtonType.cut => 'Cut',
+                                  ContextMenuButtonType.copy => 'Copy',
+                                  ContextMenuButtonType.paste => 'Paste',
+                                  ContextMenuButtonType.selectAll =>
+                                    'Select all',
+                                  _ => 'Action',
+                                },
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ),
           ValueListenableBuilder<TextEditingValue>(
@@ -176,6 +227,40 @@ class _MechanixTaskToggle extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
         onChanged: taskContext.enabled ? (_) => taskContext.onToggle() : null,
       ),
+    );
+  }
+}
+
+/// Android (Material) selection handle: the teardrop whose point touches the
+/// text, in the theme's selection-handle colour (primary by default).
+///
+/// The editor reserves a 22px box centred under the selection end for every
+/// handle, while Android hangs the start handle to the left of the text and
+/// the end handle to the right; shifting by half the handle's width puts the
+/// point exactly on the text. Touches still land inside the editor's 48px
+/// target around the box.
+class _AndroidSelectionHandle extends StatelessWidget {
+  const _AndroidSelectionHandle({required this.kind});
+
+  final MarkdownSelectionHandleKind kind;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = switch (kind) {
+      MarkdownSelectionHandleKind.start => TextSelectionHandleType.left,
+      MarkdownSelectionHandleKind.end => TextSelectionHandleType.right,
+      MarkdownSelectionHandleKind.collapsed =>
+        TextSelectionHandleType.collapsed,
+    };
+    final size = materialTextSelectionControls.getHandleSize(0);
+    final shift = switch (kind) {
+      MarkdownSelectionHandleKind.start => -size.width / 2,
+      MarkdownSelectionHandleKind.end => size.width / 2,
+      MarkdownSelectionHandleKind.collapsed => 0.0,
+    };
+    return Transform.translate(
+      offset: Offset(shift, 0),
+      child: materialTextSelectionControls.buildHandle(context, type, 0),
     );
   }
 }

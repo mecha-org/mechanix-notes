@@ -25,6 +25,9 @@ void main() {
 
   setUp(() {
     mockRepository = MockNoteRepository();
+    when(
+      () => mockRepository.noteRemovals,
+    ).thenAnswer((_) => const Stream.empty());
     mockSearchBloc = MockSearchBloc();
   });
 
@@ -63,8 +66,6 @@ void main() {
       title: title,
       previewText: preview,
       updatedAt: updatedAt ?? DateTime(2026, 10, 1),
-      createdAt: DateTime(2026, 10, 1),
-      height: 200,
     );
   }
 

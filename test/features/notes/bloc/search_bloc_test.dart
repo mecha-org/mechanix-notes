@@ -21,16 +21,13 @@ NoteMetaData makeNote({required String id, String title = 'Note'}) =>
       id: id,
       title: title,
       updatedAt: DateTime(2024, 6, 1),
-      height: 0,
-      createdAt: DateTime(2024, 1, 1),
       previewText: 'Preview $id',
     );
 
 List<NoteMetaData> buildNoteList(int count) =>
     List.generate(count, (i) => makeNote(id: 'note_$i', title: 'Note $i'));
 
-List<String> idsOf(List<NoteMetaData> notes) =>
-    notes.map((n) => n.id).toList();
+List<String> idsOf(List<NoteMetaData> notes) => notes.map((n) => n.id).toList();
 
 Matcher stateMatching({
   SearchStatus? status,
@@ -47,8 +44,7 @@ Matcher stateMatching({
     if (resultsLength != null && s.results.length != resultsLength) {
       return false;
     }
-    if (idsLength != null &&
-        s.resultIds.length != idsLength) {
+    if (idsLength != null && s.resultIds.length != idsLength) {
       return false;
     }
     if (hasMore != null && s.hasMore != hasMore) return false;
@@ -71,6 +67,7 @@ void main() {
 
   setUp(() {
     mockRepo = MockNoteRepository();
+    when(() => mockRepo.noteRemovals).thenAnswer((_) => const Stream.empty());
     when(() => mockRepo.getNotesMetaData(any())).thenAnswer(
       (invocation) async => [
         for (final id in invocation.positionalArguments.first as List<String>)
@@ -708,7 +705,9 @@ void main() {
       'counts pages by ids so missing notes do not shift later pages',
       build: () {
         // Every note in the second page is missing from the database
-        when(() => mockRepo.getNotesMetaData(any())).thenAnswer((_) async => []);
+        when(
+          () => mockRepo.getNotesMetaData(any()),
+        ).thenAnswer((_) async => []);
         return buildBloc();
       },
       seed: () {
@@ -1081,6 +1080,56 @@ void main() {
         isLoadingMore: true,
       );
       expect(state.props.length, 7);
+    });
+  });
+
+  // ── Removals ─────────────────────────────────────────────────────────────
+
+  group('SearchBloc – note removals', () {
+    test('drops a removed note from the current results', () async {
+      final removals = StreamController<Set<String>>.broadcast();
+      when(() => mockRepo.noteRemovals).thenAnswer((_) => removals.stream);
+      final notes = buildNoteList(3);
+      when(
+        () => mockRepo.searchNoteIds(any()),
+      ).thenAnswer((_) async => idsOf(notes));
+
+      final bloc = buildBloc();
+      bloc.add(SearchQueryChanged(query: 'note'));
+      await bloc.stream.firstWhere((s) => s.status == SearchStatus.success);
+
+      removals.add({'note_1'});
+      final s = await bloc.stream.first;
+      expect(idsOf(s.results), ['note_0', 'note_2']);
+      expect(s.resultIds, ['note_0', 'note_2']);
+
+      await bloc.close();
+      await removals.close();
+    });
+
+    test('filters a note removed while the search is in flight', () async {
+      final removals = StreamController<Set<String>>.broadcast();
+      when(() => mockRepo.noteRemovals).thenAnswer((_) => removals.stream);
+      final searchDone = Completer<List<String>>();
+      when(
+        () => mockRepo.searchNoteIds(any()),
+      ).thenAnswer((_) => searchDone.future);
+
+      final bloc = buildBloc();
+      bloc.add(SearchQueryChanged(query: 'note'));
+      await bloc.stream.firstWhere((s) => s.status == SearchStatus.loading);
+
+      removals.add({'note_1'});
+      await Future<void>.delayed(Duration.zero);
+      searchDone.complete(idsOf(buildNoteList(3)));
+
+      final s = await bloc.stream.firstWhere(
+        (s) => s.status == SearchStatus.success,
+      );
+      expect(idsOf(s.results), ['note_0', 'note_2']);
+
+      await bloc.close();
+      await removals.close();
     });
   });
 }

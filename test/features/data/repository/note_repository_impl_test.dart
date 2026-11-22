@@ -1,76 +1,22 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter_tantivy/flutter_tantivy.dart' as tantivy;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mechanix_notes/core/exceptions/objectbox_exception.dart';
+import 'package:mechanix_notes/core/exceptions/storage_exception.dart';
+import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
+import 'package:mechanix_notes/features/notes/data/repository/note_repository.dart';
 import 'package:mechanix_notes/features/notes/data/repository/note_repository_impl.dart';
 import 'package:mechanix_notes/features/notes/data/services/indexing_service.dart';
 import 'package:mechanix_notes/features/notes/data/services/note_file_storage.dart';
-import 'package:mechanix_notes/objectbox.g.dart' hide ObjectBoxException;
 import 'package:mocktail/mocktail.dart';
 
 // ---------------------------------------------------------------------------
 // Mocks & Fakes
 // ---------------------------------------------------------------------------
 
-class MockBox extends Mock implements Box<NoteModel> {}
-
-class MockQueryBuilder extends Mock implements QueryBuilder<NoteModel> {}
-
-class MockQuery extends Mock implements Query<NoteModel> {}
-
 class MockIndexingService extends Mock implements IndexingService {}
-
-class FakeQueryProperty extends Fake
-    implements QueryProperty<NoteModel, Object?> {}
-
-class FakeQueryPropertyDateTime extends Fake
-    implements QueryProperty<NoteModel, DateTime> {}
-
-class FakeQueryPropertyInt extends Fake
-    implements QueryProperty<NoteModel, int> {}
-
-class FakeQueryPropertyString extends Fake
-    implements QueryProperty<NoteModel, String> {}
-
-class FakeQueryPropertyBool extends Fake
-    implements QueryProperty<NoteModel, bool> {}
-
-class FakeCondition extends Fake implements Condition<NoteModel> {}
-
-// ---------------------------------------------------------------------------
-// Testable subclass – lets us inject a fake Box without touching Store/Platform globals
-// ---------------------------------------------------------------------------
-
-class TestableNoteRepositoryImpl extends NoteRepositoryImpl {
-  final Box<NoteModel> fakeBox;
-  bool ensureStoreCalled = false;
-
-  TestableNoteRepositoryImpl(
-    this.fakeBox,
-    IndexingService indexingService, {
-    super.fileStorage,
-  }) : super(indexingService: indexingService);
-
-  /// Override the getter so the implementation uses our fake box.
-  @override
-  Box<NoteModel> get box => fakeBox;
-
-  /// Skip real ObjectBox store initialization in tests.
-  @override
-  Future<void> ensureStoreConnected() async {
-    ensureStoreCalled = true;
-  }
-}
-
-class _FailingStoreRepository extends TestableNoteRepositoryImpl {
-  _FailingStoreRepository(super.fakeBox, super.indexingService);
-
-  @override
-  Future<void> ensureStoreConnected() async =>
-      throw ObjectBoxException('lock failed');
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -80,20 +26,54 @@ NoteModel _makeNote({
   required String id,
   required String title,
   String previewText = '',
-  double height = 200,
-  DateTime? createdAt,
   DateTime? updatedAt,
   bool isPinned = false,
+  String? fileName,
 }) {
   final now = DateTime.now();
   return NoteModel(
     id: id,
     title: title,
     content: 'content',
-    plainText: 'plainText',
     previewText: previewText,
-    height: height,
-    createdAt: createdAt ?? now,
+    updatedAt: updatedAt ?? now,
+    isPinned: isPinned,
+    fileName: fileName,
+  );
+}
+
+tantivy.Document _makeDoc({
+  required String id,
+  required String title,
+  String previewText = '',
+  bool isPinned = false,
+  DateTime? updatedAt,
+}) {
+  final now = DateTime.now();
+  return tantivy.Document(
+    id: id,
+    title: title,
+    content: '',
+    previewText: previewText,
+    isPinned: isPinned,
+    updatedAt: tantivy.PlatformInt64Util.from(
+      (updatedAt ?? now).millisecondsSinceEpoch,
+    ),
+  );
+}
+
+NoteMetaData _makeMetaData({
+  required String id,
+  required String title,
+  String previewText = '',
+  DateTime? updatedAt,
+  bool isPinned = false,
+}) {
+  final now = DateTime.now();
+  return NoteMetaData(
+    id: id,
+    title: title,
+    previewText: previewText,
     updatedAt: updatedAt ?? now,
     isPinned: isPinned,
   );
@@ -104,13 +84,10 @@ NoteModel _makeNote({
 // ---------------------------------------------------------------------------
 
 void main() {
-  late MockBox mockBox;
-  late MockQueryBuilder mockQueryBuilder;
-  late MockQuery mockQuery;
   late MockIndexingService mockIndexingService;
   late NoteFileStorage fileStorage;
   late Directory tempDir;
-  late TestableNoteRepositoryImpl repository;
+  late NoteRepositoryImpl repository;
 
   setUpAll(() {
     registerFallbackValue(
@@ -118,71 +95,49 @@ void main() {
         id: '',
         title: '',
         content: '',
-        createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-        plainText: '',
         previewText: '',
-        height: 0.0,
       ),
     );
-    registerFallbackValue(FakeQueryProperty());
-    registerFallbackValue(FakeQueryPropertyDateTime());
-    registerFallbackValue(FakeQueryPropertyInt());
-    registerFallbackValue(FakeQueryPropertyString());
-    registerFallbackValue(FakeQueryPropertyBool());
-    registerFallbackValue(FakeCondition());
-    registerFallbackValue(const <int>[]);
   });
 
   setUp(() {
     tempDir = Directory.systemTemp.createTempSync('note_repo_impl_test_');
     fileStorage = NoteFileStorage(notesDirectory: tempDir);
-    mockBox = MockBox();
-    mockQueryBuilder = MockQueryBuilder();
-    mockQuery = MockQuery();
     mockIndexingService = MockIndexingService();
-    repository = TestableNoteRepositoryImpl(
-      mockBox,
-      mockIndexingService,
+    repository = NoteRepositoryImpl(
+      indexingService: mockIndexingService,
       fileStorage: fileStorage,
     );
 
     // Setup default indexing stubs
     when(() => mockIndexingService.initialize()).thenAnswer((_) async {});
-    when(
-      () => mockIndexingService.upsertNote(any(), any(), any()),
-    ).thenAnswer((_) async {});
+    when(() => mockIndexingService.upsertNote(any())).thenAnswer((_) async {});
+    when(() => mockIndexingService.upsertNotesBatch(any())).thenAnswer((
+      invocation,
+    ) async {
+      final notes = invocation.positionalArguments[0] as List<NoteModel>;
+      for (final note in notes) {
+        await mockIndexingService.upsertNote(note);
+      }
+    });
     when(
       () => mockIndexingService.deleteNotesBatch(any()),
     ).thenAnswer((_) async {});
+    when(
+      () => mockIndexingService.getNotes(
+        skip: any(named: 'skip'),
+        take: any(named: 'take'),
+      ),
+    ).thenAnswer((_) async => []);
     when(() => mockIndexingService.search(any())).thenAnswer((_) async => []);
-
-    // Setup default query builder stubbing
-    when(() => mockBox.query(any())).thenReturn(mockQueryBuilder);
-    when(() => mockBox.query(null)).thenReturn(mockQueryBuilder);
-    when(() => mockBox.query()).thenReturn(mockQueryBuilder);
-
     when(
-      () => mockQueryBuilder.order<DateTime>(any(), flags: any(named: 'flags')),
-    ).thenReturn(mockQueryBuilder);
-    when(
-      () => mockQueryBuilder.order<int>(any(), flags: any(named: 'flags')),
-    ).thenReturn(mockQueryBuilder);
-    when(
-      () => mockQueryBuilder.order<String>(any(), flags: any(named: 'flags')),
-    ).thenReturn(mockQueryBuilder);
-    when(
-      () => mockQueryBuilder.order<bool>(any(), flags: any(named: 'flags')),
-    ).thenReturn(mockQueryBuilder);
-    when(
-      () => mockQueryBuilder.order(any(), flags: any(named: 'flags')),
-    ).thenReturn(mockQueryBuilder);
-
-    when(() => mockQueryBuilder.build()).thenReturn(mockQuery);
-    when(() => mockQuery.close()).thenAnswer((_) {});
+      () => mockIndexingService.getAllMetadata(),
+    ).thenAnswer((_) async => []);
   });
 
-  tearDown(() {
+  tearDown(() async {
+    await repository.close();
     if (tempDir.existsSync()) {
       tempDir.deleteSync(recursive: true);
     }
@@ -193,84 +148,233 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('watchNotes', () {
-    test('emits mapped metadata on every query change', () async {
-      final changes = StreamController<Query<NoteModel>>();
+    test('emits initial notes and re-emits when a note is updated', () async {
+      final note1 = _makeMetaData(id: '1', title: 'Note 1');
+      final note2 = _makeMetaData(id: '2', title: 'Note 2');
+
       when(
-        () => mockQueryBuilder.watch(triggerImmediately: true),
-      ).thenAnswer((_) => changes.stream);
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer((_) async => [note1]);
 
-      final note1 = _makeNote(id: '1', title: 'Note 1');
-      final note2 = _makeNote(id: '2', title: 'Note 2');
-      final emitted = <List<String>>[];
-      final sub = repository.watchNotes().listen(
-        (notes) => emitted.add(notes.map((n) => n.id).toList()),
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+
+      try {
+        await pumpEventQueue();
+        expect(emissions.length, 1);
+        expect(emissions.first.first.id, '1');
+
+        when(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).thenAnswer((_) async => [note1, note2]);
+
+        await repository.upsertNote(_makeNote(id: '2', title: 'Note 2'));
+        await pumpEventQueue();
+
+        expect(emissions.length, 2);
+        expect(emissions.last.length, 2);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('reads the index once, then applies saves, renames and deletes '
+        'without re-reading it', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer(
+        (_) async => [
+          _makeMetaData(
+            id: 'Old.md',
+            title: 'Old',
+            updatedAt: DateTime(2026, 1, 1),
+          ),
+        ],
       );
-      await pumpEventQueue();
 
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1]);
-      changes.add(mockQuery);
-      await pumpEventQueue();
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note2, note1]);
-      changes.add(mockQuery);
-      await pumpEventQueue();
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      List<String> ids() => emissions.last.map((n) => n.id).toList();
 
-      expect(emitted, [
-        ['1'],
-        ['2', '1'],
-      ]);
-      expect(repository.ensureStoreCalled, isTrue);
-      verify(
-        () => mockQueryBuilder.order(
-          NoteModel_.isPinned,
-          flags: Order.descending,
+      try {
+        await pumpEventQueue();
+        expect(ids(), ['Old.md']);
+
+        // New note: appears at the top (most recently updated).
+        final created = await repository.upsertNote(
+          _makeNote(id: 'uuid-1', title: 'Fresh')..content = '# Fresh',
+        );
+        await pumpEventQueue();
+        expect(created, 'Fresh.md');
+        expect(ids(), ['Fresh.md', 'Old.md']);
+
+        // Title change renames the file: one emission, entry replaced.
+        final before = emissions.length;
+        await repository.upsertNote(
+          _makeNote(id: 'Fresh.md', title: 'Renamed', fileName: 'Fresh.md')
+            ..content = '# Renamed',
+        );
+        await pumpEventQueue();
+        expect(emissions.length, before + 1);
+        expect(ids(), ['Renamed.md', 'Old.md']);
+
+        when(
+          () => mockIndexingService.getDocument('Renamed.md'),
+        ).thenReturn(null);
+        await repository.deleteNotes(['Renamed.md']);
+        await pumpEventQueue();
+        expect(ids(), ['Old.md']);
+
+        verify(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).called(1);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('keeps pinned notes first, matching the index order', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
         ),
-      ).called(1);
-      verify(
-        () => mockQueryBuilder.order(
-          NoteModel_.updatedAt,
-          flags: Order.descending,
-        ),
-      ).called(1);
+      ).thenAnswer(
+        (_) async => [
+          _makeMetaData(
+            id: 'Pinned.md',
+            title: 'Pinned',
+            isPinned: true,
+            updatedAt: DateTime(2020),
+          ),
+        ],
+      );
 
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      try {
+        await pumpEventQueue();
+        await repository.upsertNote(
+          _makeNote(id: 'n', title: 'Newer')..content = '# Newer',
+        );
+        await pumpEventQueue();
+        expect(emissions.last.map((n) => n.id), ['Pinned.md', 'Newer.md']);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('re-reads the index after a disk sync', () async {
+      when(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      ).thenAnswer((_) async => []);
+
+      final emissions = <List<NoteMetaData>>[];
+      final sub = repository.watchNotes().listen(emissions.add);
+      try {
+        await pumpEventQueue();
+        File('${tempDir.path}/External.md').writeAsStringSync('# External');
+        when(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).thenAnswer(
+          (_) async => [_makeMetaData(id: 'External.md', title: 'External')],
+        );
+
+        expect(await repository.syncNotesFromDisk(), 1);
+        await pumpEventQueue();
+
+        expect(emissions.last.map((n) => n.id), ['External.md']);
+        verify(
+          () => mockIndexingService.getNotes(
+            skip: any(named: 'skip'),
+            take: any(named: 'take'),
+          ),
+        ).called(2);
+      } finally {
+        await sub.cancel();
+      }
+    });
+
+    test('does not subscribe if cancelled while initializing', () async {
+      final init = Completer<void>();
+      when(
+        () => mockIndexingService.initialize(),
+      ).thenAnswer((_) => init.future);
+
+      final sub = repository.watchNotes().listen((_) {});
+      await pumpEventQueue();
       await sub.cancel();
-      await changes.close();
+      init.complete();
+      await pumpEventQueue();
+
+      verifyNever(
+        () => mockIndexingService.getNotes(
+          skip: any(named: 'skip'),
+          take: any(named: 'take'),
+        ),
+      );
     });
 
-    test('maps NoteModel fields to NoteMetaData', () async {
-      final createdAt = DateTime(2024, 1, 1);
-      final updatedAt = DateTime(2024, 6, 1);
-      final note = _makeNote(
-        id: 'abc',
-        title: 'My Note',
-        previewText: 'Some preview',
-        height: 300,
-        createdAt: createdAt,
-        updatedAt: updatedAt,
-        isPinned: true,
-      );
+    test('re-throws when indexingService.initialize fails', () async {
       when(
-        () => mockQueryBuilder.watch(triggerImmediately: true),
-      ).thenAnswer((_) => Stream.value(mockQuery));
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note]);
+        () => mockIndexingService.initialize(),
+      ).thenAnswer((_) => Future.error(StateError('init failed')));
 
-      final meta = (await repository.watchNotes().first).single;
+      expect(() => repository.watchNotes().first, throwsA(isA<StateError>()));
+    });
+  });
 
-      expect(meta.id, 'abc');
-      expect(meta.title, 'My Note');
-      expect(meta.previewText, 'Some preview');
-      expect(meta.height, 300);
-      expect(meta.createdAt, createdAt);
-      expect(meta.updatedAt, updatedAt);
-      expect(meta.isPinned, isTrue);
+  group('getNotes', () {
+    test('returns empty list when index is empty', () async {
+      when(
+        () => mockIndexingService.getNotes(skip: 0, take: 10),
+      ).thenAnswer((_) async => []);
+
+      final result = await repository.getNotes(0, 10);
+
+      expect(result, isEmpty);
     });
 
-    test('forwards store errors to the listener', () async {
-      final failing = _FailingStoreRepository(mockBox, mockIndexingService);
+    test('returns NoteMetaData list when index has notes', () async {
+      final meta1 = _makeMetaData(id: '1', title: 'Note 1');
+      final meta2 = _makeMetaData(id: '2', title: 'Note 2');
 
-      await expectLater(
-        failing.watchNotes(),
-        emitsError(isA<ObjectBoxException>()),
-      );
+      when(
+        () => mockIndexingService.getNotes(skip: 0, take: 10),
+      ).thenAnswer((_) async => [meta1, meta2]);
+
+      final result = await repository.getNotes(0, 10);
+
+      expect(result, hasLength(2));
+      expect(result.map((n) => n.id), containsAll(['1', '2']));
+    });
+
+    test('returns empty list and does not throw on exception', () async {
+      when(
+        () => mockIndexingService.getNotes(skip: 0, take: 10),
+      ).thenThrow(Exception('Tantivy error'));
+
+      final result = await repository.getNotes(0, 10);
+
+      expect(result, isEmpty);
     });
   });
 
@@ -278,15 +382,60 @@ void main() {
   // getNoteById
   // -------------------------------------------------------------------------
 
-  group('getNoteById', () {
-    test('returns NoteModel by id correctly', () async {
-      final note = _makeNote(id: 'solo', title: 'Solo Note');
-      when(() => mockQuery.findFirst()).thenReturn(note);
+  group('getNoteById & getNoteMetaData', () {
+    test('returns metadata of single note by id correctly', () async {
+      final meta = _makeMetaData(id: 'solo', title: 'Solo Note');
+      when(() => mockIndexingService.getNoteMetaData('solo')).thenReturn(meta);
 
-      final result = await repository.getNoteById('solo');
+      final result = await repository.getNoteMetaData('solo');
 
       expect(result, isNotNull);
       expect(result!.id, equals('solo'));
+      expect(result.title, equals('Solo Note'));
+    });
+
+    test('returns NoteModel by id correctly', () async {
+      final fileName = await fileStorage.createNoteFile(
+        title: 'Solo Note',
+        markdown: '# Solo Note\nbody',
+      );
+      final doc = _makeDoc(id: fileName, title: 'Solo Note', isPinned: true);
+      when(() => mockIndexingService.getDocument(fileName)).thenReturn(doc);
+
+      final result = await repository.getNoteById(fileName);
+
+      expect(result, isNotNull);
+      expect(result!.id, equals('Solo Note.md'));
+      expect(result.fileName, equals('Solo Note.md'));
+      expect(result.title, equals('Solo Note'));
+      expect(result.content, equals('# Solo Note\nbody'));
+      expect(result.isPinned, isTrue);
+    });
+
+    test(
+      'returns null and purges the index entry when file is missing',
+      () async {
+        final doc = _makeDoc(id: 'orphan.md', title: 'Orphan');
+        when(
+          () => mockIndexingService.getDocument('orphan.md'),
+        ).thenReturn(doc);
+
+        final result = await repository.getNoteById('orphan.md');
+        await Future<void>.delayed(Duration.zero);
+
+        expect(result, isNull);
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['orphan.md']),
+        ).called(1);
+      },
+    );
+
+    test('returns null when document not found in Tantivy', () async {
+      when(() => mockIndexingService.getDocument('missing')).thenReturn(null);
+
+      final result = await repository.getNoteById('missing');
+
+      expect(result, isNull);
     });
   });
 
@@ -295,232 +444,164 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('deleteNotes & upsertNote', () {
-    test('deleteNotes calls removeMany with correct obxIds', () async {
-      final note1 = _makeNote(id: '1', title: 'Note 1')..obxId = 10;
-      final note2 = _makeNote(id: '2', title: 'Note 2')..obxId = 20;
-
-      when(() => mockQuery.find()).thenReturn([note1, note2]);
-      when(() => mockBox.removeMany(any())).thenReturn(2);
-
-      await repository.deleteNotes(['1', '2']);
-
-      verify(() => mockBox.removeMany([10, 20])).called(1);
-    });
-
-    test('upsertNote puts note and updates obxId if existing', () async {
-      final note = _makeNote(id: '1', title: 'New Title');
-      final existing = _makeNote(id: '1', title: 'Old Title')..obxId = 42;
-
-      when(() => mockQuery.findFirst()).thenReturn(existing);
-      when(() => mockBox.put(any())).thenReturn(42);
-
-      await repository.upsertNote(note);
-
-      expect(note.obxId, 42);
-      verify(() => mockBox.put(note)).called(1);
-    });
-
-    test(
-      'upsertNote keeps content and plain text out of the database',
-      () async {
-        final note = _makeNote(id: '1', title: 'Title')
-          ..content = '# Title\nbody'
-          ..plainText = 'Title body';
-        String? storedContent;
-        String? storedPlainText;
-
-        when(() => mockQuery.findFirst()).thenReturn(null);
-        when(() => mockBox.put(any())).thenAnswer((inv) {
-          final stored = inv.positionalArguments.first as NoteModel;
-          storedContent = stored.content;
-          storedPlainText = stored.plainText;
-          return 1;
-        });
-
-        await repository.upsertNote(note);
-
-        expect(storedContent, isEmpty);
-        expect(storedPlainText, isEmpty);
-        expect(note.plainText, 'Title body');
-        verify(
-          () => mockIndexingService.upsertNote('1', 'Title', 'Title body'),
-        ).called(1);
-      },
-    );
-
-    test(
-      'upsertNote propagates DbFullException when writing to box fails',
-      () async {
-        final note = _makeNote(id: '1', title: 'New Title');
-        when(() => mockQuery.findFirst()).thenReturn(null);
-        when(
-          () => mockBox.put(any()),
-        ).thenThrow(DbFullException('Disk full', 1018));
-
-        expect(
-          () => repository.upsertNote(note),
-          throwsA(isA<DbFullException>()),
-        );
-      },
-    );
-
-    test(
-      'upsertNote writes full markdown to .md file and stores filename in Box',
-      () async {
-        final note = _makeNote(id: 'save-test', title: 'File Test');
-        note.content = '# Custom Markdown\n\n- item 1\n- item 2';
-
-        when(() => mockQuery.findFirst()).thenReturn(null);
-        when(() => mockBox.put(any())).thenReturn(1);
-
-        await repository.upsertNote(note);
-
-        expect(note.fileName, 'File Test.md');
-        expect(await fileStorage.noteFileExists('File Test.md'), isTrue);
-        final savedMarkdown = await fileStorage.readNoteContent('File Test.md');
-        expect(
-          savedMarkdown,
-          '# Custom Markdown\n\n- item 1\n- item 2\n\n<!-- mechanix:id=save-test -->\n',
-        );
-        expect(note.content, '# Custom Markdown\n\n- item 1\n- item 2');
-      },
-    );
-
-    test(
-      'getNoteById reads full markdown from .md file using fileName and strips tag',
-      () async {
-        await fileStorage.writeNoteContent(
-          title: 'Open Test',
-          markdown: '# Loaded from file\n\n<!-- mechanix:id=open-test -->\n',
-        );
-
-        final noteInDb = _makeNote(id: 'open-test', title: 'Open Test');
-        noteInDb.fileName = 'Open Test.md';
-
-        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
-
-        final result = await repository.getNoteById('open-test');
-
-        expect(result, isNotNull);
-        expect(result!.content, '# Loaded from file');
-      },
-    );
-
-    test(
-      'getNoteById auto-heals filename when file was renamed on disk with matching embedded tag',
-      () async {
-        // File renamed externally on disk to 'Renamed File.md'
-        await fileStorage.writeNoteContent(
-          title: 'Renamed File',
-          markdown:
-              '# Renamed Title\n\nContent\n\n<!-- mechanix:id=heal-test -->\n',
-        );
-
-        // ObjectBox still has old fileName 'Old File.md'
-        final noteInDb = _makeNote(id: 'heal-test', title: 'Old Title');
-        noteInDb.fileName = 'Old File.md';
-
-        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
-        when(() => mockBox.put(any())).thenReturn(1);
-
-        final result = await repository.getNoteById('heal-test');
-
-        expect(result, isNotNull);
-        expect(result!.fileName, 'Renamed File.md');
-        expect(result.title, 'Renamed Title');
-        expect(result.content, '# Renamed Title\n\nContent');
-      },
-    );
-
-    test(
-      'getNoteById auto-heals filename when file is larger than 1KB and tag is at the tail',
-      () async {
-        // Large content > 2KB
-        final largeBody = 'A' * 2500;
-        await fileStorage.writeNoteContent(
-          title: 'Large File',
-          markdown:
-              '# Large Note\n\n$largeBody\n\n<!-- mechanix:id=large-heal -->\n',
-        );
-
-        final noteInDb = _makeNote(id: 'large-heal', title: 'Large Note');
-        noteInDb.fileName = 'Missing File.md';
-
-        when(() => mockQuery.findFirst()).thenReturn(noteInDb);
-        when(() => mockBox.put(any())).thenReturn(1);
-
-        final result = await repository.getNoteById('large-heal');
-
-        expect(result, isNotNull);
-        expect(result!.fileName, 'Large File.md');
-        expect(result.title, 'Large Note');
-        expect(result.content, '# Large Note\n\n$largeBody');
-      },
-    );
-
-    test('deleteNotes deletes corresponding .md file using fileName', () async {
-      final fileName = await fileStorage.writeNoteContent(
-        title: 'To Be Deleted',
-        markdown: 'bye',
+    test('deleteNotes calls deleteNotesBatch and deletes files', () async {
+      final id1 = await fileStorage.createNoteFile(
+        title: 'Note 1',
+        markdown: 'content 1',
       );
-      expect(await fileStorage.noteFileExists(fileName), isTrue);
+      final id2 = await fileStorage.createNoteFile(
+        title: 'Note 2',
+        markdown: 'content 2',
+      );
 
-      final note = _makeNote(id: 'del-1', title: 'To Be Deleted');
-      note.fileName = fileName;
-      note.obxId = 99;
+      await repository.deleteNotes([id1, id2]);
 
-      when(() => mockQuery.find()).thenReturn([note]);
-      when(() => mockBox.removeMany(any())).thenReturn(1);
-
-      await repository.deleteNotes(['del-1']);
-
-      expect(await fileStorage.noteFileExists(fileName), isFalse);
+      verify(
+        () => mockIndexingService.deleteNotesBatch(['Note 1.md', 'Note 2.md']),
+      ).called(1);
+      expect(await fileStorage.noteFileExists('Note 1.md'), isFalse);
+      expect(await fileStorage.noteFileExists('Note 2.md'), isFalse);
     });
+
+    test(
+      'upsertNote writes full markdown to .md file and updates Tantivy',
+      () async {
+        when(
+          () => mockIndexingService.getDocument('save-test'),
+        ).thenReturn(null);
+
+        final note = _makeNote(
+          id: 'save-test',
+          title: 'File Test',
+          previewText: 'preview',
+        );
+        note.content = 'My awesome note content';
+
+        await repository.upsertNote(note);
+
+        expect(await fileStorage.noteFileExists('File Test.md'), isTrue);
+        final savedContent = await fileStorage.readNoteContent('File Test.md');
+        expect(savedContent, contains('My awesome note content'));
+        expect(savedContent, equals('My awesome note content\n'));
+        expect(savedContent, isNot(contains('mechanix:id')));
+
+        verify(() => mockIndexingService.upsertNote(any())).called(1);
+      },
+    );
+
+    test('upsertNote on a title change renames the file, returns the new id '
+        'and emits NoteRenamed', () async {
+      final created = await repository.upsertNote(
+        _makeNote(id: 'uuid-1', title: 'Foo')..content = '# Foo',
+      );
+      expect(created, 'Foo.md');
+
+      final renamed = expectLater(
+        repository.noteRenames,
+        emits(
+          isA<NoteRenamed>()
+              .having((r) => r.oldId, 'oldId', 'Foo.md')
+              .having((r) => r.newId, 'newId', 'Bar.md'),
+        ),
+      );
+      final updated = await repository.upsertNote(
+        _makeNote(id: 'Foo.md', title: 'Bar', fileName: 'Foo.md')
+          ..content = '# Bar',
+      );
+      await renamed;
+
+      expect(updated, 'Bar.md');
+      final names = tempDir.listSync().map((e) => e.uri.pathSegments.last);
+      expect(names, ['Bar.md']);
+    });
+
+    test(
+      'upsertNote throws NoteFileMissingException instead of writing a copy',
+      () async {
+        await fileStorage.createNoteFile(title: 'Hello', markdown: 'other');
+
+        await expectLater(
+          repository.upsertNote(
+            _makeNote(id: 'gone.md', title: 'Hello', fileName: 'gone.md'),
+          ),
+          throwsA(isA<NoteFileMissingException>()),
+        );
+        final names = tempDir.listSync().map((e) => e.uri.pathSegments.last);
+        expect(names, ['Hello.md']);
+        verifyNever(() => mockIndexingService.upsertNote(any()));
+      },
+    );
+
+    test(
+      'getNoteById reads full markdown from .md file using fileName',
+      () async {
+        await fileStorage.createNoteFile(
+          title: 'Open Test',
+          markdown: 'Body text here',
+        );
+
+        final doc = _makeDoc(
+          id: 'Open Test.md',
+          title: 'Open Test',
+        );
+        when(
+          () => mockIndexingService.getDocument('Open Test.md'),
+        ).thenReturn(doc);
+
+        final note = await repository.getNoteById('Open Test.md');
+
+        expect(note, isNotNull);
+        expect(note!.content, equals('Body text here'));
+      },
+    );
   });
 
   // -------------------------------------------------------------------------
   // searchNoteIds / getNotesMetaData
   // -------------------------------------------------------------------------
 
-  group('searchNoteIds', () {
-    test('returns ids from the index in relevance order', () async {
+  group('searchNoteIds / getNotesMetaData', () {
+    test('searchNoteIds returns ids from IndexingService in order', () async {
+      final meta1 = _makeMetaData(id: '1', title: 'matching title');
+      final meta2 = _makeMetaData(id: '2', title: 'other');
       when(
         () => mockIndexingService.search('match'),
-      ).thenAnswer((_) async => ['2', '1']);
+      ).thenAnswer((_) async => [meta1, meta2]);
 
       final result = await repository.searchNoteIds('match');
 
-      expect(result, ['2', '1']);
-      verifyNever(() => mockBox.query(any()));
+      expect(result, ['1', '2']);
     });
-  });
 
-  group('getNotesMetaData', () {
-    test('returns notes in the order of the given ids', () async {
-      final note1 = _makeNote(id: '1', title: 'first');
-      final note2 = _makeNote(id: '2', title: 'second');
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1, note2]);
+    test('getNotesMetaData keeps the caller order', () async {
+      when(
+        () => mockIndexingService.getNoteMetaData('1'),
+      ).thenReturn(_makeMetaData(id: '1', title: 'first'));
+      when(
+        () => mockIndexingService.getNoteMetaData('2'),
+      ).thenReturn(_makeMetaData(id: '2', title: 'second'));
 
       final result = await repository.getNotesMetaData(['2', '1']);
 
       expect(result.map((n) => n.id), ['2', '1']);
-      verify(() => mockQuery.close()).called(1);
     });
 
     test('skips ids with no stored note', () async {
-      final note1 = _makeNote(id: '1', title: 'first');
-      when(() => mockQuery.findAsync()).thenAnswer((_) async => [note1]);
+      when(
+        () => mockIndexingService.getNoteMetaData('1'),
+      ).thenReturn(_makeMetaData(id: '1', title: 'first'));
+      when(() => mockIndexingService.getNoteMetaData('gone')).thenReturn(null);
 
       final result = await repository.getNotesMetaData(['gone', '1']);
 
       expect(result.map((n) => n.id), ['1']);
     });
 
-    test('does not query the box for an empty id list', () async {
+    test('does not touch the index for an empty id list', () async {
       final result = await repository.getNotesMetaData([]);
 
       expect(result, isEmpty);
-      verifyNever(() => mockBox.query(any()));
+      verifyNever(() => mockIndexingService.getNoteMetaData(any()));
     });
   });
 
@@ -529,43 +610,253 @@ void main() {
   // -------------------------------------------------------------------------
 
   group('togglePinNote', () {
-    test('toggles note from false to true', () async {
-      final note = _makeNote(id: '1', title: 'Note 1', isPinned: false);
-      when(() => mockQuery.findFirst()).thenReturn(note);
-      when(() => mockBox.put(any())).thenReturn(1);
+    test('calls IndexingService.togglePin', () async {
+      when(
+        () => mockIndexingService.togglePin('1'),
+      ).thenAnswer((_) async => true);
 
       final result = await repository.togglePinNote('1');
 
       expect(result, isTrue);
-      expect(note.isPinned, isTrue);
-      verify(() => mockBox.put(note)).called(1);
-    });
-
-    test('toggles note from true to false', () async {
-      final note = _makeNote(id: '2', title: 'Note 2', isPinned: true);
-      when(() => mockQuery.findFirst()).thenReturn(note);
-      when(() => mockBox.put(any())).thenReturn(1);
-
-      final result = await repository.togglePinNote('2');
-
-      expect(result, isFalse);
-      expect(note.isPinned, isFalse);
-      verify(() => mockBox.put(note)).called(1);
-    });
-
-    test('returns false when note is not found', () async {
-      when(() => mockQuery.findFirst()).thenReturn(null);
-
-      final result = await repository.togglePinNote('unknown');
-
-      expect(result, isFalse);
-      verifyNever(() => mockBox.put(any()));
+      verify(() => mockIndexingService.togglePin('1')).called(1);
     });
   });
 
-  group('close', () {
-    test('closes store and completes without error', () async {
-      await expectLater(repository.close(), completes);
+  // -------------------------------------------------------------------------
+  // syncNotesFromDisk
+  // -------------------------------------------------------------------------
+
+  group('syncNotesFromDisk', () {
+    test(
+      'indexes newly dropped .md files without writing an ID tag to them',
+      () async {
+        final file = File('${tempDir.path}/external_note.md');
+        const original = '# External Title\nBody of external note';
+        await file.writeAsString(original);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.title, 'title', 'External Title')
+                  .having((n) => n.fileName, 'fileName', 'external_note.md'),
+            ),
+          ),
+        ).called(1);
+
+        // File on disk is left untouched
+        expect(await file.readAsString(), equals(original));
+      },
+    );
+
+    test(
+      'purges ghost notes from Tantivy whose files were deleted on disk',
+      () async {
+        final ghostDoc = _makeDoc(
+          id: 'ghost-1',
+          title: 'Ghost Note',
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [ghostDoc]);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['ghost-1']),
+        ).called(1);
+      },
+    );
+
+    test(
+      're-indexes unchanged files whose stored title has Markdown',
+      () async {
+        final file = File('${tempDir.path}/stress.md');
+        await file.writeAsString('# Markdown **Stress** Test\nBody\n');
+        final stat = await file.stat();
+
+        final doc = _makeDoc(
+          id: 'stress.md',
+          title: 'Markdown **Stress** Test',
+          updatedAt: stat.modified,
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [doc]);
+
+        expect(await repository.syncNotesFromDisk(), equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>().having(
+                (n) => n.title,
+                'title',
+                'Markdown Stress Test',
+              ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test('leaves unchanged files with a clean title alone', () async {
+      final file = File('${tempDir.path}/clean.md');
+      await file.writeAsString('# Markdown Stress Test\nBody\n');
+      final stat = await file.stat();
+
+      final doc = _makeDoc(
+        id: 'clean.md',
+        title: 'Markdown Stress Test',
+        updatedAt: stat.modified,
+      );
+      when(
+        () => mockIndexingService.getAllMetadata(),
+      ).thenAnswer((_) async => [doc]);
+
+      expect(await repository.syncNotesFromDisk(), equals(0));
+      verifyNever(() => mockIndexingService.upsertNote(any()));
     });
+
+    test(
+      're-indexes files whose modified time is newer than indexed updatedAt',
+      () async {
+        final file = File('${tempDir.path}/modified_note.md');
+        await file.writeAsString('# Updated Title\nUpdated Body\n');
+
+        final oldUpdatedAt = DateTime.now().subtract(
+          const Duration(minutes: 10),
+        );
+        final doc = _makeDoc(
+          id: 'modified_note.md',
+          title: 'Old Title',
+          updatedAt: oldUpdatedAt,
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [doc]);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(1));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.id, 'id', 'modified_note.md')
+                  .having((n) => n.title, 'title', 'Updated Title'),
+            ),
+          ),
+        ).called(1);
+        verifyNever(() => mockIndexingService.deleteNotesBatch(any()));
+      },
+    );
+
+    test(
+      're-indexes legacy UUID docs with filename ID and purges old index entry',
+      () async {
+        final file = File('${tempDir.path}/renamed_note.md');
+        await file.writeAsString('# Note 1\nBody\n');
+        final fileModified = (await file.stat()).modified;
+
+        final doc = _makeDoc(
+          id: 'legacy-uuid-1',
+          title: 'Note 1',
+          updatedAt: fileModified,
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [doc]);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(2));
+        verify(
+          () => mockIndexingService.upsertNote(
+            any(
+              that: isA<NoteModel>()
+                  .having((n) => n.id, 'id', 'renamed_note.md')
+                  .having((n) => n.fileName, 'fileName', 'renamed_note.md'),
+            ),
+          ),
+        ).called(1);
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['legacy-uuid-1']),
+        ).called(1);
+      },
+    );
+
+    test(
+      'purges ghost note from Tantivy and returns null when file is missing from disk (Alternative 2)',
+      () async {
+        final doc = _makeDoc(
+          id: 'ghost-note',
+          title: 'Ghost Title',
+        );
+        when(
+          () => mockIndexingService.getDocument('ghost-note'),
+        ).thenReturn(doc);
+
+        final result = await repository.getNoteById('ghost-note');
+
+        expect(result, isNull);
+        verify(
+          () => mockIndexingService.deleteNotesBatch(['ghost-note']),
+        ).called(1);
+      },
+    );
+
+    test(
+      'batches multiple modified notes into a single upsertNotesBatch call',
+      () async {
+        final file1 = File('${tempDir.path}/note1.md');
+        await file1.writeAsString('# Note 1\nBody 1\n');
+        final file2 = File('${tempDir.path}/note2.md');
+        await file2.writeAsString('# Note 2\nBody 2\n');
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(2));
+        verify(
+          () => mockIndexingService.upsertNotesBatch(
+            any(
+              that: isA<List<NoteModel>>().having(
+                (list) => list.map((n) => n.id).toList(),
+                'ids',
+                containsAll(['note1.md', 'note2.md']),
+              ),
+            ),
+          ),
+        ).called(1);
+      },
+    );
+
+    test(
+      'matches an unmodified file to its note by filename and skips re-indexing',
+      () async {
+        final file = File('${tempDir.path}/unmodified.md');
+        await file.writeAsString('# Unmodified\nBody\n');
+
+        final stat = await file.stat();
+        final doc = _makeDoc(
+          id: 'unmodified.md',
+          title: 'Unmodified',
+          updatedAt: stat.modified,
+        );
+        when(
+          () => mockIndexingService.getAllMetadata(),
+        ).thenAnswer((_) async => [doc]);
+
+        final updatedCount = await repository.syncNotesFromDisk();
+
+        expect(updatedCount, equals(0));
+        verifyNever(() => mockIndexingService.upsertNotesBatch(any()));
+        verifyNever(() => mockIndexingService.upsertNote(any()));
+        verifyNever(() => mockIndexingService.deleteNotesBatch(any()));
+      },
+    );
   });
 }

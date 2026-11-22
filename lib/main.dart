@@ -23,7 +23,6 @@ void main(List<String> args) {
       providers: [
         RepositoryProvider<NoteRepository>(
           create: (_) => NoteRepositoryImpl(),
-          dispose: (repository) => repository.close(),
         ),
       ],
       child: MultiBlocProvider(
