@@ -60,12 +60,14 @@ void main() {
     required String title,
     String preview = '',
     DateTime? updatedAt,
+    String? snippet,
   }) {
     return NoteMetaData(
       id: id,
       title: title,
       previewText: preview,
       updatedAt: updatedAt ?? DateTime(2026, 10, 1),
+      snippet: snippet,
     );
   }
 
@@ -229,9 +231,7 @@ void main() {
           SearchState(status: SearchStatus.success, results: [note]),
         );
 
-        await tester.pumpWidget(
-          buildAppWithBloc(child: const SearchView()),
-        );
+        await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
         await tester.pump();
 
         final textField = find.byType(TextField);
@@ -258,8 +258,127 @@ void main() {
         expect(
           foundPreviewHighlightedSpan,
           isTrue,
-          reason: 'Highlighted TextSpan for "Architecture" in preview not found',
+          reason:
+              'Highlighted TextSpan for "Architecture" in preview not found',
         );
+      },
+    );
+
+    testWidgets(
+      'renders dynamic Tantivy snippet when snippet is present on NoteMetaData',
+      (tester) async {
+        final note = createNote(
+          id: '1',
+          title: 'Deep Research',
+          preview: 'Top paragraph introduction text',
+          snippet:
+              '... deep dive into <b>compiler</b> optimizations and benchmarks ...',
+        );
+        when(() => mockSearchBloc.state).thenReturn(
+          SearchState(status: SearchStatus.success, results: [note]),
+        );
+
+        await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
+        await tester.pump();
+
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'compiler');
+        await tester.pump();
+
+        // Title should be visible
+        expect(find.text('Deep Research'), findsOneWidget);
+
+        // Highlight for 'compiler' inside the tagged snippet should be active
+        bool foundSnippetHighlight = false;
+        final richTextWidgets = tester.widgetList<RichText>(
+          find.byType(RichText),
+        );
+        for (final richText in richTextWidgets) {
+          richText.text.visitChildren((InlineSpan span) {
+            if (span is TextSpan && span.text == 'compiler') {
+              foundSnippetHighlight = true;
+              expect(span.style?.color, isNotNull);
+              return false;
+            }
+            return true;
+          });
+          if (foundSnippetHighlight) break;
+        }
+        expect(foundSnippetHighlight, isTrue);
+      },
+    );
+
+    testWidgets(
+      'highlights fuzzy matched word from Tantivy <b> tags even if query is a typo',
+      (tester) async {
+        final note = createNote(
+          id: '1',
+          title: 'blocks',
+          preview: 'hello team world',
+          snippet:
+              '... please review the project <b>documentation</b> for details ...',
+        );
+        when(() => mockSearchBloc.state).thenReturn(
+          SearchState(status: SearchStatus.success, results: [note]),
+        );
+
+        await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
+        await tester.pump();
+
+        // User typed typo "documantation" (1 edit away from documentation)
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'documantation');
+        await tester.pump();
+
+        bool foundFuzzyHighlight = false;
+        final richTextWidgets = tester.widgetList<RichText>(
+          find.byType(RichText),
+        );
+        for (final richText in richTextWidgets) {
+          richText.text.visitChildren((InlineSpan span) {
+            if (span is TextSpan && span.text == 'documentation') {
+              foundFuzzyHighlight = true;
+              expect(span.style?.color, isNotNull);
+              return false;
+            }
+            return true;
+          });
+          if (foundFuzzyHighlight) break;
+        }
+        expect(
+          foundFuzzyHighlight,
+          isTrue,
+          reason: 'Fuzzy match should be highlighted via <b> tag',
+        );
+      },
+    );
+
+    testWidgets(
+      'strips leading markdown header # and title text from snippet preview',
+      (tester) async {
+        final note = createNote(
+          id: '1',
+          title: 'blocks',
+          preview: '# blocks hello team world',
+          snippet: '# <b>blocks</b> hello team world',
+        );
+        when(() => mockSearchBloc.state).thenReturn(
+          SearchState(status: SearchStatus.success, results: [note]),
+        );
+
+        await tester.pumpWidget(buildAppWithBloc(child: const SearchView()));
+        await tester.pump();
+
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'block');
+        await tester.pump();
+
+        // Title should be visible
+        expect(find.text('blocks'), findsOneWidget);
+
+        // Subtitle should not contain leading '#' or repeat the title 'blocks'
+        expect(find.textContaining('# blocks'), findsNothing);
+        expect(find.textContaining('hello team world'), findsOneWidget);
       },
     );
 

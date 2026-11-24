@@ -98,12 +98,17 @@ class SearchResultTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final displayTitle = note.title.isNotEmpty ? note.title : note.previewText;
 
-    final subtitle =
-        note.title.isNotEmpty &&
-            note.previewText.isNotEmpty &&
-            note.title != note.previewText
-        ? note.previewText
+    final rawSubtitle = (note.snippet != null && note.snippet!.isNotEmpty)
+        ? note.snippet
+        : (note.title.isNotEmpty &&
+                  note.previewText.isNotEmpty &&
+                  note.title != note.previewText
+              ? note.previewText
+              : null);
+    final cleaned = rawSubtitle != null
+        ? SearchTextHighlighter.cleanSnippet(rawSubtitle, title: note.title)
         : null;
+    final subtitle = (cleaned != null && cleaned.isNotEmpty) ? cleaned : null;
 
     final formattedDate = _formatDate(note.updatedAt);
 
@@ -154,7 +159,7 @@ class SearchResultTile extends StatelessWidget {
           if (subtitle != null) ...[
             const SizedBox(height: 4.0),
             Text.rich(
-              SearchTextHighlighter.highlight(
+              SearchTextHighlighter.highlightSnippet(
                 text: subtitle,
                 query: query,
                 baseStyle: supportingStyle,

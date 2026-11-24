@@ -301,7 +301,7 @@ packages:
     description:
       path: "."
       ref: "feat/title-indexing"
-      resolved-ref: d398f809d908ee5f3536ea20d0ed103f2f9bbdb3
+      resolved-ref: ac06dc1942dab10c27d4de3cea4410641111daac
       url: "https://github.com/ojas-mecha/flutter_tantivy.git"
     source: git
     version: "0.0.1"

@@ -80,13 +80,14 @@ class IndexingService {
     }
   }
 
-  NoteMetaData docToMetaData(tantivy.Document doc) {
+  NoteMetaData docToMetaData(tantivy.Document doc, {String? snippet}) {
     return NoteMetaData(
       id: doc.id,
       title: doc.title,
       previewText: doc.previewText,
       updatedAt: DateTime.fromMillisecondsSinceEpoch(doc.updatedAt.toInt()),
       isPinned: doc.isPinned,
+      snippet: snippet,
     );
   }
 
@@ -234,7 +235,9 @@ class IndexingService {
         '[IndexingService] Search: "$cleanQuery" -> ${results.length}',
       );
 
-      return results.map((r) => docToMetaData(r.doc)).toList();
+      return results
+          .map((r) => docToMetaData(r.doc, snippet: r.snippet))
+          .toList();
     } catch (e) {
       AppLogger.e('[IndexingService] Search failed ($query): $e');
       return [];
