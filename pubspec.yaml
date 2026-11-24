@@ -49,7 +49,6 @@ dependencies:
       url: https://github.com/mineshp-mecha/mechanix-commons.git
       ref: master
   flutter_tantivy:
-    # path: /home/batman/Work/flutter_tantivy
     git:
       url: https://github.com/ojas-mecha/flutter_tantivy.git
       ref: feat/title-indexing
@@ -59,7 +58,6 @@ dependencies:
       path: widgets
       ref: pre-release
   live_markdown_editor:
-    # path: /home/batman/Work/live_markdown_editor
     git:
       url: https://gitlab.com/ojas-mecha/live_markdown_editor.git
       ref: feat/pre-release
