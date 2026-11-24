@@ -315,6 +315,74 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
         provider.focusNode.requestFocus();
         return;
       }
+
+      final type = _inlineTypeFor(command);
+      if (type != null) {
+        final spans = _styleSpans(controller, sel.start, sel.end);
+        final span = spans
+            .where(
+              (s) =>
+                  s.type == type &&
+                  s.outerStart <= sel.start &&
+                  sel.end <= s.outerEnd,
+            )
+            .lastOrNull;
+        if (span != null) {
+          final before = text.substring(span.contentStart, sel.start);
+          final unwrapped = text.substring(sel.start, sel.end);
+          final after = text.substring(sel.end, span.contentEnd);
+
+          final buffer = StringBuffer();
+          int newSelStart = span.outerStart;
+
+          if (before.isNotEmpty) {
+            final trimmedBefore = before.trimRight();
+            final trailingSpaces = before.substring(trimmedBefore.length);
+            if (trimmedBefore.isNotEmpty) {
+              buffer.write(delimiter);
+              buffer.write(trimmedBefore);
+              buffer.write(delimiter);
+              newSelStart += 2 * dLen + trimmedBefore.length;
+            }
+            buffer.write(trailingSpaces);
+            newSelStart += trailingSpaces.length;
+          }
+
+          buffer.write(unwrapped);
+
+          if (after.isNotEmpty) {
+            final trimmedAfter = after.trimLeft();
+            final leadingSpaces = after.substring(
+              0,
+              after.length - trimmedAfter.length,
+            );
+            buffer.write(leadingSpaces);
+            if (trimmedAfter.isNotEmpty) {
+              buffer.write(delimiter);
+              buffer.write(trimmedAfter);
+              buffer.write(delimiter);
+            }
+          }
+
+          final replacement = buffer.toString();
+          final newText = text.replaceRange(
+            span.outerStart,
+            span.outerEnd,
+            replacement,
+          );
+          controller.applyEditingValue(
+            TextEditingValue(
+              text: newText,
+              selection: TextSelection(
+                baseOffset: newSelStart,
+                extentOffset: newSelStart + unwrapped.length,
+              ),
+            ),
+          );
+          provider.focusNode.requestFocus();
+          return;
+        }
+      }
     }
     if (sel.isValid && sel.isCollapsed) {
       final caret = sel.start.clamp(0, text.length);
@@ -666,7 +734,144 @@ class _EditorBottomBarState extends State<EditorBottomBar> {
   void _toggleCodeBlock() {
     final provider = MarkdownControllerProvider.maybeOf(context);
     if (provider == null) return;
-    provider.controller.execute(MarkdownCommand.fencedCode);
+    final controller = provider.controller;
+    final isCodeActive = (_currentMask & _flagCode) != 0;
+
+    if (isCodeActive) {
+      final info = _getLineInfo(controller);
+      final doc = controller.document;
+      final block = _findInnermostBlock(
+        controller.text,
+        doc.blocks,
+        info.clampedCaret,
+      );
+
+      if (block != null &&
+          (block.type == MarkdownBlockType.fencedCode ||
+              block.type == MarkdownBlockType.indentedCode)) {
+        final text = controller.text;
+        final blockStart = block.range.start;
+        final blockEnd = block.range.end;
+        if (blockStart >= 0 &&
+            blockEnd <= text.length &&
+            blockStart <= blockEnd) {
+          final blockText = text.substring(blockStart, blockEnd);
+          final endsWithNewline = blockText.endsWith('\n');
+          final cleanBlock = endsWithNewline
+              ? blockText.substring(0, blockText.length - 1)
+              : blockText;
+          final lines = cleanBlock.split('\n');
+          int openingLen = 0;
+          if (lines.isNotEmpty && lines.first.trim().startsWith('```')) {
+            openingLen = lines.first.length + 1;
+            lines.removeAt(0);
+          }
+          if (lines.isNotEmpty && lines.last.trim() == '```') {
+            lines.removeLast();
+          }
+          final unwrapped = lines.join('\n');
+          final replacement = unwrapped.isEmpty
+              ? ''
+              : (endsWithNewline ? '$unwrapped\n' : unwrapped);
+          final newText = text.replaceRange(blockStart, blockEnd, replacement);
+          final newCaret = math.max(
+            0,
+            math.min(info.clampedCaret - openingLen, newText.length),
+          );
+          controller.applyEditingValue(
+            TextEditingValue(
+              text: newText,
+              selection: TextSelection.collapsed(offset: newCaret),
+            ),
+          );
+          provider.focusNode.requestFocus();
+          return;
+        }
+      }
+
+      if (info.currentLine.trim().startsWith('```')) {
+        _replaceLine(
+          controller,
+          info.lineStart,
+          info.lineEnd,
+          _stripLinePrefix(info.currentLine),
+          info.clampedCaret,
+        );
+        provider.focusNode.requestFocus();
+        return;
+      }
+    }
+
+    final sel = controller.selection;
+    final text = controller.text;
+    final rawStart = math.min(sel.baseOffset, sel.extentOffset);
+    final rawEnd = math.max(sel.baseOffset, sel.extentOffset);
+    final start = math.max(0, math.min(rawStart, text.length));
+    final end = math.max(0, math.min(rawEnd, text.length));
+
+    // If document is completely empty
+    if (text.isEmpty) {
+      controller.applyEditingValue(
+        const TextEditingValue(
+          text: '```\n\n```\n',
+          selection: TextSelection.collapsed(offset: 4),
+        ),
+      );
+      provider.focusNode.requestFocus();
+      return;
+    }
+
+    // Expand to full line boundaries touched by the selection/cursor
+    int lineStart = start;
+    while (lineStart > 0 && text[lineStart - 1] != '\n') {
+      lineStart--;
+    }
+
+    int lineEnd = end;
+    // If end is at line start and there was a non-collapsed selection,
+    // don't include the trailing line unless start == end
+    if (start != end && lineEnd > lineStart && text[lineEnd - 1] == '\n') {
+      lineEnd--;
+    } else {
+      while (lineEnd < text.length && text[lineEnd] != '\n') {
+        lineEnd++;
+      }
+    }
+    // If the line ended at a newline, include the newline in replacement range
+    // so replacing lineStart..lineEnd with ```\n$targetText\n```\n does not leave a duplicate \n
+    final bool hasTrailingNewline = lineEnd < text.length && text[lineEnd] == '\n';
+    final int replaceEnd = hasTrailingNewline ? lineEnd + 1 : lineEnd;
+
+    final targetText = text.substring(lineStart, lineEnd);
+
+    // If the line is empty
+    if (targetText.isEmpty) {
+      final insertion = '```\n\n```\n';
+      final newText = text.replaceRange(lineStart, replaceEnd, insertion);
+      final newCaret = lineStart + 4;
+      controller.applyEditingValue(
+        TextEditingValue(
+          text: newText,
+          selection: TextSelection.collapsed(offset: newCaret),
+        ),
+      );
+    } else {
+      // Put the entire line(s) inside the fenced code block
+      final replacement = '```\n$targetText\n```\n';
+      final newText = text.replaceRange(lineStart, replaceEnd, replacement);
+      final newSelStart = lineStart + 4;
+      final newSelEnd = newSelStart + targetText.length;
+      controller.applyEditingValue(
+        TextEditingValue(
+          text: newText,
+          selection: TextSelection(
+            baseOffset: newSelStart,
+            extentOffset: newSelEnd,
+          ),
+        ),
+      );
+    }
+    provider.focusNode.requestFocus();
     provider.focusNode.requestFocus();
   }
 

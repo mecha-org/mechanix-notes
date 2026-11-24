@@ -96,6 +96,97 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('tapping Code block button toggles and unwraps code fence', (
+      tester,
+    ) async {
+      controller.value = const TextEditingValue(
+        text: 'print("hello");\n',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await tester.pumpWidget(buildTestWidget());
+
+      // Switch to Link mode
+      await tester.tap(find.byKey(const Key('notes_link_toggle')));
+      await tester.pumpAndSettle();
+
+      final codeBtn = find.byKey(const Key('notes_link_code_button'));
+      expect(tester.widget<MechanixIconButton>(codeBtn).isSelected, isFalse);
+
+      // Tap Code button to wrap in code fence
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text, startsWith('```'));
+      expect(controller.text, contains('print("hello");'));
+      expect(tester.widget<MechanixIconButton>(codeBtn).isSelected, isTrue);
+
+      // Tap Code button again to untoggle / unwrap
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text.trim(), 'print("hello");');
+      expect(tester.widget<MechanixIconButton>(codeBtn).isSelected, isFalse);
+
+      // Wrapping selected text in code block and unwrapping it
+      controller.value = const TextEditingValue(
+        text: 'hello world',
+        selection: TextSelection(baseOffset: 0, extentOffset: 11),
+      );
+      await tester.pumpWidget(buildTestWidget());
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text, '```\nhello world\n```\n');
+      expect(tester.widget<MechanixIconButton>(codeBtn).isSelected, isTrue);
+
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text.trim(), 'hello world');
+      expect(tester.widget<MechanixIconButton>(codeBtn).isSelected, isFalse);
+
+      // Scenario 1: Word with no selection (test|) puts test inside code block
+      controller.value = const TextEditingValue(
+        text: 'test',
+        selection: TextSelection.collapsed(offset: 4),
+      );
+      await tester.pumpWidget(buildTestWidget());
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text, '```\ntest\n```\n');
+      expect(controller.selection.baseOffset, 4);
+      expect(controller.selection.extentOffset, 8);
+
+      // Untoggle back
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text.trim(), 'test');
+
+      // Scenario 2: Partial selection or cursor inside sentence puts entire sentence inside code block
+      controller.value = const TextEditingValue(
+        text: 'Hello world from flutter',
+        selection: TextSelection(baseOffset: 6, extentOffset: 16), // 'world from'
+      );
+      await tester.pumpWidget(buildTestWidget());
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text, '```\nHello world from flutter\n```\n');
+
+      // Untoggle back
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(controller.text.trim(), 'Hello world from flutter');
+
+      // Multiline selection spanning lines wraps all touched lines
+      controller.value = const TextEditingValue(
+        text: 'line one\nline two\nline three',
+        selection: TextSelection(baseOffset: 5, extentOffset: 17), // 'one\nline two'
+      );
+      await tester.pumpWidget(buildTestWidget());
+      await tester.tap(codeBtn);
+      await tester.pumpAndSettle();
+      expect(
+        controller.text,
+        '```\nline one\nline two\n```\nline three',
+      );
+    });
+
     testWidgets(
       'tapping Bold button toggles bold syntax and updates button active state',
       (tester) async {
@@ -189,6 +280,78 @@ void main() {
         isTrue,
       );
     });
+
+    testWidgets(
+      'tapping formatting button when selecting text inside delimiters un-formats correctly',
+      (tester) async {
+        final boldFinder = find.byKey(const Key('notes_text_bold_button'));
+        final italicFinder = find.byKey(const Key('notes_text_italic_button'));
+        final strikeFinder = find.byKey(
+          const Key('notes_text_strikethrough_button'),
+        );
+
+        // 1. **ojas** with 'ojas' selected (offsets 2..6) -> taps Bold -> unbolds to 'ojas'
+        controller.value = const TextEditingValue(
+          text: '**ojas**',
+          selection: TextSelection(baseOffset: 2, extentOffset: 6),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        expect(tester.widget<MechanixIconButton>(boldFinder).isSelected, isTrue);
+        await tester.tap(boldFinder);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'ojas');
+        expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 4));
+        expect(tester.widget<MechanixIconButton>(boldFinder).isSelected, isFalse);
+
+        // 2. *ojas* with 'ojas' selected (offsets 1..5) -> taps Italic -> un-italics to 'ojas'
+        controller.value = const TextEditingValue(
+          text: '*ojas*',
+          selection: TextSelection(baseOffset: 1, extentOffset: 5),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        expect(tester.widget<MechanixIconButton>(italicFinder).isSelected, isTrue);
+        await tester.tap(italicFinder);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'ojas');
+        expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 4));
+        expect(tester.widget<MechanixIconButton>(italicFinder).isSelected, isFalse);
+
+        // 3. ~~ojas~~ with 'ojas' selected (offsets 2..6) -> taps Strike -> un-strikes to 'ojas'
+        controller.value = const TextEditingValue(
+          text: '~~ojas~~',
+          selection: TextSelection(baseOffset: 2, extentOffset: 6),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        expect(tester.widget<MechanixIconButton>(strikeFinder).isSelected, isTrue);
+        await tester.tap(strikeFinder);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'ojas');
+        expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 4));
+        expect(tester.widget<MechanixIconButton>(strikeFinder).isSelected, isFalse);
+
+        // 4. **hello world** with 'hello' selected (offsets 2..7) -> taps Bold -> 'hello **world**'
+        controller.value = const TextEditingValue(
+          text: '**hello world**',
+          selection: TextSelection(baseOffset: 2, extentOffset: 7),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        await tester.tap(boldFinder);
+        await tester.pumpAndSettle();
+        expect(controller.text, 'hello **world**');
+        expect(controller.selection, const TextSelection(baseOffset: 0, extentOffset: 5));
+
+        // 5. **hello world** with 'world' selected (offsets 8..13) -> taps Bold -> '**hello** world'
+        controller.value = const TextEditingValue(
+          text: '**hello world**',
+          selection: TextSelection(baseOffset: 8, extentOffset: 13),
+        );
+        await tester.pumpWidget(buildTestWidget());
+        await tester.tap(boldFinder);
+        await tester.pumpAndSettle();
+        expect(controller.text, '**hello** world');
+        expect(controller.selection, const TextSelection(baseOffset: 10, extentOffset: 15));
+      },
+    );
 
     for (final c in const [
       ('notes_text_bold_button', '**'),

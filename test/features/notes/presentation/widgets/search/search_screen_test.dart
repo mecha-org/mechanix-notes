@@ -217,6 +217,52 @@ void main() {
       );
     });
 
+    testWidgets(
+      'highlights search query matching in note previewText (review text)',
+      (tester) async {
+        final note = createNote(
+          id: '1',
+          title: 'Meeting Notes',
+          preview: 'Discussion about Architecture and design',
+        );
+        when(() => mockSearchBloc.state).thenReturn(
+          SearchState(status: SearchStatus.success, results: [note]),
+        );
+
+        await tester.pumpWidget(
+          buildAppWithBloc(child: const SearchView()),
+        );
+        await tester.pump();
+
+        final textField = find.byType(TextField);
+        await tester.enterText(textField, 'Architecture');
+        await tester.pump();
+
+        bool foundPreviewHighlightedSpan = false;
+        final richTextWidgets = tester.widgetList<RichText>(
+          find.byType(RichText),
+        );
+
+        for (final richText in richTextWidgets) {
+          richText.text.visitChildren((InlineSpan span) {
+            if (span is TextSpan && span.text == 'Architecture') {
+              foundPreviewHighlightedSpan = true;
+              expect(span.style?.color, isNotNull);
+              return false;
+            }
+            return true;
+          });
+          if (foundPreviewHighlightedSpan) break;
+        }
+
+        expect(
+          foundPreviewHighlightedSpan,
+          isTrue,
+          reason: 'Highlighted TextSpan for "Architecture" in preview not found',
+        );
+      },
+    );
+
     testWidgets('tapping search result invokes onResultSelected callback', (
       tester,
     ) async {

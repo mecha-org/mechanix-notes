@@ -119,19 +119,53 @@ class SearchResultTile extends StatelessWidget {
       color: context.colorScheme.primary,
     );
 
+    final supportingStyle =
+        (context.textTheme.bodyLarge ??
+                const TextStyle(
+                  fontSize: 16,
+                  height: 22 / 16,
+                  letterSpacing: 0,
+                ))
+            .copyWith(
+              color: context.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w400,
+            );
+
+    final supportingHighlightStyle = supportingStyle.copyWith(
+      color: context.colorScheme.primary,
+    );
+
     return MechanixListTile(
       variant: ListTileVariant.standard,
-      label: Text.rich(
-        SearchTextHighlighter.highlight(
-          text: displayTitle,
-          query: query,
-          baseStyle: titleStyle,
-          highlightStyle: highlightStyle,
-        ),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text.rich(
+            SearchTextHighlighter.highlight(
+              text: displayTitle,
+              query: query,
+              baseStyle: titleStyle,
+              highlightStyle: highlightStyle,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4.0),
+            Text.rich(
+              SearchTextHighlighter.highlight(
+                text: subtitle,
+                query: query,
+                baseStyle: supportingStyle,
+                highlightStyle: supportingHighlightStyle,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
       ),
-      supportingText: subtitle,
       trailingText: formattedDate,
       trailingTextColor: context.colorScheme.onSurfaceVariant,
       contentPadding: const EdgeInsets.symmetric(
