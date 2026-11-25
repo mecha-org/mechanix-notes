@@ -95,4 +95,63 @@ void main() {
     },
     variant: TargetPlatformVariant.only(TargetPlatform.linux),
   );
+
+  testWidgets(
+    'dragging the end handle extends the selection',
+    (tester) async {
+      controller = MarkdownEditorController(text: 'alpha bravo charlie');
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: MechanixTheme.dark,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: BlocProvider<EditorBloc>.value(
+              value: editorBloc,
+              child: MarkdownControllerProvider(
+                controller: controller,
+                focusNode: focusNode,
+                child: const EditorContent(),
+              ),
+            ),
+          ),
+        ),
+      );
+      addTearDown(() => tester.pumpWidget(const SizedBox()));
+      await tester.pump();
+
+      final render = tester
+          .state<MarkdownEditableTextState>(find.byType(MarkdownEditableText))
+          .renderEditable!;
+      Offset caretAt(int offset) => render.localToGlobal(
+        render.getLocalRectForCaret(TextPosition(offset: offset)).center,
+      );
+
+      final target = caretAt(8);
+      await tester.tapAt(target, kind: PointerDeviceKind.touch);
+      await tester.pump(kDoubleTapMinTime);
+      await tester.tapAt(target, kind: PointerDeviceKind.touch);
+      await tester.pump();
+      expect(controller.selection.textInside(controller.text), 'bravo');
+
+      final handle = tester.getCenter(
+        find.byKey(const ValueKey('markdown-selection-handle-end')),
+      );
+      final gesture = await tester.startGesture(
+        handle,
+        kind: PointerDeviceKind.touch,
+      );
+      await tester.pump();
+      // Past the touch slop first, then on to the end of "charlie".
+      await gesture.moveBy(const Offset(20, 0));
+      await tester.pump();
+      await gesture.moveTo(Offset(caretAt(19).dx + 4, handle.dy));
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
+
+      expect(controller.selection.textInside(controller.text), 'bravo charlie');
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.linux),
+  );
 }

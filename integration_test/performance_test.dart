@@ -1,69 +1,64 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-import 'package:mechanix_notes/main.dart' as app;
-import 'package:mechanix_notes/core/utils/icons.dart';
-import 'test_helper.dart';
 
+import 'notes_test_app.dart';
+
+/// Coarse timing checks. Limits are generous because these run as debug
+/// builds; each result is also reported through the binding's reportData.
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  group('Performance Tests', () {
-    final helper = IntegrationTestHelper();
+  group('Performance', () {
+    testWidgets('starts and lists 300 notes quickly', (tester) async {
+      final now = DateTime.now();
+      final seed = [
+        for (var i = 0; i < 300; i++)
+          SeedNote(
+            'Note $i.md',
+            '# Note $i\n${'content ' * 30}\n',
+            modified: now.subtract(Duration(minutes: i)),
+          ),
+      ];
 
-    setUpAll(() async {
-      await helper.setUp();
+      final watch = Stopwatch()..start();
+      final app = await NotesTestApp.launch(tester, seed: seed);
+      await app.waitForNoteCard('Note 0');
+      watch.stop();
+
+      binding.reportData = {
+        ...?binding.reportData,
+        'startup_300_notes_ms': watch.elapsedMilliseconds,
+      };
+      expect(watch.elapsed, lessThan(const Duration(seconds: 20)));
+
+      // Scrolling to the end of the list works.
+      await tester.fling(app.noteCard('Note 0'), const Offset(0, -20000), 8000);
+      await app.waitForNoteCard('Note 299');
     });
 
-    tearDownAll(() async {
-      await helper.tearDown();
-    });
+    testWidgets('typing stays responsive and the final text is saved', (
+      tester,
+    ) async {
+      final app = await NotesTestApp.launch(tester);
+      await app.createNote();
 
-    testWidgets('App Startup and List Load', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      expect(find.text('Notes'), findsWidgets);
-    });
-
-    testWidgets('Editor Typing Performance', (tester) async {
-      app.main([]);
-      await tester.pumpAndSettle();
-
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.createIcon),
-      );
-      await tester.pumpAndSettle();
-      await IntegrationTestHelper.waitForEditor(tester);
-
-      final titleField = find.byType(TextField).first;
-
-      // Type continuously and pump
-      final now = DateTime.now().millisecondsSinceEpoch;
-      for (int i = 0; i < 20; i++) {
-        await tester.enterText(titleField, 'Typing $i $now');
-        await tester.pump(const Duration(milliseconds: 100));
+      final watch = Stopwatch()..start();
+      var text = '# Fast typing\n';
+      for (var i = 0; i < 200; i++) {
+        text += 'w$i ';
+        await app.setText(text);
       }
+      watch.stop();
 
-      await IntegrationTestHelper.enterQuillText(
-        tester,
-        'Continuous quill typing',
-      );
-      for (int i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
+      binding.reportData = {
+        ...?binding.reportData,
+        'typing_200_edits_ms': watch.elapsedMilliseconds,
+      };
+      expect(watch.elapsed, lessThan(const Duration(seconds: 20)));
 
-      // Wait debounce
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-
-      // Back
-      await tester.tap(
-        IntegrationTestHelper.findImageAsset(NotesIcon.backIcon),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Notes'), findsWidgets);
+      await app.goBack();
+      expect(await app.waitForFile('Fast typing.md'), '$text\n');
+      expect(app.noteFiles, ['Fast typing.md']);
     });
   });
 }

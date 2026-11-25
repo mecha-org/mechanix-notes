@@ -3,11 +3,12 @@ import 'dart:io';
 import 'package:flutter_tantivy/flutter_tantivy.dart' as tantivy;
 import 'package:mechanix_notes/core/utils/app_logger.dart';
 import 'package:mechanix_notes/core/utils/constants.dart';
+import 'package:mechanix_notes/core/utils/helper.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_metadata.dart';
 import 'package:mechanix_notes/features/notes/data/models/note_model.dart';
 
 class IndexingService {
-  static const int currentSchemaVersion = 5;
+  static const int currentSchemaVersion = 6;
   Future<void>? _initFuture;
   bool _initialized = false;
 
@@ -110,7 +111,7 @@ class IndexingService {
     return tantivy.Document(
       id: note.id,
       title: note.title,
-      content: note.content,
+      content: markdownToPlainText(note.content),
       previewText: note.previewText,
       isPinned: note.isPinned,
       updatedAt: tantivy.PlatformInt64Util.from(

@@ -164,4 +164,34 @@ void main() {
       expect(children[0].style, highlightStyle);
     });
   });
+
+  group('cleanSnippet Unit Tests', () {
+    test('strips leading # and title matching note title', () {
+      final result = SearchTextHighlighter.cleanSnippet(
+        '# <b>blocks</b> hello world',
+        title: 'blocks',
+      );
+      expect(result, 'hello world');
+    });
+
+    test('strips title prefix with colon or dash from snippet', () {
+      final result = SearchTextHighlighter.cleanSnippet(
+        'blocks - something else',
+        title: 'blocks',
+      );
+      expect(result, 'something else');
+    });
+
+    test('returns original snippet when title does not match start', () {
+      final result = SearchTextHighlighter.cleanSnippet(
+        '... elephant Re Indexed checkbox',
+        title: 'blocks',
+      );
+      expect(result, '... elephant Re Indexed checkbox');
+    });
+
+    test('returns empty string when text is empty', () {
+      expect(SearchTextHighlighter.cleanSnippet(''), '');
+    });
+  });
 }
